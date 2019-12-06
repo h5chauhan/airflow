@@ -31,22 +31,23 @@ from parameterized import parameterized
 import airflow.example_dags
 from airflow import AirflowException, models, settings
 from airflow.configuration import conf
-from airflow.executors import BaseExecutor
+from airflow.executors.base_executor import BaseExecutor
 from airflow.jobs import BackfillJob, SchedulerJob
 from airflow.models import DAG, DagBag, DagModel, DagRun, Pool, SlaMiss, TaskInstance as TI, errors
 from airflow.operators.bash_operator import BashOperator
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.utils import timezone
-from airflow.utils.dag_processing import SimpleDag, SimpleDagBag, list_py_file_paths
+from airflow.utils.dag_processing import SimpleDag, SimpleDagBag
 from airflow.utils.dates import days_ago
 from airflow.utils.db import create_session, provide_session
+from airflow.utils.file import list_py_file_paths
 from airflow.utils.state import State
 from tests.compat import MagicMock, Mock, PropertyMock, mock, patch
-from tests.core import TEST_DAG_FOLDER
-from tests.executors.test_executor import TestExecutor
+from tests.test_core import TEST_DAG_FOLDER
 from tests.test_utils.db import (
     clear_db_dags, clear_db_errors, clear_db_pools, clear_db_runs, clear_db_sla_miss, set_default_pool_slots,
 )
+from tests.test_utils.mock_executor import MockExecutor
 
 DEFAULT_DATE = timezone.datetime(2016, 1, 1)
 TRY_NUMBER = 1
@@ -72,7 +73,7 @@ class TestSchedulerJob(unittest.TestCase):
 
         # Speed up some tests by not running the tasks, just look at what we
         # enqueue!
-        self.null_exec = TestExecutor()
+        self.null_exec = MockExecutor()
 
     @classmethod
     def setUpClass(cls):
@@ -130,17 +131,17 @@ class TestSchedulerJob(unittest.TestCase):
         old_children = current_process.children(recursive=True)
         scheduler = SchedulerJob(subdir=empty_dir,
                                  num_runs=1,
-                                 executor=TestExecutor(do_update=False))
+                                 executor=MockExecutor(do_update=False))
         scheduler.run()
         shutil.rmtree(empty_dir)
 
-        scheduler.executor.terminate()
         # Remove potential noise created by previous tests.
         current_children = set(current_process.children(recursive=True)) - set(
             old_children)
         self.assertFalse(current_children)
 
-    def test_process_executor_events(self):
+    @mock.patch('airflow.stats.Stats.incr')
+    def test_process_executor_events(self, mock_stats_incr):
         dag_id = "test_process_executor_events"
         dag_id2 = "test_process_executor_events_2"
         task_id_1 = 'dummy_task'
@@ -161,7 +162,7 @@ class TestSchedulerJob(unittest.TestCase):
         session.merge(ti1)
         session.commit()
 
-        executor = TestExecutor(do_update=False)
+        executor = MockExecutor(do_update=False)
         executor.event_buffer[ti1.key] = State.FAILED
 
         scheduler.executor = executor
@@ -184,6 +185,8 @@ class TestSchedulerJob(unittest.TestCase):
         scheduler._process_executor_events(simple_dag_bag=dagbag1)
         ti1.refresh_from_db()
         self.assertEqual(ti1.state, State.SUCCESS)
+
+        mock_stats_incr.assert_called_once_with('scheduler.tasks.killed_externally')
 
     def test_execute_task_instances_is_paused_wont_execute(self):
         dag_id = 'SchedulerJobTest.test_execute_task_instances_is_paused_wont_execute'
@@ -356,7 +359,7 @@ class TestSchedulerJob(unittest.TestCase):
         t2 = DummyOperator(dag=dag, task_id='dummy2')
         dagbag = self._make_simple_dag_bag([dag])
 
-        executor = TestExecutor(do_update=True)
+        executor = MockExecutor(do_update=True)
         scheduler = SchedulerJob(executor=executor)
         dr1 = scheduler.create_dag_run(dag)
         dr2 = scheduler.create_dag_run(dag)
@@ -521,7 +524,7 @@ class TestSchedulerJob(unittest.TestCase):
         task2 = DummyOperator(dag=dag, task_id=task_id_2)
         dagbag = self._make_simple_dag_bag([dag])
 
-        executor = TestExecutor(do_update=True)
+        executor = MockExecutor(do_update=True)
         scheduler = SchedulerJob(executor=executor)
         session = settings.Session()
 
@@ -948,7 +951,7 @@ class TestSchedulerJob(unittest.TestCase):
         session = settings.Session()
         scheduler_job = SchedulerJob()
         mock_logger = mock.MagicMock()
-        test_executor = TestExecutor(do_update=False)
+        test_executor = MockExecutor(do_update=False)
         scheduler_job.executor = test_executor
         scheduler_job._logger = mock_logger
         scheduler_job._change_state_for_tasks_failed_to_execute()
@@ -1012,7 +1015,7 @@ class TestSchedulerJob(unittest.TestCase):
         processor = mock.MagicMock()
 
         scheduler = SchedulerJob(num_runs=0)
-        executor = TestExecutor(do_update=False)
+        executor = MockExecutor(do_update=False)
         scheduler.executor = executor
         scheduler.processor_agent = processor
 
@@ -1056,7 +1059,7 @@ class TestSchedulerJob(unittest.TestCase):
         # to a high value to ensure loop is entered. Poll interval is 0 to
         # avoid sleep. Done flag is set to true to exist the loop immediately.
         scheduler = SchedulerJob(num_runs=0, processor_poll_interval=0)
-        executor = TestExecutor(do_update=False)
+        executor = MockExecutor(do_update=False)
         executor.queued_tasks
         scheduler.executor = executor
         processor = mock.MagicMock()
@@ -1260,7 +1263,7 @@ class TestSchedulerJob(unittest.TestCase):
             # because it would take the most recent run and start from there
             # That behavior still exists, but now it will only do so if after the
             # start date
-            bf_exec = TestExecutor()
+            bf_exec = MockExecutor()
             backfill = BackfillJob(
                 executor=bf_exec,
                 dag=dag,
@@ -1792,7 +1795,7 @@ class TestSchedulerJob(unittest.TestCase):
         Checks if tasks that are not taken up by the executor
         get rescheduled
         """
-        executor = TestExecutor(do_update=False)
+        executor = MockExecutor(do_update=False)
 
         dagbag = DagBag(executor=executor)
         dagbag.dags.clear()
@@ -1986,6 +1989,47 @@ class TestSchedulerJob(unittest.TestCase):
                 'Could not call sla_miss_callback for DAG %s',
                 'test_sla_miss')
 
+    @mock.patch('airflow.jobs.scheduler_job.send_email')
+    def test_scheduler_only_collect_emails_from_sla_missed_tasks(self, mock_send_email):
+        session = settings.Session()
+
+        test_start_date = days_ago(2)
+        dag = DAG(dag_id='test_sla_miss',
+                  default_args={'start_date': test_start_date,
+                                'sla': datetime.timedelta(days=1)})
+
+        email1 = 'test1@test.com'
+        task = DummyOperator(task_id='sla_missed',
+                             dag=dag,
+                             owner='airflow',
+                             email=email1,
+                             sla=datetime.timedelta(hours=1))
+
+        session.merge(models.TaskInstance(task=task,
+                                          execution_date=test_start_date,
+                                          state='Success'))
+
+        email2 = 'test2@test.com'
+        DummyOperator(task_id='sla_not_missed',
+                      dag=dag,
+                      owner='airflow',
+                      email=email2)
+
+        session.merge(SlaMiss(task_id='sla_missed',
+                              dag_id='test_sla_miss',
+                              execution_date=test_start_date))
+
+        scheduler = SchedulerJob(dag_id='test_sla_miss',
+                                 num_runs=1)
+
+        scheduler.manage_slas(dag=dag, session=session)
+
+        self.assertTrue(1, len(mock_send_email.call_args_list))
+
+        send_email_to = mock_send_email.call_args_list[0][0][0]
+        self.assertIn(email1, send_email_to)
+        self.assertNotIn(email2, send_email_to)
+
     @mock.patch("airflow.utils.email.send_email")
     def test_scheduler_sla_miss_email_exception(self, mock_send_email):
         """
@@ -2032,7 +2076,7 @@ class TestSchedulerJob(unittest.TestCase):
         Checks if the scheduler does not put a task in limbo, when a task is retried
         but is still present in the executor.
         """
-        executor = TestExecutor(do_update=False)
+        executor = MockExecutor(do_update=False)
         dagbag = DagBag(executor=executor, dag_folder=os.path.join(settings.DAGS_FOLDER,
                                                                    "no_dags.py"))
         dagbag.dags.clear()

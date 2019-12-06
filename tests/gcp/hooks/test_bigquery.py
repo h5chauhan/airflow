@@ -22,7 +22,6 @@ import unittest
 from typing import List, Optional
 from unittest import mock
 
-from google.auth.exceptions import GoogleAuthError
 from googleapiclient.errors import HttpError
 
 from airflow.gcp.hooks import bigquery as hook
@@ -30,13 +29,6 @@ from airflow.gcp.hooks.bigquery import (
     _api_resource_configs_duplication_check, _cleanse_time_partitioning, _validate_src_fmt_configs,
     _validate_value,
 )
-
-bq_available = True
-
-try:
-    hook.BigQueryHook().get_service()
-except GoogleAuthError:
-    bq_available = False
 
 
 class TestBigQueryHookConnection(unittest.TestCase):
@@ -77,66 +69,6 @@ class TestPandasGbqCredentials(unittest.TestCase):
         args, kwargs = mock_read_gbq.call_args
         self.assertEqual("CREDENTIALS", kwargs['credentials'])
         self.assertEqual("PROJECT_ID", kwargs['project_id'])
-
-
-class TestBigQueryDataframeResults(unittest.TestCase):
-    def setUp(self):
-        self.instance = hook.BigQueryHook()
-
-    @mock.patch(
-        'airflow.gcp.hooks.base.GoogleCloudBaseHook.project_id',
-        new_callable=mock.PropertyMock,
-        return_value=None
-    )
-    @unittest.skipIf(not bq_available, 'BQ is not available to run tests')
-    def test_output_is_dataframe_with_valid_query(self, mock_project_id):
-        import pandas as pd
-        df = self.instance.get_pandas_df('select 1')
-        self.assertIsInstance(df, pd.DataFrame)
-
-    @mock.patch(
-        'airflow.gcp.hooks.base.GoogleCloudBaseHook.project_id',
-        new_callable=mock.PropertyMock,
-        return_value=None
-    )
-    @unittest.skipIf(not bq_available, 'BQ is not available to run tests')
-    def test_throws_exception_with_invalid_query(self, mock_project_id):
-        with self.assertRaises(Exception) as context:
-            self.instance.get_pandas_df('from `1`')
-        self.assertIn('Reason: ', str(context.exception), "")
-
-    @mock.patch(
-        'airflow.gcp.hooks.base.GoogleCloudBaseHook.project_id',
-        new_callable=mock.PropertyMock,
-        return_value=None
-    )
-    @unittest.skipIf(not bq_available, 'BQ is not available to run tests')
-    def test_succeeds_with_explicit_legacy_query(self, mock_project_id):
-        df = self.instance.get_pandas_df('select 1', dialect='legacy')
-        self.assertEqual(df.iloc(0)[0][0], 1)
-
-    @mock.patch(
-        'airflow.gcp.hooks.base.GoogleCloudBaseHook.project_id',
-        new_callable=mock.PropertyMock,
-        return_value=None
-    )
-    @unittest.skipIf(not bq_available, 'BQ is not available to run tests')
-    def test_succeeds_with_explicit_std_query(self, mock_project_id):
-        df = self.instance.get_pandas_df(
-            'select * except(b) from (select 1 a, 2 b)', dialect='standard')
-        self.assertEqual(df.iloc(0)[0][0], 1)
-
-    @mock.patch(
-        'airflow.gcp.hooks.base.GoogleCloudBaseHook.project_id',
-        new_callable=mock.PropertyMock,
-        return_value=None
-    )
-    @unittest.skipIf(not bq_available, 'BQ is not available to run tests')
-    def test_throws_exception_with_incompatible_syntax(self, mock_project_id):
-        with self.assertRaises(Exception) as context:
-            self.instance.get_pandas_df(
-                'select * except(b) from (select 1 a, 2 b)', dialect='legacy')
-        self.assertIn('Reason: ', str(context.exception), "")
 
 
 class TestBigQueryTableSplitter(unittest.TestCase):
@@ -1228,6 +1160,7 @@ class TestBigQueryWithKMS(unittest.TestCase):
             projectId=project_id, datasetId=dataset_id, body=body
         )
 
+    # pylint: disable=too-many-locals
     def test_create_external_table_with_kms(self):
         project_id = "bq-project"
         dataset_id = "bq_dataset"
@@ -1246,6 +1179,7 @@ class TestBigQueryWithKMS(unittest.TestCase):
         quote_character = None
         allow_quoted_newlines = False
         allow_jagged_rows = False
+        encoding = "UTF-8"
         labels = {'label1': 'test1', 'label2': 'test2'}
         schema_fields = [
             {"name": "id", "type": "STRING", "mode": "REQUIRED"}
@@ -1270,6 +1204,7 @@ class TestBigQueryWithKMS(unittest.TestCase):
             field_delimiter=field_delimiter,
             quote_character=quote_character,
             allow_jagged_rows=allow_jagged_rows,
+            encoding=encoding,
             allow_quoted_newlines=allow_quoted_newlines,
             labels=labels,
             schema_fields=schema_fields,
@@ -1290,7 +1225,8 @@ class TestBigQueryWithKMS(unittest.TestCase):
                     'fieldDelimiter': field_delimiter,
                     'quote': quote_character,
                     'allowQuotedNewlines': allow_quoted_newlines,
-                    'allowJaggedRows': allow_jagged_rows
+                    'allowJaggedRows': allow_jagged_rows,
+                    'encoding': encoding
                 }
             },
             'tableReference': {

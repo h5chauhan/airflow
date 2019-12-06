@@ -33,7 +33,7 @@ TIME_TO_SLEEP_IN_SECONDS = 1
 
 
 # noinspection PyAbstractClass
-class GcfHook(GoogleCloudBaseHook):
+class CloudFunctionsHook(GoogleCloudBaseHook):
     """
     Hook for the Google Cloud Functions APIs.
 
@@ -209,7 +209,7 @@ class GcfHook(GoogleCloudBaseHook):
             location=location,
             function_id=function_id
         )
-        response = self.get_conn().projects().locations().functions().call(  # pylint:disable=no-member
+        response = self.get_conn().projects().locations().functions().call(  # pylint: disable=no-member
             name=name,
             body=input_data
         ).execute(num_retries=self.num_retries)

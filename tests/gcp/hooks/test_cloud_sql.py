@@ -1066,23 +1066,6 @@ class TestCloudsqlDatabaseHook(unittest.TestCase):
         self.assertIn("needs to be set in connection", str(err))
 
     @mock.patch('airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection')
-    def test_cloudsql_database_hook_create_delete_connection(self, get_connection):
-        connection = Connection()
-        connection.parse_from_uri("http://user:password@host:80/database")
-        connection.set_extra(json.dumps({
-            "location": "test",
-            "instance": "instance",
-            "database_type": "postgres"
-        }))
-        get_connection.return_value = connection
-        hook = CloudSqlDatabaseHook(gcp_cloudsql_conn_id='cloudsql_connection',
-                                    default_gcp_project_id='google_connection')
-        hook.create_connection()
-        self.assertIsNotNone(hook.retrieve_connection())
-        hook.delete_connection()
-        self.assertIsNone(hook.retrieve_connection())
-
-    @mock.patch('airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection')
     def test_cloudsql_database_hook_get_sqlproxy_runner_no_proxy(self, get_connection):
         connection = Connection()
         connection.parse_from_uri("http://user:password@host:80/database")
@@ -1094,14 +1077,10 @@ class TestCloudsqlDatabaseHook(unittest.TestCase):
         get_connection.return_value = connection
         hook = CloudSqlDatabaseHook(gcp_cloudsql_conn_id='cloudsql_connection',
                                     default_gcp_project_id='google_connection')
-        hook.create_connection()
-        try:
-            with self.assertRaises(AirflowException) as cm:
-                hook.get_sqlproxy_runner()
-            err = cm.exception
-            self.assertIn('Proxy runner can only be retrieved in case of use_proxy = True', str(err))
-        finally:
-            hook.delete_connection()
+        with self.assertRaises(AirflowException) as cm:
+            hook.get_sqlproxy_runner()
+        err = cm.exception
+        self.assertIn('Proxy runner can only be retrieved in case of use_proxy = True', str(err))
 
     @mock.patch('airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection')
     def test_cloudsql_database_hook_get_sqlproxy_runner(self, get_connection):
@@ -1118,11 +1097,8 @@ class TestCloudsqlDatabaseHook(unittest.TestCase):
         hook = CloudSqlDatabaseHook(gcp_cloudsql_conn_id='cloudsql_connection',
                                     default_gcp_project_id='google_connection')
         hook.create_connection()
-        try:
-            proxy_runner = hook.get_sqlproxy_runner()
-            self.assertIsNotNone(proxy_runner)
-        finally:
-            hook.delete_connection()
+        proxy_runner = hook.get_sqlproxy_runner()
+        self.assertIsNotNone(proxy_runner)
 
     @mock.patch('airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection')
     def test_cloudsql_database_hook_get_database_hook(self, get_connection):
@@ -1136,12 +1112,9 @@ class TestCloudsqlDatabaseHook(unittest.TestCase):
         get_connection.return_value = connection
         hook = CloudSqlDatabaseHook(gcp_cloudsql_conn_id='cloudsql_connection',
                                     default_gcp_project_id='google_connection')
-        hook.create_connection()
-        try:
-            db_hook = hook.get_database_hook()
-            self.assertIsNotNone(db_hook)
-        finally:
-            hook.delete_connection()
+        connection = hook.create_connection()
+        db_hook = hook.get_database_hook(connection=connection)
+        self.assertIsNotNone(db_hook)
 
 
 class TestCloudSqlDatabaseHook(unittest.TestCase):
@@ -1199,3 +1172,145 @@ class TestCloudSqlDatabaseHook(unittest.TestCase):
             project=project, location=location, instance=instance
         )
         self.assertEqual(sqlproxy_runner.instance_specification, instance_spec)
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_not_too_long_unix_socket_path(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=postgres&" \
+              "project_id=example-project&location=europe-west1&" \
+              "instance=" \
+              "test_db_with_longname_but_with_limit_of_UNIX_socket&" \
+              "use_proxy=True&sql_proxy_use_tcp=False"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('postgres', connection.conn_type)
+        self.assertEqual('testdb', connection.schema)
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_postgres(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=postgres&" \
+              "project_id=example-project&location=europe-west1&instance=testdb&" \
+              "use_proxy=False&use_ssl=False"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('postgres', connection.conn_type)
+        self.assertEqual('127.0.0.1', connection.host)
+        self.assertEqual(3200, connection.port)
+        self.assertEqual('testdb', connection.schema)
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_postgres_ssl(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=postgres&" \
+              "project_id=example-project&location=europe-west1&instance=testdb&" \
+              "use_proxy=False&use_ssl=True&sslcert=/bin/bash&" \
+              "sslkey=/bin/bash&sslrootcert=/bin/bash"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('postgres', connection.conn_type)
+        self.assertEqual('127.0.0.1', connection.host)
+        self.assertEqual(3200, connection.port)
+        self.assertEqual('testdb', connection.schema)
+        self.assertEqual('/bin/bash', connection.extra_dejson['sslkey'])
+        self.assertEqual('/bin/bash', connection.extra_dejson['sslcert'])
+        self.assertEqual('/bin/bash', connection.extra_dejson['sslrootcert'])
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_postgres_proxy_socket(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=postgres&" \
+              "project_id=example-project&location=europe-west1&instance=testdb&" \
+              "use_proxy=True&sql_proxy_use_tcp=False"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('postgres', connection.conn_type)
+        self.assertIn('/tmp', connection.host)
+        self.assertIn('example-project:europe-west1:testdb', connection.host)
+        self.assertIsNone(connection.port)
+        self.assertEqual('testdb', connection.schema)
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_project_id_missing(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=mysql&" \
+              "location=europe-west1&instance=testdb&" \
+              "use_proxy=False&use_ssl=False"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('mysql', connection.conn_type)
+        self.assertEqual('127.0.0.1', connection.host)
+        self.assertEqual(3200, connection.port)
+        self.assertEqual('testdb', connection.schema)
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_postgres_proxy_tcp(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=postgres&" \
+              "project_id=example-project&location=europe-west1&instance=testdb&" \
+              "use_proxy=True&sql_proxy_use_tcp=True"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('postgres', connection.conn_type)
+        self.assertEqual('127.0.0.1', connection.host)
+        self.assertNotEqual(3200, connection.port)
+        self.assertEqual('testdb', connection.schema)
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_mysql(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=mysql&" \
+              "project_id=example-project&location=europe-west1&instance=testdb&" \
+              "use_proxy=False&use_ssl=False"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('mysql', connection.conn_type)
+        self.assertEqual('127.0.0.1', connection.host)
+        self.assertEqual(3200, connection.port)
+        self.assertEqual('testdb', connection.schema)
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_mysql_ssl(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=mysql&" \
+              "project_id=example-project&location=europe-west1&instance=testdb&" \
+              "use_proxy=False&use_ssl=True&sslcert=/bin/bash&" \
+              "sslkey=/bin/bash&sslrootcert=/bin/bash"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('mysql', connection.conn_type)
+        self.assertEqual('127.0.0.1', connection.host)
+        self.assertEqual(3200, connection.port)
+        self.assertEqual('testdb', connection.schema)
+        self.assertEqual('/bin/bash', json.loads(connection.extra_dejson['ssl'])['cert'])
+        self.assertEqual('/bin/bash', json.loads(connection.extra_dejson['ssl'])['key'])
+        self.assertEqual('/bin/bash', json.loads(connection.extra_dejson['ssl'])['ca'])
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_mysql_proxy_socket(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=mysql&" \
+              "project_id=example-project&location=europe-west1&instance=testdb&" \
+              "use_proxy=True&sql_proxy_use_tcp=False"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('mysql', connection.conn_type)
+        self.assertEqual('localhost', connection.host)
+        self.assertIn('/tmp', connection.extra_dejson['unix_socket'])
+        self.assertIn('example-project:europe-west1:testdb',
+                      connection.extra_dejson['unix_socket'])
+        self.assertIsNone(connection.port)
+        self.assertEqual('testdb', connection.schema)
+
+    @mock.patch("airflow.gcp.hooks.cloud_sql.CloudSqlDatabaseHook.get_connection")
+    def test_hook_with_correct_parameters_mysql_tcp(self, get_connection):
+        uri = "gcpcloudsql://user:password@127.0.0.1:3200/testdb?database_type=mysql&" \
+              "project_id=example-project&location=europe-west1&instance=testdb&" \
+              "use_proxy=True&sql_proxy_use_tcp=True"
+        get_connection.side_effect = [Connection(uri=uri)]
+        hook = CloudSqlDatabaseHook()
+        connection = hook.create_connection()
+        self.assertEqual('mysql', connection.conn_type)
+        self.assertEqual('127.0.0.1', connection.host)
+        self.assertNotEqual(3200, connection.port)
+        self.assertEqual('testdb', connection.schema)

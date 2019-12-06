@@ -26,6 +26,7 @@ import sys
 import threading
 import time
 from collections import defaultdict
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import timedelta
 from time import sleep
 from typing import List, Set
@@ -34,21 +35,24 @@ from setproctitle import setproctitle
 from sqlalchemy import and_, func, not_, or_
 from sqlalchemy.orm.session import make_transient
 
-from airflow import executors, models, settings
+from airflow import models, settings
 from airflow.configuration import conf
 from airflow.exceptions import AirflowException
+from airflow.executors.local_executor import LocalExecutor
+from airflow.executors.sequential_executor import SequentialExecutor
 from airflow.jobs.base_job import BaseJob
 from airflow.models import DAG, DagRun, SlaMiss, errors
+from airflow.models.taskinstance import SimpleTaskInstance
 from airflow.stats import Stats
 from airflow.ti_deps.dep_context import SCHEDULEABLE_STATES, SCHEDULED_DEPS, DepContext
 from airflow.ti_deps.deps.pool_slots_available_dep import STATES_TO_COUNT_AS_RUNNING
 from airflow.utils import asciiart, helpers, timezone
 from airflow.utils.dag_processing import (
-    AbstractDagFileProcessor, DagFileProcessorAgent, SimpleDag, SimpleDagBag, SimpleTaskInstance,
-    list_py_file_paths,
+    AbstractDagFileProcessor, DagFileProcessorAgent, SimpleDag, SimpleDagBag,
 )
 from airflow.utils.db import provide_session
 from airflow.utils.email import get_email_address_list, send_email
+from airflow.utils.file import list_py_file_paths
 from airflow.utils.log.logging_mixin import LoggingMixin, StreamLogWriter, set_context
 from airflow.utils.state import State
 
@@ -62,18 +66,21 @@ class DagFileProcessor(AbstractDagFileProcessor, LoggingMixin):
     :type pickle_dags: bool
     :param dag_id_white_list: If specified, only look at these DAG ID's
     :type dag_id_white_list: list[unicode]
+    :param zombies: zombie task instances to kill
+    :type zombies: list[airflow.models.taskinstance.SimpleTaskInstance]
     """
 
     # Counter that increments every time an instance of this class is created
     class_creation_counter = 0
 
-    def __init__(self, file_path, pickle_dags, dag_id_white_list):
+    def __init__(self, file_path, pickle_dags, dag_id_white_list, zombies):
         self._file_path = file_path
 
         # The process that was launched to process the given .
         self._process = None
         self._dag_id_white_list = dag_id_white_list
         self._pickle_dags = pickle_dags
+        self._zombies = zombies
         # The result of Scheduler.process_file(file_path).
         self._result = None
         # Whether the process is done running.
@@ -94,7 +101,8 @@ class DagFileProcessor(AbstractDagFileProcessor, LoggingMixin):
                             file_path,
                             pickle_dags,
                             dag_id_white_list,
-                            thread_name):
+                            thread_name,
+                            zombies):
         """
         Process the given file.
 
@@ -110,49 +118,48 @@ class DagFileProcessor(AbstractDagFileProcessor, LoggingMixin):
         :type dag_id_white_list: list[unicode]
         :param thread_name: the name to use for the process that is launched
         :type thread_name: unicode
+        :param zombies: zombie task instances to kill
+        :type zombies: list[airflow.models.taskinstance.SimpleTaskInstance]
         :return: the process that was launched
         :rtype: multiprocessing.Process
         """
         # This helper runs in the newly created process
         log = logging.getLogger("airflow.processor")
 
-        stdout = StreamLogWriter(log, logging.INFO)
-        stderr = StreamLogWriter(log, logging.WARN)
-
         set_context(log, file_path)
         setproctitle("airflow scheduler - DagFileProcessor {}".format(file_path))
 
         try:
             # redirect stdout/stderr to log
-            sys.stdout = stdout
-            sys.stderr = stderr
+            with redirect_stdout(StreamLogWriter(log, logging.INFO)),\
+                    redirect_stderr(StreamLogWriter(log, logging.WARN)):
 
-            # Re-configure the ORM engine as there are issues with multiple processes
-            settings.configure_orm()
+                # Re-configure the ORM engine as there are issues with multiple processes
+                settings.configure_orm()
 
-            # Change the thread name to differentiate log lines. This is
-            # really a separate process, but changing the name of the
-            # process doesn't work, so changing the thread name instead.
-            threading.current_thread().name = thread_name
-            start_time = time.time()
+                # Change the thread name to differentiate log lines. This is
+                # really a separate process, but changing the name of the
+                # process doesn't work, so changing the thread name instead.
+                threading.current_thread().name = thread_name
+                start_time = time.time()
 
-            log.info("Started process (PID=%s) to work on %s",
-                     os.getpid(), file_path)
-            scheduler_job = SchedulerJob(dag_ids=dag_id_white_list, log=log)
-            result = scheduler_job.process_file(file_path, pickle_dags)
-            result_channel.send(result)
-            end_time = time.time()
-            log.info(
-                "Processing %s took %.3f seconds", file_path, end_time - start_time
-            )
+                log.info("Started process (PID=%s) to work on %s",
+                         os.getpid(), file_path)
+                scheduler_job = SchedulerJob(dag_ids=dag_id_white_list, log=log)
+                result = scheduler_job.process_file(file_path,
+                                                    zombies,
+                                                    pickle_dags)
+                result_channel.send(result)
+                end_time = time.time()
+                log.info(
+                    "Processing %s took %.3f seconds", file_path, end_time - start_time
+                )
         except Exception:
             # Log exceptions through the logging framework.
             log.exception("Got an exception! Propagating...")
             raise
         finally:
             result_channel.close()
-            sys.stdout = sys.__stdout__
-            sys.stderr = sys.__stderr__
             # We re-initialized the ORM within this Process above so we need to
             # tear it down manually here
             settings.dispose_orm()
@@ -170,6 +177,7 @@ class DagFileProcessor(AbstractDagFileProcessor, LoggingMixin):
                 self._pickle_dags,
                 self._dag_id_white_list,
                 "DagFileProcessor{}".format(self._instance_id),
+                self._zombies
             ),
             name="DagFileProcessor{}-Process".format(self._instance_id)
         )
@@ -490,8 +498,10 @@ class SchedulerJob(BaseJob):
             <pre><code>{blocking_task_list}\n{bug}<code></pre>
             """.format(task_list=task_list, blocking_task_list=blocking_task_list,
                        bug=asciiart.bug)
+
+            tasks_missed_sla = [dag.get_task(sla.task_id) for sla in slas]
             emails = set()
-            for task in dag.tasks:
+            for task in tasks_missed_sla:
                 if task.email:
                     if isinstance(task.email, str):
                         emails |= set(get_email_address_list(task.email))
@@ -744,11 +754,11 @@ class SchedulerJob(BaseJob):
         changed manually.
 
         :param old_states: examine TaskInstances in this state
-        :type old_state: list[airflow.utils.state.State]
+        :type old_states: list[airflow.utils.state.State]
         :param new_state: set TaskInstances to this state
         :type new_state: airflow.utils.state.State
         :param simple_dag_bag: TaskInstances associated with DAGs in the
-            simple_dag_bag and with states in the old_state will be examined
+            simple_dag_bag and with states in the old_states will be examined
         :type simple_dag_bag: airflow.utils.dag_processing.SimpleDagBag
         """
         tis_changed = 0
@@ -1006,7 +1016,7 @@ class SchedulerJob(BaseJob):
         :type task_instances: list[airflow.models.TaskInstance]
         :param acceptable_states: Filters the TaskInstances updated to be in these states
         :type acceptable_states: Iterable[State]
-        :rtype: list[airflow.utils.dag_processing.SimpleTaskInstance]
+        :rtype: list[airflow.models.taskinstance.SimpleTaskInstance]
         """
         if len(task_instances) == 0:
             session.commit()
@@ -1254,6 +1264,7 @@ class SchedulerJob(BaseJob):
                     msg = ("Executor reports task instance {} finished ({}) "
                            "although the task says its {}. Was the task "
                            "killed externally?".format(ti, state, ti.state))
+                    Stats.incr('scheduler.tasks.killed_externally')
                     self.log.error(msg)
                     try:
                         simple_dag = simple_dag_bag.get_dag(dag_id)
@@ -1274,8 +1285,7 @@ class SchedulerJob(BaseJob):
 
         # DAGs can be pickled for easier remote execution by some executors
         pickle_dags = False
-        if self.do_pickle and self.executor.__class__ not in \
-                (executors.LocalExecutor, executors.SequentialExecutor):
+        if self.do_pickle and self.executor.__class__ not in (LocalExecutor, SequentialExecutor):
             pickle_dags = True
 
         self.log.info("Processing each file at most %s times", self.num_runs)
@@ -1285,10 +1295,11 @@ class SchedulerJob(BaseJob):
         known_file_paths = list_py_file_paths(self.subdir)
         self.log.info("There are %s files in %s", len(known_file_paths), self.subdir)
 
-        def processor_factory(file_path):
+        def processor_factory(file_path, zombies):
             return DagFileProcessor(file_path,
                                     pickle_dags,
-                                    self.dag_ids)
+                                    self.dag_ids,
+                                    zombies)
 
         # When using sqlite, we do not use async_mode
         # so the scheduler job and DAG parser don't access the DB at the same time.
@@ -1465,7 +1476,7 @@ class SchedulerJob(BaseJob):
         return dags
 
     @provide_session
-    def process_file(self, file_path, pickle_dags=False, session=None):
+    def process_file(self, file_path, zombies, pickle_dags=False, session=None):
         """
         Process a Python file containing Airflow DAGs.
 
@@ -1484,6 +1495,8 @@ class SchedulerJob(BaseJob):
 
         :param file_path: the path to the Python file that should be executed
         :type file_path: unicode
+        :param zombies: zombie task instances to kill.
+        :type zombies: list[airflow.models.taskinstance.SimpleTaskInstance]
         :param pickle_dags: whether serialize the DAGs found in the file and
             save them to the db
         :type pickle_dags: bool
@@ -1567,7 +1580,7 @@ class SchedulerJob(BaseJob):
         except Exception:
             self.log.exception("Error logging import errors!")
         try:
-            dagbag.kill_zombies()
+            dagbag.kill_zombies(zombies)
         except Exception:
             self.log.exception("Error killing zombies!")
 

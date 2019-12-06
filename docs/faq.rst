@@ -40,7 +40,7 @@ Here are some of the common causes:
   files collocated with user's DAGs.
 
 - Is your ``start_date`` set properly? The Airflow scheduler triggers the
-  task soon after the ``start_date + scheduler_interval`` is passed.
+  task soon after the ``start_date + schedule_interval`` is passed.
 
 - Is your ``schedule_interval`` set properly? The default ``schedule_interval``
   is one day (``datetime.timedelta(1)``). You must specify a different ``schedule_interval``
@@ -84,14 +84,7 @@ sure you fully understand how it proceeds.
 How do I trigger tasks based on another task's failure?
 -------------------------------------------------------
 
-Check out the ``Trigger Rule`` section in the Concepts section of the
-documentation.
-
-Why are connection passwords still not encrypted in the metadata db after I installed airflow[crypto]?
-------------------------------------------------------------------------------------------------------
-
-Check out the ``Securing Connections`` section in the How-to Guides section of the
-documentation.
+Check out the :ref:`concepts/trigger_rule`.
 
 What's the deal with ``start_date``?
 ------------------------------------
@@ -221,3 +214,8 @@ Why next_ds or prev_ds might not contain expected values?
   ``execution_date`` and ``schedule_interval``. If you set ``schedule_interval`` as ``None`` or ``@once``,
   the ``next_ds``, ``next_ds_nodash``, ``prev_ds``, ``prev_ds_nodash`` valueS will be set to ``None``.
 - When manually triggering DAG, the schedule will be ignored, and ``prev_ds == next_ds == ds``
+
+How do I stop the sync perms happening multiple times per webserver?
+--------------------------------------------------------------------
+
+Set the value of ``update_fab_perms`` configuration in ``airflow.cfg`` to ``False``.

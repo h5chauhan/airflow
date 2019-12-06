@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-#
+
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -29,6 +28,7 @@ from collections import OrderedDict
 # Ignored Mypy on configparser because it thinks the configparser module has no _UNSET attribute
 from configparser import _UNSET, ConfigParser, NoOptionError, NoSectionError  # type: ignore
 
+from cryptography.fernet import Fernet
 from zope.deprecation import deprecated
 
 from airflow.exceptions import AirflowConfigException
@@ -41,15 +41,6 @@ warnings.filterwarnings(
     action='default', category=DeprecationWarning, module='airflow')
 warnings.filterwarnings(
     action='default', category=PendingDeprecationWarning, module='airflow')
-
-
-def generate_fernet_key():
-    try:
-        from cryptography.fernet import Fernet
-    except ImportError:
-        return ''
-    else:
-        return Fernet.generate_key().decode()
 
 
 def expand_env_var(env_var):
@@ -110,8 +101,6 @@ class AirflowConfigParser(ConfigParser):
         ('core', 'fernet_key'),
         ('celery', 'broker_url'),
         ('celery', 'result_backend'),
-        # Todo: remove this in Airflow 1.11
-        ('celery', 'celery_result_backend'),
         ('atlas', 'password'),
         ('smtp', 'smtp_password'),
         ('ldap', 'bind_password'),
@@ -122,21 +111,14 @@ class AirflowConfigParser(ConfigParser):
     # new_name, the old_name will be checked to see if it exists. If it does a
     # DeprecationWarning will be issued and the old name will be used instead
     deprecated_options = {
-        'celery': {
-            # Remove these keys in Airflow 1.11
-            'worker_concurrency': 'celeryd_concurrency',
-            'result_backend': 'celery_result_backend',
-            'broker_url': 'celery_broker_url',
-            'ssl_active': 'celery_ssl_active',
-            'ssl_cert': 'celery_ssl_cert',
-            'ssl_key': 'celery_ssl_key',
-            'elasticsearch_host': 'host',
-            'elasticsearch_log_id_template': 'log_id_template',
-            'elasticsearch_end_of_log_mark': 'end_of_log_mark',
-            'elasticsearch_frontend': 'frontend',
-            'elasticsearch_write_stdout': 'write_stdout',
-            'elasticsearch_json_format': 'json_format',
-            'elasticsearch_json_fields': 'json_fields'
+        'elasticsearch': {
+            'host': 'elasticsearch_host',
+            'log_id_template': 'elasticsearch_log_id_template',
+            'end_of_log_mark': 'elasticsearch_end_of_log_mark',
+            'frontend': 'elasticsearch_frontend',
+            'write_stdout': 'elasticsearch_write_stdout',
+            'json_format': 'elasticsearch_json_format',
+            'json_fields': 'elasticsearch_json_fields'
         }
     }
 
@@ -501,6 +483,7 @@ def parameterized_config(template):
     """
     Generates a configuration from the provided template + variables defined in
     current scope
+
     :param template: a config content templated with {{variables}}
     """
     all_vars = {k: v for d in [globals(), locals()] for k, v in d.items()}
@@ -517,7 +500,7 @@ TEST_CONFIG_FILE = get_airflow_test_config(AIRFLOW_HOME)
 
 # only generate a Fernet key if we need to create a new config file
 if not os.path.isfile(TEST_CONFIG_FILE) or not os.path.isfile(AIRFLOW_CONFIG):
-    FERNET_KEY = generate_fernet_key()
+    FERNET_KEY = Fernet.generate_key().decode()
 else:
     FERNET_KEY = ''
 
@@ -590,7 +573,7 @@ getsection = conf.getsection
 has_option = conf.has_option
 remove_option = conf.remove_option
 as_dict = conf.as_dict
-set = conf.set # noqa
+set = conf.set  # noqa
 
 for func in [load_test_config, get, getboolean, getfloat, getint, has_option,
              remove_option, as_dict, set]:
