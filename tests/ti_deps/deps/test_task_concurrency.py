@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -28,7 +27,6 @@ from airflow.ti_deps.deps.task_concurrency_dep import TaskConcurrencyDep
 
 
 class TestTaskConcurrencyDep(unittest.TestCase):
-
     def _get_task(self, **kwargs):
         return BaseOperator(task_id='test_task', dag=DAG('test_dag'), **kwargs)
 

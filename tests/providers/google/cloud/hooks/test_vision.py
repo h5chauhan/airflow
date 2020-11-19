@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -17,20 +16,22 @@
 # specific language governing permissions and limitations
 # under the License.
 import unittest
+from unittest import mock
 
 from google.cloud.vision import enums
 from google.cloud.vision_v1 import ProductSearchClient
 from google.cloud.vision_v1.proto.image_annotator_pb2 import (
-    AnnotateImageResponse, EntityAnnotation, SafeSearchAnnotation,
+    AnnotateImageResponse,
+    EntityAnnotation,
+    SafeSearchAnnotation,
 )
 from google.cloud.vision_v1.proto.product_search_service_pb2 import Product, ProductSet, ReferenceImage
 from google.protobuf.json_format import MessageToDict
 from parameterized import parameterized
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.providers.google.cloud.hooks.vision import ERR_DIFF_NAMES, ERR_UNABLE_TO_CREATE, CloudVisionHook
-from tests.compat import mock
-from tests.gcp.utils.base_gcp_mock import mock_base_gcp_hook_default_project_id
+from tests.providers.google.cloud.utils.base_gcp_mock import mock_base_gcp_hook_default_project_id
 
 PROJECT_ID_TEST = 'project-id'
 PROJECT_ID_TEST_2 = 'project-id-2'
@@ -46,7 +47,7 @@ PRODUCT_ID_TEST_2 = 'p-id-2'
 PRODUCT_NAME_TEST = "projects/{}/locations/{}/products/{}".format(
     PROJECT_ID_TEST, LOC_ID_TEST, PRODUCT_ID_TEST
 )
-PRODUCT_NAME = "projects/{}/locations/{}/products/{}".format(PROJECT_ID_TEST, LOC_ID_TEST, PRODUCT_ID_TEST)
+PRODUCT_NAME = f"projects/{PROJECT_ID_TEST}/locations/{LOC_ID_TEST}/products/{PRODUCT_ID_TEST}"
 REFERENCE_IMAGE_ID_TEST = 'ri-id'
 REFERENCE_IMAGE_GEN_ID_TEST = 'ri-id'
 ANNOTATE_IMAGE_REQUEST = {
@@ -61,7 +62,7 @@ BATCH_ANNOTATE_IMAGE_REQUEST = [
     {
         'image': {'source': {'image_uri': "gs://bucket-name/object-name"}},
         'features': [{'type': enums.Feature.Type.LOGO_DETECTION}],
-    }
+    },
 ]
 REFERENCE_IMAGE_NAME_TEST = "projects/{}/locations/{}/products/{}/referenceImages/{}".format(
     PROJECT_ID_TEST, LOC_ID_TEST, PRODUCTSET_ID_TEST, REFERENCE_IMAGE_ID_TEST
@@ -82,15 +83,14 @@ class TestGcpVisionHook(unittest.TestCase):
 
     @mock.patch(
         "airflow.providers.google.cloud.hooks.vision.CloudVisionHook.client_info",
-        new_callable=mock.PropertyMock
+        new_callable=mock.PropertyMock,
     )
     @mock.patch("airflow.providers.google.cloud.hooks.vision.CloudVisionHook._get_credentials")
     @mock.patch("airflow.providers.google.cloud.hooks.vision.ProductSearchClient")
     def test_product_search_client_creation(self, mock_client, mock_get_creds, mock_client_info):
         result = self.hook.get_conn()
         mock_client.assert_called_once_with(
-            credentials=mock_get_creds.return_value,
-            client_info=mock_client_info.return_value
+            credentials=mock_get_creds.return_value, client_info=mock_client_info.return_value
         )
         self.assertEqual(mock_client.return_value, result)
         self.assertEqual(self.hook._client, result)
@@ -254,10 +254,7 @@ class TestGcpVisionHook(unittest.TestCase):
             )
         err = cm.exception
         self.assertTrue(err)
-        self.assertIn(
-            ERR_UNABLE_TO_CREATE.format(label='ProductSet', id_label='productset_id'),
-            str(err)
-        )
+        self.assertIn(ERR_UNABLE_TO_CREATE.format(label='ProductSet', id_label='productset_id'), str(err))
         update_product_set_method.assert_not_called()
 
     @parameterized.expand([(None, None), (None, PRODUCTSET_ID_TEST), (LOC_ID_TEST, None)])
@@ -324,11 +321,13 @@ class TestGcpVisionHook(unittest.TestCase):
         # self.assertIn("The required parameter 'project_id' is missing", str(err))
         self.assertTrue(err)
         self.assertIn(
-            ERR_DIFF_NAMES.format(explicit_name=explicit_ps_name,
-                                  constructed_name=template_ps_name,
-                                  label="ProductSet", id_label="productset_id"
-                                  ),
-            str(err)
+            ERR_DIFF_NAMES.format(
+                explicit_name=explicit_ps_name,
+                constructed_name=template_ps_name,
+                label="ProductSet",
+                id_label="productset_id",
+            ),
+            str(err),
         )
         update_product_set_method.assert_not_called()
 
@@ -348,7 +347,7 @@ class TestGcpVisionHook(unittest.TestCase):
 
     @mock.patch(
         'airflow.providers.google.cloud.hooks.vision.CloudVisionHook.get_conn',
-        **{'return_value.create_reference_image.return_value': REFERENCE_IMAGE_TEST}
+        **{'return_value.create_reference_image.return_value': REFERENCE_IMAGE_TEST},
     )
     def test_create_reference_image_explicit_id(self, get_conn):
         # Given
@@ -376,7 +375,7 @@ class TestGcpVisionHook(unittest.TestCase):
 
     @mock.patch(
         'airflow.providers.google.cloud.hooks.vision.CloudVisionHook.get_conn',
-        **{'return_value.create_reference_image.return_value': REFERENCE_IMAGE_TEST}
+        **{'return_value.create_reference_image.return_value': REFERENCE_IMAGE_TEST},
     )
     def test_create_reference_image_autogenerated_id(self, get_conn):
         # Given
@@ -664,10 +663,12 @@ class TestGcpVisionHook(unittest.TestCase):
         err = cm.exception
         self.assertTrue(err)
         self.assertIn(
-            ERR_DIFF_NAMES.format(explicit_name=explicit_p_name,
-                                  constructed_name=template_p_name,
-                                  label="Product", id_label="product_id"
-                                  ),
+            ERR_DIFF_NAMES.format(
+                explicit_name=explicit_p_name,
+                constructed_name=template_p_name,
+                label="Product",
+                id_label="product_id",
+            ),
             str(err),
         )
         update_product_method.assert_not_called()

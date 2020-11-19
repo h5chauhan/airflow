@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -25,12 +24,13 @@ import unittest
 from airflow.config_templates.airflow_local_settings import DEFAULT_LOGGING_CONFIG
 from airflow.models import DAG, DagRun, TaskInstance
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.python_operator import PythonOperator
-from airflow.utils.db import create_session
+from airflow.operators.python import PythonOperator
 from airflow.utils.log.file_task_handler import FileTaskHandler
 from airflow.utils.log.logging_mixin import set_context
+from airflow.utils.session import create_session
 from airflow.utils.state import State
 from airflow.utils.timezone import datetime
+from airflow.utils.types import DagRunType
 
 DEFAULT_DATE = datetime(2016, 1, 1)
 TASK_LOGGER = 'airflow.task'
@@ -38,8 +38,7 @@ FILE_TASK_HANDLER = 'task'
 
 
 class TestFileTaskLogHandler(unittest.TestCase):
-
-    def cleanUp(self):
+    def clean_up(self):
         with create_session() as session:
             session.query(DagRun).delete()
             session.query(TaskInstance).delete()
@@ -48,11 +47,11 @@ class TestFileTaskLogHandler(unittest.TestCase):
         super().setUp()
         logging.config.dictConfig(DEFAULT_LOGGING_CONFIG)
         logging.root.disabled = False
-        self.cleanUp()
+        self.clean_up()
         # We use file task handler by default.
 
     def tearDown(self):
-        self.cleanUp()
+        self.clean_up()
         super().tearDown()
 
     def test_default_task_logging_setup(self):
@@ -66,7 +65,9 @@ class TestFileTaskLogHandler(unittest.TestCase):
     def test_file_task_handler(self):
         def task_callable(ti, **kwargs):
             ti.log.info("test")
+
         dag = DAG('dag_for_testing_file_task_handler', start_date=DEFAULT_DATE)
+        dag.create_dagrun(run_type=DagRunType.MANUAL, state=State.RUNNING, execution_date=DEFAULT_DATE)
         task = PythonOperator(
             task_id='task_for_testing_file_log_handler',
             dag=dag,
@@ -77,8 +78,9 @@ class TestFileTaskLogHandler(unittest.TestCase):
         logger = ti.log
         ti.log.disabled = False
 
-        file_handler = next((handler for handler in logger.handlers
-                             if handler.name == FILE_TASK_HANDLER), None)
+        file_handler = next(
+            (handler for handler in logger.handlers if handler.name == FILE_TASK_HANDLER), None
+        )
         self.assertIsNotNone(file_handler)
 
         set_context(logger, ti)
@@ -105,11 +107,7 @@ class TestFileTaskLogHandler(unittest.TestCase):
 
         # We should expect our log line from the callable above to appear in
         # the logs we read back
-        self.assertRegex(
-            logs[0],
-            target_re,
-            "Logs were " + str(logs)
-        )
+        self.assertRegex(logs[0][0][-1], target_re, "Logs were " + str(logs))
 
         # Remove the generated tmp log file.
         os.remove(log_filename)
@@ -117,6 +115,7 @@ class TestFileTaskLogHandler(unittest.TestCase):
     def test_file_task_handler_running(self):
         def task_callable(ti, **kwargs):
             ti.log.info("test")
+
         dag = DAG('dag_for_testing_file_task_handler', start_date=DEFAULT_DATE)
         task = PythonOperator(
             task_id='task_for_testing_file_log_handler',
@@ -130,8 +129,9 @@ class TestFileTaskLogHandler(unittest.TestCase):
         logger = ti.log
         ti.log.disabled = False
 
-        file_handler = next((handler for handler in logger.handlers
-                             if handler.name == FILE_TASK_HANDLER), None)
+        file_handler = next(
+            (handler for handler in logger.handlers if handler.name == FILE_TASK_HANDLER), None
+        )
         self.assertIsNotNone(file_handler)
 
         set_context(logger, ti)
@@ -158,25 +158,26 @@ class TestFileTaskLogHandler(unittest.TestCase):
 
 
 class TestFilenameRendering(unittest.TestCase):
-
     def setUp(self):
         dag = DAG('dag_for_testing_filename_rendering', start_date=DEFAULT_DATE)
         task = DummyOperator(task_id='task_for_testing_filename_rendering', dag=dag)
         self.ti = TaskInstance(task=task, execution_date=DEFAULT_DATE)
 
     def test_python_formatting(self):
-        expected_filename = \
-            'dag_for_testing_filename_rendering/task_for_testing_filename_rendering/%s/42.log' \
+        expected_filename = (
+            'dag_for_testing_filename_rendering/task_for_testing_filename_rendering/%s/42.log'
             % DEFAULT_DATE.isoformat()
+        )
 
         fth = FileTaskHandler('', '{dag_id}/{task_id}/{execution_date}/{try_number}.log')
         rendered_filename = fth._render_filename(self.ti, 42)
         self.assertEqual(expected_filename, rendered_filename)
 
     def test_jinja_rendering(self):
-        expected_filename = \
-            'dag_for_testing_filename_rendering/task_for_testing_filename_rendering/%s/42.log' \
+        expected_filename = (
+            'dag_for_testing_filename_rendering/task_for_testing_filename_rendering/%s/42.log'
             % DEFAULT_DATE.isoformat()
+        )
 
         fth = FileTaskHandler('', '{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts }}/{{ try_number }}.log')
         rendered_filename = fth._render_filename(self.ti, 42)

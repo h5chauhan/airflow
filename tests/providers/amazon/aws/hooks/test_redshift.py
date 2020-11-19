@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -22,7 +21,7 @@ import unittest
 
 import boto3
 
-from airflow.contrib.hooks.aws_hook import AwsHook
+from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.providers.amazon.aws.hooks.redshift import RedshiftHook
 
 try:
@@ -39,13 +38,13 @@ class TestRedshiftHook(unittest.TestCase):
             ClusterIdentifier='test_cluster',
             NodeType='dc1.large',
             MasterUsername='admin',
-            MasterUserPassword='mock_password'
+            MasterUserPassword='mock_password',
         )
         client.create_cluster(
             ClusterIdentifier='test_cluster_2',
             NodeType='dc1.large',
             MasterUsername='admin',
-            MasterUserPassword='mock_password'
+            MasterUserPassword='mock_password',
         )
         if not client.describe_clusters()['Clusters']:
             raise ValueError('AWS not properly mocked')
@@ -54,8 +53,8 @@ class TestRedshiftHook(unittest.TestCase):
     @mock_redshift
     def test_get_client_type_returns_a_boto3_client_of_the_requested_type(self):
         self._create_clusters()
-        hook = AwsHook(aws_conn_id='aws_default')
-        client_from_hook = hook.get_client_type('redshift')
+        hook = AwsBaseHook(aws_conn_id='aws_default', client_type='redshift')
+        client_from_hook = hook.get_conn()
 
         clusters = client_from_hook.describe_clusters()['Clusters']
         self.assertEqual(len(clusters), 2)
@@ -67,10 +66,9 @@ class TestRedshiftHook(unittest.TestCase):
         hook = RedshiftHook(aws_conn_id='aws_default')
         hook.create_cluster_snapshot('test_snapshot', 'test_cluster')
         self.assertEqual(
-            hook.restore_from_cluster_snapshot(
-                'test_cluster_3', 'test_snapshot'
-            )['ClusterIdentifier'],
-            'test_cluster_3')
+            hook.restore_from_cluster_snapshot('test_cluster_3', 'test_snapshot')['ClusterIdentifier'],
+            'test_cluster_3',
+        )
 
     @unittest.skipIf(mock_redshift is None, 'mock_redshift package not present')
     @mock_redshift
@@ -105,7 +103,3 @@ class TestRedshiftHook(unittest.TestCase):
         hook = RedshiftHook(aws_conn_id='aws_default')
         status = hook.cluster_status('test_cluster')
         self.assertEqual(status, 'available')
-
-
-if __name__ == '__main__':
-    unittest.main()

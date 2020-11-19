@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -25,6 +24,12 @@ from airflow.utils.timezone import datetime
 
 class DummyWithOnKill(DummyOperator):
     def execute(self, context):
+        import os
+
+        # This runs extra processes, so that we can be sure that we correctly
+        # tidy up all processes launched by a task when killing
+        if not os.fork():
+            os.system('sleep 10')
         time.sleep(10)
 
     def on_kill(self):
@@ -35,10 +40,5 @@ class DummyWithOnKill(DummyOperator):
 
 # DAG tests backfill with pooled tasks
 # Previously backfill would queue the task but never run it
-dag1 = DAG(
-    dag_id='test_on_kill',
-    start_date=datetime(2015, 1, 1))
-dag1_task1 = DummyWithOnKill(
-    task_id='task1',
-    dag=dag1,
-    owner='airflow')
+dag1 = DAG(dag_id='test_on_kill', start_date=datetime(2015, 1, 1))
+dag1_task1 = DummyWithOnKill(task_id='task1', dag=dag1, owner='airflow')

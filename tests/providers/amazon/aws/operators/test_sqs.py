@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -23,7 +22,7 @@ from unittest.mock import MagicMock
 
 from moto import mock_sqs
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.amazon.aws.hooks.sqs import SQSHook
 from airflow.providers.amazon.aws.operators.sqs import SQSPublishOperator
 from airflow.utils import timezone
@@ -32,12 +31,8 @@ DEFAULT_DATE = timezone.datetime(2019, 1, 1)
 
 
 class TestSQSPublishOperator(unittest.TestCase):
-
     def setUp(self):
-        args = {
-            'owner': 'airflow',
-            'start_date': DEFAULT_DATE
-        }
+        args = {'owner': 'airflow', 'start_date': DEFAULT_DATE}
 
         self.dag = DAG('test_dag_id', default_args=args)
         self.operator = SQSPublishOperator(
@@ -45,7 +40,7 @@ class TestSQSPublishOperator(unittest.TestCase):
             dag=self.dag,
             sqs_queue='test',
             message_content='hello',
-            aws_conn_id='aws_default'
+            aws_conn_id='aws_default',
         )
 
         self.mock_context = MagicMock()
@@ -68,7 +63,3 @@ class TestSQSPublishOperator(unittest.TestCase):
         context_calls = []
 
         self.assertTrue(self.mock_context['ti'].method_calls == context_calls, "context call  should be same")
-
-
-if __name__ == '__main__':
-    unittest.main()

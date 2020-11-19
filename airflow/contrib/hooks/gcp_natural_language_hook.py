@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -16,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module is deprecated. Please use `airflow.providers.google.cloud.hooks.natural_language`.
-"""
+"""This module is deprecated. Please use `airflow.providers.google.cloud.hooks.natural_language`."""
 
 import warnings
 
@@ -27,5 +24,6 @@ from airflow.providers.google.cloud.hooks.natural_language import CloudNaturalLa
 
 warnings.warn(
     "This module is deprecated. Please use `airflow.providers.google.cloud.hooks.natural_language`",
-    DeprecationWarning, stacklevel=2
+    DeprecationWarning,
+    stacklevel=2,
 )

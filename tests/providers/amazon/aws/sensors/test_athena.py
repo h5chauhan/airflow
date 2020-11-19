@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -18,21 +17,22 @@
 # under the License.
 
 import unittest
+from unittest import mock
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.hooks.athena import AWSAthenaHook
 from airflow.providers.amazon.aws.sensors.athena import AthenaSensor
-from tests.compat import mock
 
 
 class TestAthenaSensor(unittest.TestCase):
-
     def setUp(self):
-        self.sensor = AthenaSensor(task_id='test_athena_sensor',
-                                   query_execution_id='abc',
-                                   sleep_time=5,
-                                   max_retires=1,
-                                   aws_conn_id='aws_default')
+        self.sensor = AthenaSensor(
+            task_id='test_athena_sensor',
+            query_execution_id='abc',
+            sleep_time=5,
+            max_retries=1,
+            aws_conn_id='aws_default',
+        )
 
     @mock.patch.object(AWSAthenaHook, 'poll_query_status', side_effect=("SUCCEEDED",))
     def test_poke_success(self, mock_poll_query_status):
@@ -57,7 +57,3 @@ class TestAthenaSensor(unittest.TestCase):
         with self.assertRaises(AirflowException) as context:
             self.sensor.poke(None)
         self.assertIn('Athena sensor failed', str(context.exception))
-
-
-if __name__ == '__main__':
-    unittest.main()

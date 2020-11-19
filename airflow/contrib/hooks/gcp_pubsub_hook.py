@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -25,5 +24,6 @@ from airflow.providers.google.cloud.hooks.pubsub import PubSubException, PubSubH
 
 warnings.warn(
     "This module is deprecated. Please use `airflow.providers.google.cloud.hooks.pubsub`.",
-    DeprecationWarning, stacklevel=2
+    DeprecationWarning,
+    stacklevel=2,
 )

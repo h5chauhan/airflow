@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -26,18 +25,20 @@ from airflow.utils.log.logging_mixin import StreamLogWriter, set_context
 
 class TestLoggingMixin(unittest.TestCase):
     def setUp(self):
-        warnings.filterwarnings(
-            action='always'
-        )
+        warnings.filterwarnings(action='always')
 
     def test_set_context(self):
         handler1 = mock.MagicMock()
         handler2 = mock.MagicMock()
         parent = mock.MagicMock()
         parent.propagate = False
-        parent.handlers = [handler1, ]
+        parent.handlers = [
+            handler1,
+        ]
         log = mock.MagicMock()
-        log.handlers = [handler2, ]
+        log.handlers = [
+            handler2,
+        ]
         log.parent = parent
         log.propagate = True
 
@@ -96,4 +97,11 @@ class TestStreamLogWriter(unittest.TestCase):
         logger.log = mock.MagicMock()
 
         log = StreamLogWriter(logger, 1)
-        self.assertFalse(log.encoding)
+        self.assertIsNone(log.encoding)
+
+    def test_iobase_compatibility(self):
+        log = StreamLogWriter(None, 1)
+
+        self.assertFalse(log.closed)
+        # has no specific effect
+        log.close()

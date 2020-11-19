@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -25,5 +24,6 @@ from airflow.task.task_runner.cgroup_task_runner import CgroupTaskRunner  # noqa
 
 warnings.warn(
     "This module is deprecated. Please use `airflow.task.task_runner.cgroup_task_runner`.",
-    DeprecationWarning, stacklevel=2
+    DeprecationWarning,
+    stacklevel=2,
 )

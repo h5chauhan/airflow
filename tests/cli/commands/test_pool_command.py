@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -24,7 +23,7 @@ import unittest
 from contextlib import redirect_stdout
 
 from airflow import models, settings
-from airflow.bin import cli
+from airflow.cli import cli_parser
 from airflow.cli.commands import pool_command
 from airflow.models import Pool
 from airflow.settings import Session
@@ -35,7 +34,7 @@ class TestCliPools(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dagbag = models.DagBag(include_examples=True)
-        cls.parser = cli.CLIFactory.get_parser()
+        cls.parser = cli_parser.get_parser()
 
     def setUp(self):
         super().setUp()
@@ -82,18 +81,9 @@ class TestCliPools(unittest.TestCase):
     def test_pool_import_export(self):
         # Create two pools first
         pool_config_input = {
-            "foo": {
-                "description": "foo_test",
-                "slots": 1
-            },
-            'default_pool': {
-                'description': 'Default pool',
-                'slots': 128
-            },
-            "baz": {
-                "description": "baz_test",
-                "slots": 2
-            }
+            "foo": {"description": "foo_test", "slots": 1},
+            'default_pool': {'description': 'Default pool', 'slots': 128},
+            "baz": {"description": "baz_test", "slots": 2},
         }
         with open('pools_import.json', mode='w') as file:
             json.dump(pool_config_input, file)
@@ -107,8 +97,7 @@ class TestCliPools(unittest.TestCase):
         with open('pools_export.json', mode='r') as file:
             pool_config_output = json.load(file)
             self.assertEqual(
-                pool_config_input,
-                pool_config_output,
-                "Input and output pool files are not same")
+                pool_config_input, pool_config_output, "Input and output pool files are not same"
+            )
         os.remove('pools_import.json')
         os.remove('pools_export.json')

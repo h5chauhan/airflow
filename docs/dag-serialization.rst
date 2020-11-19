@@ -21,19 +21,20 @@
 DAG Serialization
 =================
 
-In order to make Airflow Webserver stateless (almost!), Airflow >=1.10.7 supports
+In order to make Airflow Webserver stateless, Airflow >=1.10.7 supports
 DAG Serialization and DB Persistence.
 
 .. image:: img/dag_serialization.png
 
 Without DAG Serialization & persistence in DB, the Webserver and the Scheduler both
-needs access to the DAG files. Both the scheduler and webserver parses the DAG files.
+need access to the DAG files. Both the scheduler and webserver parse the DAG files.
 
 With **DAG Serialization** we aim to decouple the webserver from DAG parsing
 which would make the Webserver very light-weight.
 
 As shown in the image above, when using the this feature,
-the Scheduler parses the DAG files, serializes them in JSON format and saves them in the Metadata DB.
+the Scheduler parses the DAG files, serializes them in JSON format and saves them in the Metadata DB
+as :class:`airflow.models.serialized_dag.SerializedDagModel` model.
 
 The Webserver now instead of having to parse the DAG file again, reads the
 serialized DAGs in JSON, de-serializes them and create the DagBag and uses it
@@ -44,41 +45,61 @@ instead of loading an entire DagBag when the WebServer starts we only load each 
 Serialized Dag table. This helps reduce Webserver startup time and memory. The reduction is notable
 when you have large number of DAGs.
 
-Below is the screenshot of the ``serialized_dag`` table in Metadata DB:
+You can enable the source code to be stored in the database to make it completely independent from DAG files.
+This is not necessary if your files are embedded in an Docker image or you can otherwise provide
+them to the webserver. The data is stored in the :class:`airflow.models.dagcode.DagCode` model.
 
-.. image:: img/serialized_dag_table.png
+The last element is rendering template fields. When serialization is enabled, templates are not rendered
+to requests, but a copy of the field contents is saved before the task is executed on worker.
+The data is stored in the :class:`airflow.models.renderedtifields.RenderedTaskInstanceFields` model.
+To limit the excessive growth of the database, only the most recent entries are kept and older entries
+are purged.
 
-Enable Dag Serialization
-------------------------
+.. note::
+  From Airflow 2.0 DAG Serialization is a strictly required and can not be turned off.
+
+
+Dag Serialization Settings
+---------------------------
 
 Add the following settings in ``airflow.cfg``:
 
 .. code-block:: ini
 
     [core]
-    store_serialized_dags = True
-    min_serialized_dag_update_interval = 30
+    store_dag_code = True
 
-*   ``store_serialized_dags``: This flag decides whether to serialises DAGs and persist them in DB.
-    If set to True, Webserver reads from DB instead of parsing DAG files
+    # You can also update the following default configurations based on your needs
+    min_serialized_dag_update_interval = 30
+    min_serialized_dag_fetch_interval = 10
+    max_num_rendered_ti_fields_per_task = 30
+
+*   ``store_dag_code``: This option decides whether to persist DAG files code in DB.
+    If set to True, Webserver reads file contents from DB instead of trying to access files in a DAG folder.
 *   ``min_serialized_dag_update_interval``: This flag sets the minimum interval (in seconds) after which
     the serialized DAG in DB should be updated. This helps in reducing database write rate.
+*   ``min_serialized_dag_fetch_interval``: This option controls how often a SerializedDAG will be re-fetched
+    from the DB when it's already loaded in the DagBag in the Webserver. Setting this higher will reduce
+    load on the DB, but at the expense of displaying a possibly stale cached version of the DAG.
+*   ``max_num_rendered_ti_fields_per_task``: This option controls maximum number of Rendered Task Instance
+    Fields (Template Fields) per task to store in the Database.
 
 If you are updating Airflow from <1.10.7, please do not forget to run ``airflow db upgrade``.
 
 
 Limitations
 -----------
-The Webserver will still need access to DAG files in the following cases,
-which is why we said "almost" stateless.
 
-*   **Rendered Template** tab will still have to parse Python file as it needs all the details like
-    the execution date and even the data passed by the upstream task using Xcom.
-*   **Code View** will read the DAG File & show it using Pygments.
-    However, it does not need to Parse the Python file so it is still a small operation.
-*   :doc:`Extra Operator Links <howto/define_extra_link>` for the inbuilt Operators would not no longer work.
-    However, you can define your own Operator Links via Airflow plugins.
+*   When using user-defined filters and macros, the Rendered View in the Webserver might show incorrect results
+    for TIs that have not yet executed as it might be using external modules that Webserver wont have access to.
+    Use ``airflow tasks render`` cli command in such situation to debug or test rendering of you template_fields.
+    Once the tasks execution starts the Rendered Template Fields will be stored in the DB in a separate table and
+    after which the correct values would be showed in the Webserver (Rendered View tab).
 
+.. note::
+    You need Airflow >= 1.10.10 for completely stateless Webserver.
+    Airflow 1.10.7 to 1.10.9 needed access to Dag files in some cases.
+    More Information: https://airflow.apache.org/docs/1.10.9/dag-serialization.html#limitations
 
 Using a different JSON Library
 ------------------------------
@@ -86,7 +107,7 @@ Using a different JSON Library
 To use a different JSON library instead of the standard ``json`` library like ``ujson``, you need to
 define a ``json`` variable in local Airflow settings (``airflow_local_settings.py``) file as follows:
 
-.. code:: python
+.. code-block:: python
 
     import ujson
     json = ujson

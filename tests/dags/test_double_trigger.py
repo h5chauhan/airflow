@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -29,6 +28,4 @@ args = {
 }
 
 dag = DAG(dag_id='test_localtaskjob_double_trigger', default_args=args)
-task = DummyOperator(
-    task_id='test_localtaskjob_double_trigger_task',
-    dag=dag)
+task = DummyOperator(task_id='test_localtaskjob_double_trigger_task', dag=dag)

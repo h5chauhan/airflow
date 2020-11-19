@@ -1,4 +1,4 @@
-/**
+/*!
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,8 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { generateTooltipDateTime, converAndFormatUTC, secondsToString } from './datetime-utils';
-import { escapeHtml } from './base';
+// global tiTooltip, taskTip
 
 // Assigning css classes based on state to nodes
 // Initiating the tooltips
@@ -27,39 +26,27 @@ function update_nodes_states(task_instances) {
       return $(this).text() === task_id;
     })
       .parent().parent().parent().parent()
-      .attr("class", "node enter " + (ti.state ? ti.state : "no_status"))
-      .attr("data-toggle", "tooltip")
-      .on("mouseover", function (d) {
-        const task = tasks[task_id];
-        let tt = "";
-        if(ti.task_id != undefined) {
-          tt +=  "Task_id: " + escapeHtml(task.task_id) + "<br>";
-        }
-        tt += "Run: " + converAndFormatUTC(task.execution_date) + "<br>";
-        if(ti.run_id != undefined) {
-          tt += "run_id: <nobr>" + escapeHtml(task.run_id) + "</nobr><br>";
-        }
-        tt += "Operator: " + escapeHtml(task.task_type) + "<br>";
-        tt += "Duration: " + escapeHtml(convertSecsToHumanReadable(ti.duration)) + "<br>";
-        tt += "Started: " + escapeHtml(ti.start_date) + "<br>";
-        tt += generateTooltipDateTime(ti.start_date, ti.end_date, dagTZ); // dagTZ has been defined in dag.html
-        taskTip.show(tt, this); // taskTip is defined in graph.html
+      .attr('class', 'node enter ' + (ti.state ? ti.state : 'no_status'))
+      .attr('data-toggle', 'tooltip')
+      .on('mouseover', function (d) {
+        const tt = tiTooltip(task_instances[task_id]);
+        taskTip.show(tt, this);
       })
       .on('mouseout', taskTip.hide);
   });
 }
 
 function initRefreshButton() {
-  d3.select("#refresh_button").on("click",
+  d3.select('#refresh_button').on('click',
     function () {
-      $("#loading").css("display", "block");
-      $("div#svg_container").css("opacity", "0.2");
+      $('#loading').css('display', 'block');
+      $('div#svg_container').css('opacity', '0.2');
       $.get(getTaskInstanceURL)
         .done(
           function (task_instances) {
             update_nodes_states(JSON.parse(task_instances));
-            $("#loading").hide();
-            $("div#svg_container").css("opacity", "1");
+            $('#loading').hide();
+            $('div#svg_container').css('opacity', '1');
             $('#error').hide();
           }
         ).fail(function (jqxhr, textStatus, err) {
@@ -69,8 +56,7 @@ function initRefreshButton() {
         $('#chart_section').hide(1000);
         $('#datatable_section').hide(1000);
       });
-    }
-  );
+    });
 }
 
 initRefreshButton();

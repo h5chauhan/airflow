@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -21,12 +20,12 @@ import unittest
 
 from airflow.api.common.experimental.trigger_dag import trigger_dag
 from airflow.models import DagBag, DagRun
+from airflow.models.serialized_dag import SerializedDagModel
 from airflow.settings import Session
 from airflow.www import app as application
 
 
 class TestDagRunsEndpoint(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -37,10 +36,11 @@ class TestDagRunsEndpoint(unittest.TestCase):
         dagbag = DagBag(include_examples=True)
         for dag in dagbag.dags.values():
             dag.sync_to_db()
+            SerializedDagModel.write_dag(dag)
 
     def setUp(self):
         super().setUp()
-        app, _ = application.create_app(testing=True)
+        app = application.create_app(testing=True)
         self.app = app.test_client()
 
     def tearDown(self):

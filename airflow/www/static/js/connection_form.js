@@ -1,4 +1,4 @@
-/**
+/*!
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -55,11 +55,23 @@ $(document).ready(function () {
         'host': 'https://<env>.qubole.com/api'
       }
     },
+    kubernetes: {
+      hidden_fields: ['host', 'schema', 'login', 'password', 'port', 'extra'],
+      relabeling: {},
+    },
     ssh: {
       hidden_fields: ['schema'],
       relabeling: {
         'login': 'Username',
       }
+    },
+    yandexcloud: {
+      hidden_fields: ['host', 'schema', 'login', 'password', 'port', 'extra'],
+      relabeling: {},
+    },
+    spark: {
+      hidden_fields: ['schema', 'login', 'password'],
+      relabeling: {},
     },
   };
 
