@@ -47,10 +47,10 @@ details the steps for releasing apache-airflow-upgrade-check package.
 
 ## Pre-requisites
 
-- Install `setuptools-build-subpackage` v0.1.0 by running:
+- Install `setuptools-build-subpackage` by running:
 
   ```shell script
-  pip install https://github.com/ashb/setuptools-build-subpackage/archive/master.zip
+  pip install setuptools-build-subpackage
   ```
 
 ## Build RC artifacts
@@ -153,10 +153,7 @@ official Apache releases must not include the rcN suffix.
 ## Prepare PyPI convenience "snapshot" packages
 
 At this point we have the artefact that we vote on, but as a convenience to developers we also want to
-publish "snapshots" of the RC builds to pypi for installing via pip. Also those packages
-are used to build the production docker image in DockerHub, so we need to upload the packages
-before we push the tag to GitHub. Pushing the tag to GitHub automatically triggers image building in
-DockerHub.
+publish "snapshots" of the RC builds to pypi for installing via pip.
 
 To do this we need to
 
@@ -249,7 +246,7 @@ to test the release and vote with "(non-binding)".
 
 The test procedure for PMCs and Contributors who would like to test
 this RC are described in
-<https://github.com/apache/airflow/blob/master/dev/README_RELEASE_AIRFLOW.md#verify-release-candidates-by-contributors>,
+<https://github.com/apache/airflow/blob/main/dev/README_RELEASE_AIRFLOW.md#verify-release-candidates-by-contributors>,
 but again, this time it is a little bit different.
 
 To actually use this command you will need apache-airflow 1.10.15

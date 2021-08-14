@@ -28,14 +28,43 @@ For high-level changelog, see :doc:`package information including changelog <ind
 
 
 
+3.1.0
+.....
+
+Latest change: 2021-07-26
+
+================================================================================================  ===========  ======================================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  ======================================================================================
+`87f408b1e <https://github.com/apache/airflow/commit/87f408b1e78968580c760acb275ae5bb042161db>`_  2021-07-26   ``Prepares docs for Rc2 release of July providers (#17116)``
+`763919d41 <https://github.com/apache/airflow/commit/763919d4152ffa13433e2489fec85ed286b7b196>`_  2021-07-25   ``Adding custom Salesforce connection type + SalesforceToS3Operator updates (#17162)``
+`b916b7507 <https://github.com/apache/airflow/commit/b916b7507921129dc48d6add1bdc4b923b60c9b9>`_  2021-07-15   ``Prepare documentation for July release of providers. (#17015)``
+`866a601b7 <https://github.com/apache/airflow/commit/866a601b76e219b3c043e1dbbc8fb22300866351>`_  2021-06-28   ``Removes pylint from our toolchain (#16682)``
+================================================================================================  ===========  ======================================================================================
+
+3.0.0
+.....
+
+Latest change: 2021-06-18
+
+================================================================================================  ===========  =================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  =================================================================
+`bbc627a3d <https://github.com/apache/airflow/commit/bbc627a3dab17ba4cf920dd1a26dbed6f5cebfd1>`_  2021-06-18   ``Prepares documentation for rc2 release of Providers (#16501)``
+`cbf8001d7 <https://github.com/apache/airflow/commit/cbf8001d7630530773f623a786f9eb319783b33c>`_  2021-06-16   ``Synchronizes updated changelog after buggfix release (#16464)``
+`1fba5402b <https://github.com/apache/airflow/commit/1fba5402bb14b3ffa6429fdc683121935f88472f>`_  2021-06-15   ``More documentation update for June providers release (#16405)``
+`9c94b72d4 <https://github.com/apache/airflow/commit/9c94b72d440b18a9e42123d20d48b951712038f9>`_  2021-06-07   ``Updated documentation for June 2021 provider release (#16294)``
+================================================================================================  ===========  =================================================================
+
 2.0.0
 .....
 
-Latest change: 2021-02-27
+Latest change: 2021-03-20
 
 ================================================================================================  ===========  ===================================================================
 Commit                                                                                            Committed    Subject
 ================================================================================================  ===========  ===================================================================
+`68e4c4dcb <https://github.com/apache/airflow/commit/68e4c4dcb0416eb51a7011a3bb040f1e23d7bba8>`_  2021-03-20   ``Remove Backport Providers (#14886)``
 `589d6dec9 <https://github.com/apache/airflow/commit/589d6dec922565897785bcbc5ac6bb3b973d7f5d>`_  2021-02-27   ``Prepare to release the next wave of providers: (#14487)``
 `45e72ca83 <https://github.com/apache/airflow/commit/45e72ca83049a7db526b1f0fbd94c75f5f92cc75>`_  2021-02-25   ``Add Tableau provider separate from Salesforce Provider (#14030)``
 ================================================================================================  ===========  ===================================================================

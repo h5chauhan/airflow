@@ -1,7 +1,7 @@
 # Core
-/airflow/executors/ @kaxil @XD-DENG @ashb @turbaszek
+/airflow/executors/ @kaxil @XD-DENG @ashb
 /airflow/jobs/ @kaxil @ashb @XD-DENG
-/airflow/models/ @kaxil @XD-DENG @ashb @turbaszek
+/airflow/models/ @kaxil @XD-DENG @ashb
 
 # DAG Serialization
 /airflow/serialization/ @kaxil @ashb
@@ -10,10 +10,19 @@
 /airflow/kubernetes/ @dimberman
 /airflow/kubernetes_executor_templates/ @dimberman
 /airflow/executors/celery_kubernetes_executor.py @dimberman
-/chart/ @dimberman @ashb
+
+# Helm Chart
+/chart/ @dimberman @ashb @kaxil @jedcunningham
+
 
 # Docs
-/docs/ @mik-laj @kaxil @vikramkoka
+/docs/ @mik-laj @vikramkoka
+
+# Docs (without Providers)
+/docs/apache-airflow @kaxil
+/docs/docker-stack @kaxil
+/docs/helm-chart @kaxil @jedcunningham
+/docs/*.py @kaxil
 
 # API
 /airflow/api/ @mik-laj @kaxil
@@ -25,9 +34,17 @@
 # WWW
 /airflow/www/ @ryanahamilton @ashb
 
+# Security/Permissions
+/airflow/security/permissions.py @jhtimmins
+/airflow/www/security.py @jhtimmins
+/airflow/api_connexion/security.py @jhtimmins
+
+# Calendar/Timetables
+/airflow/timetables/ @uranusjr
+
 # Providers
-/airflow/providers/google/ @turbaszek @mik-laj
-/airflow/providers/snowflake @turbaszek @potiuk
+/airflow/providers/google/ @turbaszek
+/airflow/providers/snowflake/ @turbaszek @potiuk @mik-laj
 
 # Dev tools
 /.github/workflows/ @potiuk @ashb @kaxil

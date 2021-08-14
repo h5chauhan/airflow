@@ -19,10 +19,10 @@ import logging
 import warnings
 from os import path
 
-import connexion
-from connexion import ProblemException
 from flask import Flask, request
 
+from airflow._vendor import connexion
+from airflow._vendor.connexion import ProblemException
 from airflow.api_connexion.exceptions import common_error_handler
 from airflow.configuration import conf
 from airflow.security import permissions
@@ -97,6 +97,11 @@ def init_appbuilder_views(app):
     appbuilder.add_view(
         views.XComModelView, permissions.RESOURCE_XCOM, category=permissions.RESOURCE_ADMIN_MENU
     )
+    appbuilder.add_view(
+        views.DagDependenciesView,
+        permissions.RESOURCE_DAG_DEPENDENCIES,
+        category=permissions.RESOURCE_BROWSE_MENU,
+    )
     # add_view_no_menu to change item position.
     # I added link in extensions.init_appbuilder_links.init_appbuilder_links
     appbuilder.add_view_no_menu(views.RedocView)
@@ -139,7 +144,7 @@ def init_error_handlers(app: Flask):
     from airflow.www import views
 
     app.register_error_handler(500, views.show_traceback)
-    app.register_error_handler(404, views.circles)
+    app.register_error_handler(404, views.not_found)
 
 
 def set_cors_headers_on_response(response):
@@ -172,7 +177,7 @@ def init_api_connexion(app: Flask) -> None:
             # here on the application level
             return common_error_handler(ex)
         else:
-            return views.circles(ex)
+            return views.not_found(ex)
 
     spec_dir = path.join(ROOT_APP_DIR, 'api_connexion', 'openapi')
     connexion_app = connexion.App(__name__, specification_dir=spec_dir, skip_error_handlers=True)

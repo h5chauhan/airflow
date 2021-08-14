@@ -21,6 +21,7 @@ import collections
 import json
 import unittest
 from io import StringIO
+from unittest import mock
 from unittest.mock import call, patch
 
 import pytest
@@ -41,7 +42,7 @@ class TestSqoopHook(unittest.TestCase):
         'hcatalog_table': 'hive_table',
     }
     _config_export = {
-        'table': 'domino.export_data_to',
+        'table': 'export_data_to',
         'export_dir': '/hdfs/data/to/be/exported',
         'input_null_string': '\\n',
         'input_null_non_string': '\\t',
@@ -57,6 +58,7 @@ class TestSqoopHook(unittest.TestCase):
         'extra_export_options': collections.OrderedDict(
             [('update-key', 'id'), ('update-mode', 'allowinsert'), ('fetch-size', 1)]
         ),
+        'schema': 'domino',
     }
     _config_import = {
         'target_dir': '/hdfs/data/target/location',
@@ -91,17 +93,29 @@ class TestSqoopHook(unittest.TestCase):
                 extra=json.dumps(self._config_json),
             )
         )
+        db.merge_conn(
+            Connection(
+                conn_id='sqoop_test_mssql',
+                conn_type='mssql',
+                schema='schema',
+                host='rmdbs',
+                port=5050,
+                extra=None,
+            )
+        )
 
     @patch('subprocess.Popen')
     def test_popen(self, mock_popen):
         # Given
-        mock_popen.return_value.stdout = StringIO('stdout')
-        mock_popen.return_value.stderr = StringIO('stderr')
-        mock_popen.return_value.returncode = 0
-        mock_popen.return_value.communicate.return_value = [
+        mock_proc = mock.MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = StringIO('stdout')
+        mock_proc.stderr = StringIO('stderr')
+        mock_proc.communicate.return_value = [
             StringIO('stdout\nstdout'),
             StringIO('stderr\nstderr'),
         ]
+        mock_popen.return_value.__enter__.return_value = mock_proc
 
         # When
         hook = SqoopHook(conn_id='sqoop_test')
@@ -153,6 +167,9 @@ class TestSqoopHook(unittest.TestCase):
                 str(self._config_export['extra_export_options'].get('fetch-size')),
                 '--table',
                 self._config_export['table'],
+                '--',
+                '--schema',
+                self._config_export['schema'],
             ],
             stderr=-2,
             stdout=-1,
@@ -212,7 +229,7 @@ class TestSqoopHook(unittest.TestCase):
             hook.export_table(**self._config_export)
 
         with pytest.raises(OSError):
-            hook.import_table(table='schema.table', target_dir='/sqoop/example/path')
+            hook.import_table(table='table', target_dir='/sqoop/example/path', schema='schema')
 
         with pytest.raises(OSError):
             hook.import_query(query='SELECT * FROM sometable', target_dir='/sqoop/example/path')
@@ -240,6 +257,7 @@ class TestSqoopHook(unittest.TestCase):
                 batch=self._config_export['batch'],
                 relaxed_isolation=self._config_export['relaxed_isolation'],
                 extra_export_options=self._config_export['extra_export_options'],
+                schema=self._config_export['schema'],
             )
         )
 
@@ -268,6 +286,9 @@ class TestSqoopHook(unittest.TestCase):
             assert "--update-key" in cmd
             assert "--update-mode" in cmd
             assert "--fetch-size" in cmd
+
+        if self._config_export['schema']:
+            assert "-- --schema" in cmd
 
     def test_import_cmd(self):
         """
@@ -342,3 +363,15 @@ class TestSqoopHook(unittest.TestCase):
 
         cmd = ['--target', 'targettable']
         assert hook.cmd_mask_password(cmd) == cmd
+
+    def test_connection_string_preparation(self):
+        """
+        Tests to verify the hook creates the connection string correctly for mssql and not DB connections.
+        """
+        # Case mssql
+        hook = SqoopHook(conn_id='sqoop_test_mssql')
+        assert f"{hook.conn.host}:{hook.conn.port};databaseName={hook.conn.schema}" in hook._prepare_command()
+
+        # Case no mssql
+        hook = SqoopHook(conn_id='sqoop_test')
+        assert f"{hook.conn.host}:{hook.conn.port}/{hook.conn.schema}" in hook._prepare_command()

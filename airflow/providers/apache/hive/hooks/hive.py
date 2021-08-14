@@ -68,6 +68,9 @@ class HiveCliHook(BaseHook):
     The extra connection parameter ``auth`` gets passed as in the ``jdbc``
     connection string as is.
 
+    :param hive_cli_conn_id: Reference to the
+        :ref:`Hive CLI connection id <howto/connection:hive_cli>`.
+    :type hive_cli_conn_id: str
     :param mapred_queue: queue used by the Hadoop Scheduler (Capacity or Fair)
     :type  mapred_queue: str
     :param mapred_queue_priority: priority within the job queue.
@@ -426,16 +429,16 @@ class HiveCliHook(BaseHook):
         if create or recreate:
             if field_dict is None:
                 raise ValueError("Must provide a field dict when creating a table")
-            fields = ",\n    ".join(['`{k}` {v}'.format(k=k.strip('`'), v=v) for k, v in field_dict.items()])
+            fields = ",\n    ".join(f"`{k.strip('`')}` {v}" for k, v in field_dict.items())
             hql += f"CREATE TABLE IF NOT EXISTS {table} (\n{fields})\n"
             if partition:
-                pfields = ",\n    ".join([p + " STRING" for p in partition])
+                pfields = ",\n    ".join(p + " STRING" for p in partition)
                 hql += f"PARTITIONED BY ({pfields})\n"
             hql += "ROW FORMAT DELIMITED\n"
             hql += f"FIELDS TERMINATED BY '{delimiter}'\n"
             hql += "STORED AS textfile\n"
             if tblproperties is not None:
-                tprops = ", ".join([f"'{k}'='{v}'" for k, v in tblproperties.items()])
+                tprops = ", ".join(f"'{k}'='{v}'" for k, v in tblproperties.items())
                 hql += f"TBLPROPERTIES({tprops})\n"
             hql += ";"
             self.log.info(hql)
@@ -445,7 +448,7 @@ class HiveCliHook(BaseHook):
             hql += "OVERWRITE "
         hql += f"INTO TABLE {table} "
         if partition:
-            pvals = ", ".join([f"{k}='{v}'" for k, v in partition.items()])
+            pvals = ", ".join(f"{k}='{v}'" for k, v in partition.items())
             hql += f"PARTITION ({pvals})"
 
         # As a workaround for HIVE-10541, add a newline character
@@ -466,7 +469,13 @@ class HiveCliHook(BaseHook):
 
 
 class HiveMetastoreHook(BaseHook):
-    """Wrapper to interact with the Hive Metastore"""
+    """
+    Wrapper to interact with the Hive Metastore
+
+    :param metastore_conn_id: reference to the
+        :ref: `metastore thrift service connection id <howto/connection:hive_metastore>`.
+    :type metastore_conn_id: str
+    """
 
     # java short max val
     MAX_PART_COUNT = 32767
@@ -483,7 +492,7 @@ class HiveMetastoreHook(BaseHook):
 
     def __getstate__(self) -> Dict[str, Any]:
         # This is for pickling to work despite the thrift hive client not
-        # being pickable
+        # being picklable
         state = dict(self.__dict__)
         del state['metastore']
         return state
@@ -729,7 +738,7 @@ class HiveMetastoreHook(BaseHook):
         :type filter_map: map
 
         >>> hh = HiveMetastoreHook()
-        >>> filter_map = {'ds': '2015-01-01', 'ds': '2014-01-01'}
+        >>> filter_map = {'ds': '2015-01-01'}
         >>> t = 'static_babynames_partitioned'
         >>> hh.max_partition(schema='airflow',\
         ... table_name=t, field='ds', filter_map=filter_map)
@@ -768,7 +777,7 @@ class HiveMetastoreHook(BaseHook):
         try:
             self.get_table(table_name, db)
             return True
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             return False
 
     def drop_partitions(self, table_name, part_vals, delete_data=False, db='default'):
@@ -811,6 +820,12 @@ class HiveServer2Hook(DbApiHook):
     * the default for run_set_variable_statements is true, if you
     are using impala you may need to set it to false in the
     ``extra`` of your connection in the UI
+
+    :param hiveserver2_conn_id: Reference to the
+        :ref: `Hive Server2 thrift service connection id <howto/connection:hiveserver2>`.
+    :type hiveserver2_conn_id: str
+    :param schema: Hive database name.
+    :type schema: Optional[str]
     """
 
     conn_name_attr = 'hiveserver2_conn_id'
@@ -823,7 +838,7 @@ class HiveServer2Hook(DbApiHook):
         """Returns a Hive connection object."""
         username: Optional[str] = None
         password: Optional[str] = None
-        # pylint: disable=no-member
+
         db = self.get_connection(self.hiveserver2_conn_id)  # type: ignore
 
         auth_mechanism = db.extra_dejson.get('authMechanism', 'NONE')
@@ -859,8 +874,6 @@ class HiveServer2Hook(DbApiHook):
             database=schema or db.schema or 'default',
         )
 
-        # pylint: enable=no-member
-
     def _get_results(
         self,
         hql: Union[str, str, List[str]],
@@ -878,9 +891,9 @@ class HiveServer2Hook(DbApiHook):
             cur.arraysize = fetch_size or 1000
 
             # not all query services (e.g. impala AIRFLOW-4434) support the set command
-            # pylint: disable=no-member
+
             db = self.get_connection(self.hiveserver2_conn_id)  # type: ignore
-            # pylint: enable=no-member
+
             if db.extra_dejson.get('run_set_variable_statements', True):
                 env_context = get_context_from_env_var()
                 if hive_conf:

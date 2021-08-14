@@ -14,13 +14,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from connexion import NoContent
 from flask import current_app, g, request
 from marshmallow import ValidationError
+from sqlalchemy import or_
 
+from airflow._vendor.connexion import NoContent
 from airflow.api_connexion import security
 from airflow.api_connexion.exceptions import AlreadyExists, BadRequest, NotFound
-from airflow.api_connexion.parameters import check_limit, format_datetime, format_parameters
+from airflow.api_connexion.parameters import apply_sorting, check_limit, format_datetime, format_parameters
 from airflow.api_connexion.schemas.dag_run_schema import (
     DAGRunCollection,
     dagrun_collection_schema,
@@ -30,6 +31,7 @@ from airflow.api_connexion.schemas.dag_run_schema import (
 from airflow.models import DagModel, DagRun
 from airflow.security import permissions
 from airflow.utils.session import provide_session
+from airflow.utils.state import State
 from airflow.utils.types import DagRunType
 
 
@@ -94,6 +96,7 @@ def get_dag_runs(
     end_date_lte=None,
     offset=None,
     limit=None,
+    order_by='id',
 ):
     """Get all DAG Runs."""
     query = session.query(DagRun)
@@ -115,6 +118,7 @@ def get_dag_runs(
         start_date_lte,
         limit,
         offset,
+        order_by,
     )
 
     return dagrun_collection_schema.dump(DAGRunCollection(dag_runs=dag_run, total_entries=total_entries))
@@ -130,6 +134,7 @@ def _fetch_dag_runs(
     start_date_lte,
     limit,
     offset,
+    order_by,
 ):
     query = _apply_date_filters_to_query(
         query,
@@ -142,8 +147,22 @@ def _fetch_dag_runs(
     )
     # Count items
     total_entries = query.count()
+    # sort
+    to_replace = {"dag_run_id": "run_id"}
+    allowed_filter_attrs = [
+        "id",
+        "state",
+        "dag_id",
+        "execution_date",
+        "dag_run_id",
+        "start_date",
+        "end_date",
+        "external_trigger",
+        "conf",
+    ]
+    query = apply_sorting(query, order_by, to_replace, allowed_filter_attrs)
     # apply offset and limit
-    dag_run = query.order_by(DagRun.id).offset(offset).limit(limit).all()
+    dag_run = query.offset(offset).limit(limit).all()
     return dag_run, total_entries
 
 
@@ -202,6 +221,7 @@ def get_dag_runs_batch(session):
         data["start_date_lte"],
         data["page_limit"],
         data["page_offset"],
+        order_by=data.get('order_by', "id"),
     )
 
     return dagrun_collection_schema.dump(DAGRunCollection(dag_runs=dag_runs, total_entries=total_entries))
@@ -222,14 +242,35 @@ def post_dag_run(dag_id, session):
         post_body = dagrun_schema.load(request.json, session=session)
     except ValidationError as err:
         raise BadRequest(detail=str(err))
+
+    execution_date = post_body["execution_date"]
+    run_id = post_body["run_id"]
     dagrun_instance = (
-        session.query(DagRun).filter(DagRun.dag_id == dag_id, DagRun.run_id == post_body["run_id"]).first()
+        session.query(DagRun)
+        .filter(
+            DagRun.dag_id == dag_id,
+            or_(DagRun.run_id == run_id, DagRun.execution_date == execution_date),
+        )
+        .first()
     )
     if not dagrun_instance:
-        dag_run = DagRun(dag_id=dag_id, run_type=DagRunType.MANUAL, **post_body)
-        session.add(dag_run)
-        session.commit()
+        dag_run = current_app.dag_bag.get_dag(dag_id).create_dagrun(
+            run_type=DagRunType.MANUAL,
+            run_id=run_id,
+            execution_date=execution_date,
+            state=State.QUEUED,
+            conf=post_body.get("conf"),
+            external_trigger=True,
+            dag_hash=current_app.dag_bag.dags_hash.get(dag_id),
+        )
         return dagrun_schema.dump(dag_run)
+
+    if dagrun_instance.execution_date == execution_date:
+        raise AlreadyExists(
+            detail=f"DAGRun with DAG ID: '{dag_id}' and "
+            f"DAGRun ExecutionDate: '{post_body['execution_date']}' already exists"
+        )
+
     raise AlreadyExists(
         detail=f"DAGRun with DAG ID: '{dag_id}' and DAGRun ID: '{post_body['run_id']}' already exists"
     )

@@ -38,14 +38,8 @@ set the below:
 Sensitive Variable fields
 -------------------------
 
-By default, Airflow Value of a variable will be hidden if the key contains any words in
-(‘password’, ‘secret’, ‘passwd’, ‘authorization’, ‘api_key’, ‘apikey’, ‘access_token’), but can be configured
-to extend this list by using the following configurations option:
-
-.. code-block:: ini
-
-    [admin]
-    hide_sensitive_variable_fields = comma_separated_sensitive_variable_fields_list
+Variable values that are deemed "sensitive" based on the variable name will be masked in the UI automatically.
+See :ref:`security:mask-sensitive-values` for more details.
 
 .. _web-authentication:
 
@@ -76,7 +70,7 @@ user will have by default:
 
     AUTH_ROLE_PUBLIC = 'Admin'
 
-Be sure to checkout :doc:`/rest-api-ref` for securing the API.
+Be sure to checkout :doc:`/security/api` for securing the API.
 
 .. note::
 
@@ -96,7 +90,7 @@ Other Methods
 '''''''''''''
 
 Since the Airflow 2.0, the default UI is the Flask App Builder RBAC. A ``webserver_config.py`` configuration file
-it's automatically generated and can be used to configure the Airflow to support authentication
+is automatically generated and can be used to configure the Airflow to support authentication
 methods like OAuth, OpenID, LDAP, REMOTE_USER.
 
 For previous versions from Airflow, the ``$AIRFLOW_HOME/airflow.cfg`` following entry needs to be set to enable
@@ -113,7 +107,7 @@ with the following entry in the ``$AIRFLOW_HOME/webserver_config.py``.
 
     AUTH_TYPE = AUTH_DB
 
-Another way to create users it's in the UI login page, allowing user self registration through a "Register" button.
+Another way to create users is in the UI login page, allowing user self registration through a "Register" button.
 The following entries in the ``$AIRFLOW_HOME/webserver_config.py`` can be edited to make it possible:
 
 .. code-block:: ini

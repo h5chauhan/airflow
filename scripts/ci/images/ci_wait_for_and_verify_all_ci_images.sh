@@ -25,11 +25,16 @@ source "${LIBRARIES_DIR}/_all_libs.sh"
 
 initialization::set_output_color_variables
 
+PARALLEL_TAIL_LENGTH=5
+
 parallel::make_sure_gnu_parallel_is_installed
 
+parallel::make_sure_python_versions_are_specified
+
 echo
-echo "Waiting for all CI images to appear: ${CURRENT_PYTHON_MAJOR_MINOR_VERSIONS_AS_STRING}"
+echo "${COLOR_BLUE}Waiting for all CI images to appear${COLOR_RESET}"
 echo
+
 
 parallel::initialize_monitoring
 

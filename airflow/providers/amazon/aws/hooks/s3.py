@@ -16,7 +16,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# pylint: disable=invalid-name
+
 """Interact with AWS S3, using the boto3 library."""
 import fnmatch
 import gzip as gz
@@ -26,6 +26,7 @@ import shutil
 from functools import wraps
 from inspect import signature
 from io import BytesIO
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union, cast
 from urllib.parse import urlparse
@@ -37,7 +38,7 @@ from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.utils.helpers import chunks
 
-T = TypeVar("T", bound=Callable)  # pylint: disable=invalid-name
+T = TypeVar("T", bound=Callable)
 
 
 def provide_bucket_name(func: T) -> T:
@@ -142,7 +143,7 @@ class S3Hook(AwsBaseHook):
             raise AirflowException(f'Please provide a bucket_name instead of "{s3url}"')
 
         bucket_name = parsed_url.netloc
-        key = parsed_url.path.strip('/')
+        key = parsed_url.path.lstrip('/')
 
         return bucket_name, key
 
@@ -410,9 +411,9 @@ class S3Hook(AwsBaseHook):
             OutputSerialization=output_serialization,
         )
 
-        return ''.join(
-            event['Records']['Payload'].decode('utf-8') for event in response['Payload'] if 'Records' in event
-        )
+        return b''.join(
+            event['Records']['Payload'] for event in response['Payload'] if 'Records' in event
+        ).decode('utf-8')
 
     @provide_bucket_name
     @unify_bucket_name_and_key
@@ -464,7 +465,7 @@ class S3Hook(AwsBaseHook):
     @unify_bucket_name_and_key
     def load_file(
         self,
-        filename: str,
+        filename: Union[Path, str],
         key: str,
         bucket_name: Optional[str] = None,
         replace: bool = False,
@@ -475,8 +476,8 @@ class S3Hook(AwsBaseHook):
         """
         Loads a local file to S3
 
-        :param filename: name of the file to load.
-        :type filename: str
+        :param filename: path to the file to load.
+        :type filename: Union[Path, str]
         :param key: S3 key that will point to the file
         :type key: str
         :param bucket_name: Name of the bucket in which to store the file
@@ -494,6 +495,7 @@ class S3Hook(AwsBaseHook):
             uploaded to the S3 bucket.
         :type acl_policy: str
         """
+        filename = str(filename)
         if not replace and self.check_for_key(key, bucket_name):
             raise ValueError(f"The key {key} already exists.")
 

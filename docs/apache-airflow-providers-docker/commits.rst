@@ -28,14 +28,78 @@ For high-level changelog, see :doc:`package information including changelog <ind
 
 
 
+2.1.0
+.....
+
+Latest change: 2021-07-26
+
+================================================================================================  ===========  ===============================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  ===============================================================================
+`b10ed95a2 <https://github.com/apache/airflow/commit/b10ed95a2aded01eb5580120ab2abbde1bac633b>`_  2021-07-26   ``Updating Docker example DAGs to use XComArgs (#16871)``
+`cd3307ff2 <https://github.com/apache/airflow/commit/cd3307ff2147b170dc3feb5999edf5c8eebed4ba>`_  2021-07-26   ``fix string encoding when using xcom / json (#13536)``
+`24d02bfa8 <https://github.com/apache/airflow/commit/24d02bfa840ae2a315af4280b2c185122e3c30e1>`_  2021-07-19   ``Prepares documentation for RC2 release of Docker Provider (#17066)``
+`b076ac592 <https://github.com/apache/airflow/commit/b076ac5925e1a316dd6e9ad8ee4d1a2223e376ca>`_  2021-07-18   ``[FIX] Docker provider - retry docker in docker (#17061)``
+`d02ded65e <https://github.com/apache/airflow/commit/d02ded65eaa7d2281e249b3fa028605d1b4c52fb>`_  2021-07-15   ``Fixed wrongly escaped characters in amazon's changelog (#17020)``
+`b916b7507 <https://github.com/apache/airflow/commit/b916b7507921129dc48d6add1bdc4b923b60c9b9>`_  2021-07-15   ``Prepare documentation for July release of providers. (#17015)``
+`bc004151e <https://github.com/apache/airflow/commit/bc004151ed6924ee7bec5d9d047aedb4873806da>`_  2021-07-15   ``Adds option to disable mounting temporary folder in DockerOperator (#16932)``
+`866a601b7 <https://github.com/apache/airflow/commit/866a601b76e219b3c043e1dbbc8fb22300866351>`_  2021-06-28   ``Removes pylint from our toolchain (#16682)``
+================================================================================================  ===========  ===============================================================================
+
+2.0.0
+.....
+
+Latest change: 2021-06-18
+
+================================================================================================  ===========  =================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  =================================================================
+`bbc627a3d <https://github.com/apache/airflow/commit/bbc627a3dab17ba4cf920dd1a26dbed6f5cebfd1>`_  2021-06-18   ``Prepares documentation for rc2 release of Providers (#16501)``
+`cbf8001d7 <https://github.com/apache/airflow/commit/cbf8001d7630530773f623a786f9eb319783b33c>`_  2021-06-16   ``Synchronizes updated changelog after buggfix release (#16464)``
+`8a9c33783 <https://github.com/apache/airflow/commit/8a9c3378385454f16560d82e885ebc00c5ec069c>`_  2021-06-15   ``Remove class references in changelogs (#16454)``
+`1fba5402b <https://github.com/apache/airflow/commit/1fba5402bb14b3ffa6429fdc683121935f88472f>`_  2021-06-15   ``More documentation update for June providers release (#16405)``
+`9c94b72d4 <https://github.com/apache/airflow/commit/9c94b72d440b18a9e42123d20d48b951712038f9>`_  2021-06-07   ``Updated documentation for June 2021 provider release (#16294)``
+`12995cfb9 <https://github.com/apache/airflow/commit/12995cfb9a90d1f93511a4a4ab692323e62cc318>`_  2021-05-17   ``Replace DockerOperator's 'volumes' arg for 'mounts' (#15843)``
+`37681bca0 <https://github.com/apache/airflow/commit/37681bca0081dd228ac4047c17631867bba7a66f>`_  2021-05-07   ``Auto-apply apply_default decorator (#15667)``
+================================================================================================  ===========  =================================================================
+
+1.2.0
+.....
+
+Latest change: 2021-05-01
+
+================================================================================================  ===========  ======================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  ======================================================================
+`807ad32ce <https://github.com/apache/airflow/commit/807ad32ce59e001cb3532d98a05fa7d0d7fabb95>`_  2021-05-01   ``Prepares provider release after PIP 21 compatibility (#15576)``
+`5b2fe0e74 <https://github.com/apache/airflow/commit/5b2fe0e74013cd08d1f76f5c115f2c8f990ff9bc>`_  2021-04-27   ``Add Connection Documentation for Popular Providers (#15393)``
+`594d93d3b <https://github.com/apache/airflow/commit/594d93d3b0882132615ec26770ea77ff6aac5dff>`_  2021-04-09   ``Entrypoint support in docker operator (#14642)``
+`566127308 <https://github.com/apache/airflow/commit/566127308f283e2eff29e8a7fbfb01f17a1cd18a>`_  2021-04-08   ``Add PythonVirtualenvDecorator to Taskflow API (#14761)``
+`ab4771769 <https://github.com/apache/airflow/commit/ab477176998090e8fb94d6f0e6bf056bad2da441>`_  2021-04-07   ``Support all terminus task states in Docker Swarm Operator (#14960)``
+================================================================================================  ===========  ======================================================================
+
+1.1.0
+.....
+
+Latest change: 2021-04-06
+
+================================================================================================  ===========  =============================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  =============================================================================
+`042be2e4e <https://github.com/apache/airflow/commit/042be2e4e06b988f5ba2dc146f53774dabc8b76b>`_  2021-04-06   ``Updated documentation for provider packages before April release (#15236)``
+`68e4c4dcb <https://github.com/apache/airflow/commit/68e4c4dcb0416eb51a7011a3bb040f1e23d7bba8>`_  2021-03-20   ``Remove Backport Providers (#14886)``
+`3064bf044 <https://github.com/apache/airflow/commit/3064bf04429f86ff2b527704603ef3ca9b9fe22f>`_  2021-03-02   ``Add privileged option in DockerOperator (#14157)``
+================================================================================================  ===========  =============================================================================
+
 1.0.2
 .....
 
-Latest change: 2021-02-05
+Latest change: 2021-02-27
 
 ================================================================================================  ===========  =======================================================================
 Commit                                                                                            Committed    Subject
 ================================================================================================  ===========  =======================================================================
+`589d6dec9 <https://github.com/apache/airflow/commit/589d6dec922565897785bcbc5ac6bb3b973d7f5d>`_  2021-02-27   ``Prepare to release the next wave of providers: (#14487)``
 `10343ec29 <https://github.com/apache/airflow/commit/10343ec29f8f0abc5b932ba26faf49bc63c6bcda>`_  2021-02-05   ``Corrections in docs and tools after releasing provider RCs (#14082)``
 ================================================================================================  ===========  =======================================================================
 

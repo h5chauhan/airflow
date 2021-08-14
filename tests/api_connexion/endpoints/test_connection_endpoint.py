@@ -110,6 +110,7 @@ class TestGetConnection(TestConnectionEndpoint):
         connection_model = Connection(
             conn_id='test-connection-id',
             conn_type='mysql',
+            description='test description',
             host='mysql',
             login='login',
             schema='testschema',
@@ -127,6 +128,7 @@ class TestGetConnection(TestConnectionEndpoint):
         assert response.json == {
             "connection_id": "test-connection-id",
             "conn_type": 'mysql',
+            "description": "test description",
             "host": 'mysql',
             "login": 'login',
             'schema': 'testschema',
@@ -168,6 +170,7 @@ class TestGetConnections(TestConnectionEndpoint):
                 {
                     "connection_id": "test-connection-id-1",
                     "conn_type": 'test_type',
+                    "description": None,
                     "host": None,
                     "login": None,
                     'schema': None,
@@ -176,6 +179,44 @@ class TestGetConnections(TestConnectionEndpoint):
                 {
                     "connection_id": "test-connection-id-2",
                     "conn_type": 'test_type',
+                    "description": None,
+                    "host": None,
+                    "login": None,
+                    'schema': None,
+                    'port': None,
+                },
+            ],
+            'total_entries': 2,
+        }
+
+    def test_should_respond_200_with_order_by(self, session):
+        connection_model_1 = Connection(conn_id='test-connection-id-1', conn_type='test_type')
+        connection_model_2 = Connection(conn_id='test-connection-id-2', conn_type='test_type')
+        connections = [connection_model_1, connection_model_2]
+        session.add_all(connections)
+        session.commit()
+        result = session.query(Connection).all()
+        assert len(result) == 2
+        response = self.client.get(
+            "/api/v1/connections?order_by=-connection_id", environ_overrides={'REMOTE_USER': "test"}
+        )
+        assert response.status_code == 200
+        # Using - means descending
+        assert response.json == {
+            'connections': [
+                {
+                    "connection_id": "test-connection-id-2",
+                    "conn_type": 'test_type',
+                    "description": None,
+                    "host": None,
+                    "login": None,
+                    'schema': None,
+                    'port': None,
+                },
+                {
+                    "connection_id": "test-connection-id-1",
+                    "conn_type": 'test_type',
+                    "description": None,
                     "host": None,
                     "login": None,
                     'schema': None,
@@ -251,6 +292,20 @@ class TestGetConnectionsPagination(TestConnectionEndpoint):
         assert response.json["total_entries"] == 200
         assert len(response.json["connections"]) == 100
 
+    def test_invalid_order_by_raises_400(self, session):
+        connection_models = self._create_connections(200)
+        session.add_all(connection_models)
+        session.commit()
+
+        response = self.client.get(
+            "/api/v1/connections?order_by=invalid", environ_overrides={'REMOTE_USER': "test"}
+        )
+        assert response.status_code == 400
+        assert (
+            response.json['detail'] == "Ordering with 'invalid' is disallowed or"
+            " the attribute does not exist on the model"
+        )
+
     def test_limit_of_zero_should_return_default(self, session):
         connection_models = self._create_connections(200)
         session.add_all(connection_models)
@@ -316,6 +371,7 @@ class TestPatchConnection(TestConnectionEndpoint):
         assert response.json == {
             "connection_id": test_connection,  # not updated
             "conn_type": 'test_type',  # Not updated
+            "description": None,  # Not updated
             "extra": None,  # Not updated
             'login': "login",  # updated
             "port": 80,  # updated
@@ -491,6 +547,41 @@ class TestPostConnection(TestConnectionEndpoint):
     def test_should_raises_401_unauthenticated(self):
         response = self.client.post(
             "/api/v1/connections", json={"connection_id": "test-connection-id", "conn_type": 'test_type'}
+        )
+
+        assert_401(response)
+
+
+class TestConnection(TestConnectionEndpoint):
+    def test_should_respond_200(self):
+        payload = {"connection_id": "test-connection-id", "conn_type": 'sqlite'}
+        response = self.client.post(
+            "/api/v1/connections/test", json=payload, environ_overrides={'REMOTE_USER': "test"}
+        )
+        assert response.status_code == 200
+        assert response.json == {
+            'status': True,
+            'message': 'Connection successfully tested',
+        }
+
+    def test_post_should_respond_400_for_invalid_payload(self):
+        payload = {
+            "connection_id": "test-connection-id",
+        }  # conn_type missing
+        response = self.client.post(
+            "/api/v1/connections/test", json=payload, environ_overrides={'REMOTE_USER': "test"}
+        )
+        assert response.status_code == 400
+        assert response.json == {
+            'detail': "{'conn_type': ['Missing data for required field.']}",
+            'status': 400,
+            'title': 'Bad Request',
+            'type': EXCEPTIONS_LINK_MAP[400],
+        }
+
+    def test_should_raises_401_unauthenticated(self):
+        response = self.client.post(
+            "/api/v1/connections/test", json={"connection_id": "test-connection-id", "conn_type": 'test_type'}
         )
 
         assert_401(response)

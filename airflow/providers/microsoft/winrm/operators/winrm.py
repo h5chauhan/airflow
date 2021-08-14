@@ -26,7 +26,6 @@ from airflow.configuration import conf
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.microsoft.winrm.hooks.winrm import WinRMHook
-from airflow.utils.decorators import apply_defaults
 
 # Hide the following error message in urllib3 when making WinRM connections:
 # requests.packages.urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(),
@@ -56,8 +55,8 @@ class WinRMOperator(BaseOperator):
     """
 
     template_fields = ('command',)
+    template_fields_renderers = {"command": "powershell"}
 
-    @apply_defaults
     def __init__(
         self,
         *,
@@ -95,7 +94,6 @@ class WinRMOperator(BaseOperator):
 
         winrm_client = self.winrm_hook.get_conn()
 
-        # pylint: disable=too-many-nested-blocks
         try:
             if self.ps_path is not None:
                 self.log.info("Running command as powershell script: '%s'...", self.command)
@@ -115,7 +113,7 @@ class WinRMOperator(BaseOperator):
             command_done = False
             while not command_done:
                 try:
-                    # pylint: disable=protected-access
+
                     (
                         stdout,
                         stderr,

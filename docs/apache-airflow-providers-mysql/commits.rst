@@ -28,14 +28,66 @@ For high-level changelog, see :doc:`package information including changelog <ind
 
 
 
+2.1.0
+.....
+
+Latest change: 2021-07-26
+
+================================================================================================  ===========  =============================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  =============================================================================
+`0dbd0f420 <https://github.com/apache/airflow/commit/0dbd0f420cc08e011317e2a9f21f92fff4a64c1b>`_  2021-07-26   ``Remove/refactor default_args pattern for miscellaneous providers (#16872)``
+`a1d3b271e <https://github.com/apache/airflow/commit/a1d3b271edb2e938a7e76c10c5617425d0f48591>`_  2021-07-19   ``Parse template parameters field for MySQL operator (#17080)``
+`d02ded65e <https://github.com/apache/airflow/commit/d02ded65eaa7d2281e249b3fa028605d1b4c52fb>`_  2021-07-15   ``Fixed wrongly escaped characters in amazon's changelog (#17020)``
+`b916b7507 <https://github.com/apache/airflow/commit/b916b7507921129dc48d6add1bdc4b923b60c9b9>`_  2021-07-15   ``Prepare documentation for July release of providers. (#17015)``
+`6ab00bfcf <https://github.com/apache/airflow/commit/6ab00bfcfdfe1213928281527f32ca31b77cce1b>`_  2021-07-14   ``Extended template_fields_renderers for MySQL provider (#16987)``
+`c3b8212b6 <https://github.com/apache/airflow/commit/c3b8212b6e82145f96d17e51cc462db8e2506220>`_  2021-07-10   ``Added template_fields_renderers for MySQL Operator (#16914)``
+`866a601b7 <https://github.com/apache/airflow/commit/866a601b76e219b3c043e1dbbc8fb22300866351>`_  2021-06-28   ``Removes pylint from our toolchain (#16682)``
+================================================================================================  ===========  =============================================================================
+
+2.0.0
+.....
+
+Latest change: 2021-06-18
+
+================================================================================================  ===========  =================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  =================================================================
+`bbc627a3d <https://github.com/apache/airflow/commit/bbc627a3dab17ba4cf920dd1a26dbed6f5cebfd1>`_  2021-06-18   ``Prepares documentation for rc2 release of Providers (#16501)``
+`cbf8001d7 <https://github.com/apache/airflow/commit/cbf8001d7630530773f623a786f9eb319783b33c>`_  2021-06-16   ``Synchronizes updated changelog after buggfix release (#16464)``
+`1fba5402b <https://github.com/apache/airflow/commit/1fba5402bb14b3ffa6429fdc683121935f88472f>`_  2021-06-15   ``More documentation update for June providers release (#16405)``
+`9c94b72d4 <https://github.com/apache/airflow/commit/9c94b72d440b18a9e42123d20d48b951712038f9>`_  2021-06-07   ``Updated documentation for June 2021 provider release (#16294)``
+`37681bca0 <https://github.com/apache/airflow/commit/37681bca0081dd228ac4047c17631867bba7a66f>`_  2021-05-07   ``Auto-apply apply_default decorator (#15667)``
+`807ad32ce <https://github.com/apache/airflow/commit/807ad32ce59e001cb3532d98a05fa7d0d7fabb95>`_  2021-05-01   ``Prepares provider release after PIP 21 compatibility (#15576)``
+`bf2b48174 <https://github.com/apache/airflow/commit/bf2b48174a1ccfe398eefba7f04a5cacac421266>`_  2021-04-27   ``Add Connection Documentation for Providers (#15499)``
+`4b031d39e <https://github.com/apache/airflow/commit/4b031d39e12110f337151cda6693e2541bf71c2c>`_  2021-04-27   ``Make Airflow code Pylint 2.8 compatible (#15534)``
+`71c673e42 <https://github.com/apache/airflow/commit/71c673e427a89cae2a9f3174c32c5c85556d6342>`_  2021-04-22   ``Update Docstrings of Modules with Missing Params (#15391)``
+================================================================================================  ===========  =================================================================
+
+1.1.0
+.....
+
+Latest change: 2021-04-06
+
+================================================================================================  ===========  =============================================================================
+Commit                                                                                            Committed    Subject
+================================================================================================  ===========  =============================================================================
+`042be2e4e <https://github.com/apache/airflow/commit/042be2e4e06b988f5ba2dc146f53774dabc8b76b>`_  2021-04-06   ``Updated documentation for provider packages before April release (#15236)``
+`eae22cec9 <https://github.com/apache/airflow/commit/eae22cec9c87e8dad4d6e8599e45af1bdd452062>`_  2021-04-06   ``Adds 'Trino' provider (with lower memory footprint for tests) (#15187)``
+`9b76b94c9 <https://github.com/apache/airflow/commit/9b76b94c940d472290861930a1d5860b43b3b2b2>`_  2021-04-02   ``A bunch of template_fields_renderers additions (#15130)``
+`9b428bbbd <https://github.com/apache/airflow/commit/9b428bbbdf4c56f302a1ce84f7c2caf34b81ffa0>`_  2021-03-28   ``Fix autocommit calls for mysql-connector-python (#14869)``
+`68e4c4dcb <https://github.com/apache/airflow/commit/68e4c4dcb0416eb51a7011a3bb040f1e23d7bba8>`_  2021-03-20   ``Remove Backport Providers (#14886)``
+================================================================================================  ===========  =============================================================================
+
 1.0.2
 .....
 
-Latest change: 2021-02-17
+Latest change: 2021-02-27
 
 ================================================================================================  ===========  =======================================================================
 Commit                                                                                            Committed    Subject
 ================================================================================================  ===========  =======================================================================
+`589d6dec9 <https://github.com/apache/airflow/commit/589d6dec922565897785bcbc5ac6bb3b973d7f5d>`_  2021-02-27   ``Prepare to release the next wave of providers: (#14487)``
 `cdc20904a <https://github.com/apache/airflow/commit/cdc20904a59610822968ab57aa127d989ec7e2a5>`_  2021-02-17   ``MySQL hook respects conn_name_attr (#14240)``
 `10343ec29 <https://github.com/apache/airflow/commit/10343ec29f8f0abc5b932ba26faf49bc63c6bcda>`_  2021-02-05   ``Corrections in docs and tools after releasing provider RCs (#14082)``
 ================================================================================================  ===========  =======================================================================

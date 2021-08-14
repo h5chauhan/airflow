@@ -15,9 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 # Might be empty
-AIRFLOW_COMMAND="${1}"
+AIRFLOW_COMMAND="${1:-}"
 
 set -euo pipefail
 
@@ -154,13 +153,6 @@ function create_www_user() {
        --lastname "${_AIRFLOW_WWW_USER_LASTNME="Admin"}" \
        --email "${_AIRFLOW_WWW_USER_EMAIL="airflowadmin@example.com"}" \
        --role "${_AIRFLOW_WWW_USER_ROLE="Admin"}" \
-       --password "${local_password}" ||
-    airflow create_user \
-       --username "${_AIRFLOW_WWW_USER_USERNAME="admin"}" \
-       --firstname "${_AIRFLOW_WWW_USER_FIRSTNAME="Airflow"}" \
-       --lastname "${_AIRFLOW_WWW_USER_LASTNME="Admin"}" \
-       --email "${_AIRFLOW_WWW_USER_EMAIL="airflowadmin@example.com"}" \
-       --role "${_AIRFLOW_WWW_USER_ROLE="Admin"}" \
        --password "${local_password}" || true
 }
 
@@ -194,47 +186,29 @@ function set_pythonpath_for_root_user() {
 }
 
 function wait_for_airflow_db() {
-    # Check if Airflow has a command to check the connection to the database.
-    if ! airflow db check --help >/dev/null 2>&1; then
-        run_check_with_retries "airflow db check"
-    else
-        # Verify connections to the Airflow DB by guessing the database address based on environment variables,
-        # then uses netcat to check that the host is reachable.
-        # This is only used by Airflow 1.10+ as there are no built-in commands to check the db connection.
-        local connection_url
-        if [[ -n "${AIRFLOW__CORE__SQL_ALCHEMY_CONN_CMD=}" ]]; then
-            connection_url="$(eval "${AIRFLOW__CORE__SQL_ALCHEMY_CONN_CMD}")"
-        else
-            # if no DB configured - use sqlite db by default
-            connection_url="${AIRFLOW__CORE__SQL_ALCHEMY_CONN:="sqlite:///${AIRFLOW_HOME}/airflow.db"}"
-        fi
-        # SQLite doesn't require a remote connection, so we don't have to wait.
-        if [[ ${connection_url} != sqlite* ]]; then
-            wait_for_connection "${connection_url}"
-        fi
-    fi
+    # Wait for the command to run successfully to validate the database connection.
+    run_check_with_retries "airflow db check"
 }
 
 function upgrade_db() {
     # Runs airflow db upgrade
-    airflow db upgrade || airflow upgradedb || true
+    airflow db upgrade || true
 }
 
-function wait_for_celery_backend() {
+function wait_for_celery_broker() {
     # Verifies connection to Celery Broker
-    if [[ -n "${AIRFLOW__CELERY__BROKER_URL_CMD=}" ]]; then
-        wait_for_connection "$(eval "${AIRFLOW__CELERY__BROKER_URL_CMD}")"
-    else
-        AIRFLOW__CELERY__BROKER_URL=${AIRFLOW__CELERY__BROKER_URL:=}
-        if [[ -n ${AIRFLOW__CELERY__BROKER_URL=} ]]; then
-            wait_for_connection "${AIRFLOW__CELERY__BROKER_URL}"
-        fi
+    local executor
+    executor="$(airflow config get-value core executor)"
+    if [[ "${executor}" == "CeleryExecutor" ]]; then
+        local connection_url
+        connection_url="$(airflow config get-value celery broker_url)"
+        wait_for_connection "${connection_url}"
     fi
 }
 
 function exec_to_bash_or_python_command_if_specified() {
-    # If one of the commands: 'airflow', 'bash', 'python' is used, either run appropriate
-    # command with exec or update the command line parameters
+    # If one of the commands: 'bash', 'python' is used, either run appropriate
+    # command with exec
     if [[ ${AIRFLOW_COMMAND} == "bash" ]]; then
        shift
        exec "/bin/bash" "${@}"
@@ -244,6 +218,53 @@ function exec_to_bash_or_python_command_if_specified() {
     fi
 }
 
+function check_uid_gid() {
+    if [[ $(id -g) == "0" ]]; then
+        return
+    fi
+    if [[ $(id -u) == "50000" ]]; then
+        >&2 echo
+        >&2 echo "WARNING! You should run the image with GID (Group ID) set to 0"
+        >&2 echo "         even if you use 'airflow' user (UID=50000)"
+        >&2 echo
+        >&2 echo " You started the image with UID=$(id -u) and GID=$(id -g)"
+        >&2 echo
+        >&2 echo " This is to make sure you can run the image with an arbitrary UID in the future."
+        >&2 echo
+        >&2 echo " See more about it in the Airflow's docker image documentation"
+        >&2 echo "     http://airflow.apache.org/docs/docker-stack/entrypoint"
+        >&2 echo
+        # We still allow the image to run with `airflow` user.
+        return
+    else
+        >&2 echo
+        >&2 echo "ERROR! You should run the image with GID=0"
+        >&2 echo
+        >&2 echo " You started the image with UID=$(id -u) and GID=$(id -g)"
+        >&2 echo
+        >&2 echo "The image should always be run with GID (Group ID) set to 0 regardless of the UID used."
+        >&2 echo " This is to make sure you can run the image with an arbitrary UID."
+        >&2 echo
+        >&2 echo " See more about it in the Airflow's docker image documentation"
+        >&2 echo "     http://airflow.apache.org/docs/docker-stack/entrypoint"
+        # This will not work so we fail hard
+        exit 1
+    fi
+}
+
+# In Airflow image we are setting PIP_USER variable to true, in order to install all the packages
+# by default with the ``--user`` flag. However this is a problem if a virtualenv is created later
+# which happens in PythonVirtualenvOperator. We are unsetting this variable here, so that it is
+# not set when PIP is run by Airflow later on
+unset PIP_USER
+
+check_uid_gid
+
+# Set umask to 0002 to make all the directories created by the current user group-writeable
+# This allows the same directories to be writeable for any arbitrary user the image will be
+# run with, when the directory is created on a mounted volume and when that volume is later
+# reused with a different UID (but with GID=0)
+umask 0002
 
 CONNECTION_CHECK_MAX_COUNT=${CONNECTION_CHECK_MAX_COUNT:=20}
 readonly CONNECTION_CHECK_MAX_COUNT
@@ -265,6 +286,23 @@ if [[ -n "${_AIRFLOW_WWW_USER_CREATE=}" ]] ; then
     create_www_user
 fi
 
+if [[ -n "${_PIP_ADDITIONAL_REQUIREMENTS=}" ]] ; then
+    >&2 echo
+    >&2 echo "!!!!!  Installing additional requirements: '${_PIP_ADDITIONAL_REQUIREMENTS}' !!!!!!!!!!!!"
+    >&2 echo
+    >&2 echo "WARNING: This is a developpment/test feature only. NEVER use it in production!"
+    >&2 echo "         Instead, build a custom image as described in"
+    >&2 echo
+    >&2 echo "         https://airflow.apache.org/docs/docker-stack/build.html"
+    >&2 echo
+    >&2 echo "         Adding requirements at container startup is fragile and is done every time"
+    >&2 echo "         the container starts, so it is onlny useful for testing and trying out"
+    >&2 echo "         of adding dependencies."
+    >&2 echo
+    pip install --no-cache-dir --user ${_PIP_ADDITIONAL_REQUIREMENTS}
+fi
+
+
 # The `bash` and `python` commands should also verify the basic connections
 # So they are run after the DB check
 exec_to_bash_or_python_command_if_specified "${@}"
@@ -276,14 +314,14 @@ exec_to_bash_or_python_command_if_specified "${@}"
 #     docker run IMAGE webserver
 #
 if [[ ${AIRFLOW_COMMAND} == "airflow" ]]; then
-   AIRFLOW_COMMAND="${2}"
+   AIRFLOW_COMMAND="${2:-}"
    shift
 fi
 
 # Note: the broker backend configuration concerns only a subset of Airflow components
-if [[ ${AIRFLOW_COMMAND} =~ ^(scheduler|celery|worker|flower)$ ]] \
+if [[ ${AIRFLOW_COMMAND} =~ ^(scheduler|celery)$ ]] \
     && [[ "${CONNECTION_CHECK_MAX_COUNT}" -gt "0" ]]; then
-    wait_for_celery_backend "${@}"
+    wait_for_celery_broker
 fi
 
 exec "airflow" "${@}"

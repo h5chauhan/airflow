@@ -57,13 +57,16 @@ class DefaultHelpParser(argparse.ArgumentParser):
 
     def _check_value(self, action, value):
         """Override _check_value and check conditionally added command"""
-        executor = conf.get('core', 'EXECUTOR')
-        if value == 'celery' and executor not in (CELERY_EXECUTOR, CELERY_KUBERNETES_EXECUTOR):
-            message = f'celery subcommand works only with CeleryExecutor, your current executor: {executor}'
-            raise ArgumentError(action, message)
-        if value == 'kubernetes':
+        if action.dest == 'subcommand' and value == 'celery':
+            executor = conf.get('core', 'EXECUTOR')
+            if executor not in (CELERY_EXECUTOR, CELERY_KUBERNETES_EXECUTOR):
+                message = (
+                    f'celery subcommand works only with CeleryExecutor, your current executor: {executor}'
+                )
+                raise ArgumentError(action, message)
+        if action.dest == 'subcommand' and value == 'kubernetes':
             try:
-                import kubernetes.client  # noqa: F401 pylint: disable=unused-import
+                import kubernetes.client  # noqa: F401
             except ImportError:
                 message = (
                     'The kubernetes subcommand requires that you pip install the kubernetes python client.'
@@ -89,7 +92,6 @@ _UNSET = object()
 class Arg:
     """Class to keep information about command line argument"""
 
-    # pylint: disable=redefined-builtin,unused-argument,too-many-arguments
     def __init__(
         self,
         flags=_UNSET,
@@ -112,8 +114,6 @@ class Arg:
                 continue
 
             self.kwargs[k] = v
-
-    # pylint: enable=redefined-builtin,unused-argument,too-many-arguments
 
     def add_to_parser(self, parser: argparse.ArgumentParser):
         """Add this argument to an ArgumentParser"""
@@ -141,6 +141,9 @@ def positive_int(*, allow_zero):
 ARG_DAG_ID = Arg(("dag_id",), help="The id of the dag")
 ARG_TASK_ID = Arg(("task_id",), help="The id of the task")
 ARG_EXECUTION_DATE = Arg(("execution_date",), help="The execution date of the DAG", type=parsedate)
+ARG_EXECUTION_DATE_OR_DAGRUN_ID = Arg(
+    ('execution_date_or_run_id',), help="The execution_date of the DAG or run_id of the DAGRun"
+)
 ARG_TASK_REGEX = Arg(
     ("-t", "--task-regex"), help="The regex to filter specific task_ids to backfill (optional)"
 )
@@ -502,7 +505,7 @@ ARG_DO_PICKLE = Arg(
 ARG_QUEUES = Arg(
     ("-q", "--queues"),
     help="Comma delimited list of queues to serve",
-    default=conf.get('celery', 'DEFAULT_QUEUE'),
+    default=conf.get('operators', 'DEFAULT_QUEUE'),
 )
 ARG_CONCURRENCY = Arg(
     ("-c", "--concurrency"),
@@ -518,6 +521,18 @@ ARG_UMASK = Arg(
     ("-u", "--umask"),
     help="Set the umask of celery worker in daemon mode",
     default=conf.get('celery', 'worker_umask'),
+)
+ARG_WITHOUT_MINGLE = Arg(
+    ("--without-mingle",),
+    default=False,
+    help="Don’t synchronize with other workers at start-up",
+    action="store_true",
+)
+ARG_WITHOUT_GOSSIP = Arg(
+    ("--without-gossip",),
+    default=False,
+    help="Don’t subscribe to other workers events",
+    action="store_true",
 )
 
 # flower
@@ -590,6 +605,7 @@ ARG_CONN_EXPORT = Arg(
 ARG_CONN_EXPORT_FORMAT = Arg(
     ('--format',), help='Format of the connections data in file', type=str, choices=['json', 'yaml', 'env']
 )
+ARG_CONN_IMPORT = Arg(("file",), help="Import connections from a file")
 
 # providers
 ARG_PROVIDER_NAME = Arg(
@@ -684,8 +700,8 @@ ARG_OPTION = Arg(
 # kubernetes cleanup-pods
 ARG_NAMESPACE = Arg(
     ("--namespace",),
-    default='default',
-    help="Kubernetes Namespace",
+    default=conf.get('kubernetes', 'namespace'),
+    help="Kubernetes Namespace. Default value is `[kubernetes] namespace` in configuration.",
 )
 
 # jobs check
@@ -714,6 +730,18 @@ ARG_ALLOW_MULTIPLE = Arg(
     ("--allow-multiple",),
     action='store_true',
     help="If passed, this command will be successful even if multiple matching alive jobs are found.",
+)
+
+# sync-perm
+ARG_INCLUDE_DAGS = Arg(
+    ("--include-dags",), help="If passed, DAG specific permissions will also be synced.", action="store_true"
+)
+
+# triggerer
+ARG_CAPACITY = Arg(
+    ("--capacity",),
+    type=str,
+    help="The maximum number of triggers that a Triggerer will run at one time.",
 )
 
 ALTERNATIVE_CONN_SPECS_ARGS = [
@@ -956,7 +984,7 @@ TASKS_COMMANDS = (
         name='state',
         help="Get the status of a task instance",
         func=lazy_load_command('airflow.cli.commands.task_command.task_state'),
-        args=(ARG_DAG_ID, ARG_TASK_ID, ARG_EXECUTION_DATE, ARG_SUBDIR, ARG_VERBOSE),
+        args=(ARG_DAG_ID, ARG_TASK_ID, ARG_EXECUTION_DATE_OR_DAGRUN_ID, ARG_SUBDIR, ARG_VERBOSE),
     ),
     ActionCommand(
         name='failed-deps',
@@ -967,13 +995,13 @@ TASKS_COMMANDS = (
             "and then run by an executor."
         ),
         func=lazy_load_command('airflow.cli.commands.task_command.task_failed_deps'),
-        args=(ARG_DAG_ID, ARG_TASK_ID, ARG_EXECUTION_DATE, ARG_SUBDIR),
+        args=(ARG_DAG_ID, ARG_TASK_ID, ARG_EXECUTION_DATE_OR_DAGRUN_ID, ARG_SUBDIR),
     ),
     ActionCommand(
         name='render',
         help="Render a task instance's template(s)",
         func=lazy_load_command('airflow.cli.commands.task_command.task_render'),
-        args=(ARG_DAG_ID, ARG_TASK_ID, ARG_EXECUTION_DATE, ARG_SUBDIR, ARG_VERBOSE),
+        args=(ARG_DAG_ID, ARG_TASK_ID, ARG_EXECUTION_DATE_OR_DAGRUN_ID, ARG_SUBDIR, ARG_VERBOSE),
     ),
     ActionCommand(
         name='run',
@@ -982,7 +1010,7 @@ TASKS_COMMANDS = (
         args=(
             ARG_DAG_ID,
             ARG_TASK_ID,
-            ARG_EXECUTION_DATE,
+            ARG_EXECUTION_DATE_OR_DAGRUN_ID,
             ARG_SUBDIR,
             ARG_MARK_SUCCESS,
             ARG_FORCE,
@@ -1012,7 +1040,7 @@ TASKS_COMMANDS = (
         args=(
             ARG_DAG_ID,
             ARG_TASK_ID,
-            ARG_EXECUTION_DATE,
+            ARG_EXECUTION_DATE_OR_DAGRUN_ID,
             ARG_SUBDIR,
             ARG_DRY_RUN,
             ARG_TASK_PARAMS,
@@ -1024,7 +1052,7 @@ TASKS_COMMANDS = (
         name='states-for-dag-run',
         help="Get the status of all task instances in a dag run",
         func=lazy_load_command('airflow.cli.commands.task_command.task_states_for_dag_run'),
-        args=(ARG_DAG_ID, ARG_EXECUTION_DATE, ARG_OUTPUT, ARG_VERBOSE),
+        args=(ARG_DAG_ID, ARG_EXECUTION_DATE_OR_DAGRUN_ID, ARG_OUTPUT, ARG_VERBOSE),
     ),
 )
 POOLS_COMMANDS = (
@@ -1188,6 +1216,16 @@ CONNECTIONS_COMMANDS = (
             ARG_CONN_EXPORT_FORMAT,
         ),
     ),
+    ActionCommand(
+        name='import',
+        help='Import connections from a file',
+        description=(
+            "Connections can be imported from the output of the export command.\n"
+            "The filetype must by json, yaml or env and will be automatically inferred."
+        ),
+        func=lazy_load_command('airflow.cli.commands.connection_command.connections_import'),
+        args=(ARG_CONN_IMPORT,),
+    ),
 )
 PROVIDERS_COMMANDS = (
     ActionCommand(
@@ -1267,7 +1305,7 @@ USERS_COMMANDS = (
         name='delete',
         help='Delete a user',
         func=lazy_load_command('airflow.cli.commands.user_command.users_delete'),
-        args=(ARG_USERNAME,),
+        args=(ARG_USERNAME_OPTIONAL, ARG_EMAIL_OPTIONAL),
     ),
     ActionCommand(
         name='add-role',
@@ -1326,6 +1364,8 @@ CELERY_COMMANDS = (
             ARG_LOG_FILE,
             ARG_AUTOSCALE,
             ARG_SKIP_SERVE_LOGS,
+            ARG_WITHOUT_MINGLE,
+            ARG_WITHOUT_GOSSIP,
         ),
     ),
     ActionCommand(
@@ -1350,7 +1390,7 @@ CELERY_COMMANDS = (
         name='stop',
         help="Stop the Celery worker gracefully",
         func=lazy_load_command('airflow.cli.commands.celery_command.stop_worker'),
-        args=(),
+        args=(ARG_PID,),
     ),
 )
 
@@ -1375,7 +1415,11 @@ CONFIG_COMMANDS = (
 KUBERNETES_COMMANDS = (
     ActionCommand(
         name='cleanup-pods',
-        help="Clean up Kubernetes pods in evicted/failed/succeeded states",
+        help=(
+            "Clean up Kubernetes pods "
+            "(created by KubernetesExecutor/KubernetesPodOperator) "
+            "in evicted/failed/succeeded states"
+        ),
         func=lazy_load_command('airflow.cli.commands.kubernetes_command.cleanup_pods'),
         args=(ARG_NAMESPACE,),
     ),
@@ -1483,6 +1527,7 @@ airflow_commands: List[CLICommand] = [
             ARG_STDOUT,
             ARG_STDERR,
             ARG_LOG_FILE,
+            ARG_SKIP_SERVE_LOGS,
         ),
         epilog=(
             'Signals:\n'
@@ -1491,6 +1536,19 @@ airflow_commands: List[CLICommand] = [
             '\n'
             '    Example:\n'
             '        pkill -f -USR2 "airflow scheduler"'
+        ),
+    ),
+    ActionCommand(
+        name='triggerer',
+        help="Start a triggerer instance",
+        func=lazy_load_command('airflow.cli.commands.triggerer_command.triggerer'),
+        args=(
+            ARG_PID,
+            ARG_DAEMON,
+            ARG_STDOUT,
+            ARG_STDERR,
+            ARG_LOG_FILE,
+            ARG_CAPACITY,
         ),
     ),
     ActionCommand(
@@ -1527,9 +1585,9 @@ airflow_commands: List[CLICommand] = [
     ),
     ActionCommand(
         name='sync-perm',
-        help="Update permissions for existing roles and DAGs",
+        help="Update permissions for existing roles and optionally DAGs",
         func=lazy_load_command('airflow.cli.commands.sync_perm_command.sync_perm'),
-        args=(),
+        args=(ARG_INCLUDE_DAGS,),
     ),
     ActionCommand(
         name='rotate-fernet-key',
@@ -1569,6 +1627,12 @@ airflow_commands: List[CLICommand] = [
         ),
         subcommands=CELERY_COMMANDS,
     ),
+    ActionCommand(
+        name='standalone',
+        help='Run an all-in-one copy of Airflow',
+        func=lazy_load_command('airflow.cli.commands.standalone_command.standalone'),
+        args=tuple(),
+    ),
 ]
 ALL_COMMANDS_DICT: Dict[str, CLICommand] = {sp.name: sp for sp in airflow_commands}
 
@@ -1606,7 +1670,7 @@ class AirflowHelpFormatter(argparse.HelpFormatter):
     """
 
     def _format_action(self, action: Action):
-        if isinstance(action, argparse._SubParsersAction):  # pylint: disable=protected-access
+        if isinstance(action, argparse._SubParsersAction):
 
             parts = []
             action_header = self._format_action_invocation(action)
@@ -1614,7 +1678,7 @@ class AirflowHelpFormatter(argparse.HelpFormatter):
             parts.append(action_header)
 
             self._indent()
-            subactions = action._get_subactions()  # pylint: disable=protected-access
+            subactions = action._get_subactions()
             action_subcommands, group_subcommands = partition(
                 lambda d: isinstance(ALL_COMMANDS_DICT[d.dest], GroupCommand), subactions
             )
@@ -1668,9 +1732,7 @@ def _sort_args(args: Iterable[Arg]) -> Iterable[Arg]:
     yield from sorted(optional, key=lambda x: get_long_option(x).lower())
 
 
-def _add_command(
-    subparsers: argparse._SubParsersAction, sub: CLICommand  # pylint: disable=protected-access
-) -> None:
+def _add_command(subparsers: argparse._SubParsersAction, sub: CLICommand) -> None:
     sub_proc = subparsers.add_parser(
         sub.name, help=sub.help, description=sub.description or sub.help, epilog=sub.epilog
     )

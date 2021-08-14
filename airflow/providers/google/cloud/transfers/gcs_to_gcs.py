@@ -22,7 +22,6 @@ from typing import Optional, Sequence, Union
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
-from airflow.utils.decorators import apply_defaults
 
 WILDCARD = '*'
 
@@ -185,10 +184,9 @@ class GCSToGCSOperator(BaseOperator):
     )
     ui_color = '#f0eee4'
 
-    @apply_defaults
     def __init__(
         self,
-        *,  # pylint: disable=too-many-arguments
+        *,
         source_bucket,
         source_object=None,
         source_objects=None,
@@ -356,7 +354,19 @@ class GCSToGCSOperator(BaseOperator):
             # and only keep those files which are present in
             # Source GCS bucket and not in Destination GCS bucket
 
-            existing_objects = hook.list(self.destination_bucket, prefix=prefix_, delimiter=delimiter)
+            if self.destination_object is None:
+                existing_objects = hook.list(self.destination_bucket, prefix=prefix_, delimiter=delimiter)
+            else:
+                self.log.info("Replaced destination_object with source_object prefix.")
+                destination_objects = hook.list(
+                    self.destination_bucket,
+                    prefix=self.destination_object,
+                    delimiter=delimiter,
+                )
+                existing_objects = [
+                    dest_object.replace(self.destination_object, prefix_, 1)
+                    for dest_object in destination_objects
+                ]
 
             objects = set(objects) - set(existing_objects)
             if len(objects) > 0:

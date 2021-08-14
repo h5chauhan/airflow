@@ -63,13 +63,12 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
             from airflow.providers.microsoft.azure.hooks.wasb import WasbHook
 
             return WasbHook(remote_conn_id)
-        except AzureHttpError as e:
-            self.log.error(
-                'Could not create an WasbHook with connection id "%s". '
-                'Please make sure that airflow[azure] is installed and '
-                'the Wasb connection exists. Exception "%s"',
+        except AzureHttpError:
+            self.log.exception(
+                'Could not create an WasbHook with connection id "%s".'
+                ' Please make sure that apache-airflow[azure] is installed'
+                ' and the Wasb connection exists.',
                 remote_conn_id,
-                e,
             )
             return None
 
@@ -142,7 +141,7 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         """
         try:
             return self.hook.check_for_blob(self.wasb_container, remote_log_location)
-        # pylint: disable=broad-except
+
         except Exception as e:
             self.log.debug('Exception when trying to check remote location: "%s"', e)
         return False
@@ -160,9 +159,9 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         """
         try:
             return self.hook.read_file(self.wasb_container, remote_log_location)
-        except AzureHttpError as e:
+        except AzureHttpError:
             msg = f'Could not read logs from {remote_log_location}'
-            self.log.exception("Message: '%s', exception '%s'", msg, e)
+            self.log.exception(msg)
             # return error if needed
             if return_error:
                 return msg
@@ -186,10 +185,6 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
             log = '\n'.join([old_log, log]) if old_log else log
 
         try:
-            self.hook.load_string(
-                log,
-                self.wasb_container,
-                remote_log_location,
-            )
+            self.hook.load_string(log, self.wasb_container, remote_log_location, overwrite=True)
         except AzureHttpError:
             self.log.exception('Could not write logs to %s', remote_log_location)

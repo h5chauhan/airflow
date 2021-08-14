@@ -20,19 +20,18 @@ import concurrent.futures
 import datetime
 import os
 import shutil
+import sys
+import traceback
 from itertools import repeat
 from typing import Iterator, List, Tuple
 
 import requests
+import urllib3.exceptions
 from requests.adapters import DEFAULT_POOLSIZE
 
 from airflow.utils.helpers import partition
-from docs.exts.docs_build.docs_builder import (  # pylint: disable=no-name-in-module
-    get_available_providers_packages,
-)
-from docs.exts.docs_build.third_party_inventories import (  # pylint: disable=no-name-in-module
-    THIRD_PARTY_INDEXES,
-)
+from docs.exts.docs_build.docs_builder import get_available_providers_packages
+from docs.exts.docs_build.third_party_inventories import THIRD_PARTY_INDEXES
 
 CURRENT_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, os.pardir, os.pardir, os.pardir))
@@ -50,9 +49,15 @@ def _fetch_file(session: requests.Session, package_name: str, url: str, path: st
     Download a file and returns status information as a tuple with package
     name and success status(bool value).
     """
-    response = session.get(url, allow_redirects=True, stream=True)
+    try:
+        response = session.get(url, allow_redirects=True, stream=True)
+    except (requests.RequestException, urllib3.exceptions.HTTPError):
+        print(f"Failed to fetch inventory: {url}")
+        traceback.print_exc(file=sys.stderr)
+        return package_name, False
     if not response.ok:
         print(f"Failed to fetch inventory: {url}")
+        print(f"Failed with status: {response.status_code}", file=sys.stderr)
         return package_name, False
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -83,13 +88,14 @@ def fetch_inventories():
                 f'{CACHE_DIR}/{pkg_name}/objects.inv',
             )
         )
-    to_download.append(
-        (
-            "apache-airflow",
-            S3_DOC_URL_VERSIONED.format(package_name='apache-airflow'),
-            f'{CACHE_DIR}/apache-airflow/objects.inv',
+    for pkg_name in ['apache-airflow', 'helm-chart']:
+        to_download.append(
+            (
+                pkg_name,
+                S3_DOC_URL_VERSIONED.format(package_name=pkg_name),
+                f'{CACHE_DIR}/{pkg_name}/objects.inv',
+            )
         )
-    )
     for pkg_name in ['apache-airflow-providers', 'docker-stack']:
         to_download.append(
             (

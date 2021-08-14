@@ -27,16 +27,15 @@ function compile_www_assets() {
     local md5sum_file
     md5sum_file="static/dist/sum.md5"
     readonly md5sum_file
-    local airflow_site_package
-    airflow_site_package="$(python -m site --user-site)/airflow"
-    local www_dir=""
-    if [[ -f "${airflow_site_package}/www_rbac/package.json" ]]; then
-        www_dir="${airflow_site_package}/www_rbac"
-    elif [[ -f "${airflow_site_package}/www/package.json" ]]; then
-        www_dir="${airflow_site_package}/www"
+    local www_dir
+    if [[ ${AIRFLOW_INSTALLATION_METHOD=} == "." ]]; then
+        # In case we are building from sources in production image, we should build the assets
+        www_dir="${AIRFLOW_SOURCES_TO}/airflow/www"
+    else
+        www_dir="$(python -m site --user-site)/airflow/www"
     fi
     pushd ${www_dir} || exit 1
-    yarn install --frozen-lockfile --no-cache
+    yarn install --frozen-lockfile --no-cache --network-concurrency=1
     yarn run prod
     find package.json yarn.lock static/css static/js -type f | sort | xargs md5sum > "${md5sum_file}"
     rm -rf "${www_dir}/node_modules"

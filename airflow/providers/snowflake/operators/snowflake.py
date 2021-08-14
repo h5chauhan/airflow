@@ -19,7 +19,6 @@ from typing import Any, Optional
 
 from airflow.models import BaseOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from airflow.utils.decorators import apply_defaults
 
 
 class SnowflakeOperator(BaseOperator):
@@ -30,7 +29,8 @@ class SnowflakeOperator(BaseOperator):
         For more information on how to use this operator, take a look at the guide:
         :ref:`howto/operator:SnowflakeOperator`
 
-    :param snowflake_conn_id: reference to specific snowflake connection id
+    :param snowflake_conn_id: Reference to
+        :ref:`Snowflake connection id<howto/connection:snowflake>`
     :type snowflake_conn_id: str
     :param sql: the sql code to be executed. (templated)
     :type sql: Can receive a str representing a sql statement,
@@ -70,7 +70,6 @@ class SnowflakeOperator(BaseOperator):
     template_ext = ('.sql',)
     ui_color = '#ededed'
 
-    @apply_defaults
     def __init__(
         self,
         *,
@@ -78,6 +77,7 @@ class SnowflakeOperator(BaseOperator):
         snowflake_conn_id: str = 'snowflake_default',
         parameters: Optional[dict] = None,
         autocommit: bool = True,
+        do_xcom_push: bool = True,
         warehouse: Optional[str] = None,
         database: Optional[str] = None,
         role: Optional[str] = None,
@@ -90,6 +90,7 @@ class SnowflakeOperator(BaseOperator):
         self.snowflake_conn_id = snowflake_conn_id
         self.sql = sql
         self.autocommit = autocommit
+        self.do_xcom_push = do_xcom_push
         self.parameters = parameters
         self.warehouse = warehouse
         self.database = database
@@ -97,6 +98,7 @@ class SnowflakeOperator(BaseOperator):
         self.schema = schema
         self.authenticator = authenticator
         self.session_parameters = session_parameters
+        self.query_ids = []
 
     def get_hook(self) -> SnowflakeHook:
         """
@@ -118,4 +120,8 @@ class SnowflakeOperator(BaseOperator):
         """Run query on snowflake"""
         self.log.info('Executing: %s', self.sql)
         hook = self.get_hook()
-        hook.run(self.sql, autocommit=self.autocommit, parameters=self.parameters)
+        execution_info = hook.run(self.sql, autocommit=self.autocommit, parameters=self.parameters)
+        self.query_ids = hook.query_ids
+
+        if self.do_xcom_push:
+            return execution_info

@@ -41,18 +41,15 @@ CREATE_TABLE_SQL_STRING = (
 )
 SQL_INSERT_STATEMENT = f"INSERT INTO {SNOWFLAKE_SAMPLE_TABLE} VALUES ('name', %(id)s)"
 SQL_LIST = [SQL_INSERT_STATEMENT % {"id": n} for n in range(0, 10)]
+SQL_MULTIPLE_STMTS = "; ".join(SQL_LIST)
 SNOWFLAKE_SLACK_SQL = f"SELECT name, id FROM {SNOWFLAKE_SAMPLE_TABLE} LIMIT 10;"
 SNOWFLAKE_SLACK_MESSAGE = (
     "Results in an ASCII table:\n```{{ results_df | tabulate(tablefmt='pretty', headers='keys') }}```"
 )
 
-default_args = {
-    'owner': 'airflow',
-}
 
 dag = DAG(
     'example_snowflake',
-    default_args=default_args,
     start_date=days_ago(2),
     tags=['example'],
 )
@@ -84,6 +81,13 @@ snowflake_op_with_params = SnowflakeOperator(
 
 snowflake_op_sql_list = SnowflakeOperator(
     task_id='snowflake_op_sql_list', dag=dag, snowflake_conn_id=SNOWFLAKE_CONN_ID, sql=SQL_LIST
+)
+
+snowflake_op_sql_multiple_stmts = SnowflakeOperator(
+    task_id='snowflake_op_sql_multiple_stmts',
+    dag=dag,
+    snowflake_conn_id=SNOWFLAKE_CONN_ID,
+    sql=SQL_MULTIPLE_STMTS,
 )
 
 snowflake_op_template_file = SnowflakeOperator(
@@ -123,9 +127,14 @@ slack_report = SnowflakeToSlackOperator(
 
 # [END howto_operator_snowflake_to_slack]
 
-snowflake_op_sql_str >> [
-    snowflake_op_with_params,
-    snowflake_op_sql_list,
-    snowflake_op_template_file,
-    copy_into_table,
-] >> slack_report
+(
+    snowflake_op_sql_str
+    >> [
+        snowflake_op_with_params,
+        snowflake_op_sql_list,
+        snowflake_op_template_file,
+        copy_into_table,
+        snowflake_op_sql_multiple_stmts,
+    ]
+    >> slack_report
+)

@@ -22,7 +22,6 @@ from airflow.exceptions import AirflowException
 from airflow.operators.sql import SQLCheckOperator, SQLValueCheckOperator
 from airflow.providers.qubole.hooks.qubole_check import QuboleCheckHook
 from airflow.providers.qubole.operators.qubole import QuboleOperator
-from airflow.utils.decorators import apply_defaults
 
 
 class _QuboleCheckOperatorMixin:
@@ -48,7 +47,6 @@ class _QuboleCheckOperatorMixin:
         )
 
 
-# pylint: disable=too-many-ancestors
 class QuboleCheckOperator(_QuboleCheckOperatorMixin, SQLCheckOperator, QuboleOperator):
     """
     Performs checks against Qubole Commands. ``QuboleCheckOperator`` expects
@@ -104,7 +102,6 @@ class QuboleCheckOperator(_QuboleCheckOperatorMixin, SQLCheckOperator, QuboleOpe
     template_ext = QuboleOperator.template_ext
     ui_fgcolor = '#000'
 
-    @apply_defaults
     def __init__(
         self, *, qubole_conn_id: str = "qubole_default", results_parser_callable: Callable = None, **kwargs
     ) -> None:
@@ -118,7 +115,8 @@ class QuboleCheckOperator(_QuboleCheckOperatorMixin, SQLCheckOperator, QuboleOpe
 
 
 # TODO(xinbinhuang): refactor to reduce levels of inheritance
-# pylint: disable=too-many-ancestors
+
+
 class QuboleValueCheckOperator(_QuboleCheckOperatorMixin, SQLValueCheckOperator, QuboleOperator):
     """
     Performs a simple value check using Qubole command.
@@ -161,7 +159,6 @@ class QuboleValueCheckOperator(_QuboleCheckOperatorMixin, SQLValueCheckOperator,
     template_ext = QuboleOperator.template_ext
     ui_fgcolor = '#000'
 
-    @apply_defaults
     def __init__(
         self,
         *,

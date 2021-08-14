@@ -21,6 +21,8 @@ Provider packages
 
 .. contents:: :local:
 
+.. _providers:community-maintained-providers:
+
 Community maintained providers
 ''''''''''''''''''''''''''''''
 
@@ -30,6 +32,9 @@ The core of Airflow scheduling system is delivered as ``apache-airflow`` package
 Those provider packages are separated per-provider (for example ``amazon``, ``google``, ``salesforce``
 etc.). Those packages are available as ``apache-airflow-providers`` packages - separately per each provider
 (for example there is an ``apache-airflow-providers-amazon`` or ``apache-airflow-providers-google`` package).
+
+The full list of community managed providers is available at
+`Providers Index <https://airflow.apache.org/docs/#providers-packages-docs-apache-airflow-providers-index-html>`_.
 
 You can install those provider packages separately in order to interface with a given service. For those
 providers that have corresponding extras, the provider packages (latest version from PyPI) are installed
@@ -53,6 +58,11 @@ provider packages are automatically documented in the release notes of every pro
     We also provide ``apache-airflow-backport-providers`` packages that can be installed for Airflow 1.10.
     Those are the same providers as for 2.0 but automatically back-ported to work for Airflow 1.10. The
     last release of backport providers was done on March 17, 2021.
+
+Creating and maintaining community providers
+""""""""""""""""""""""""""""""""""""""""""""
+
+See :doc:`howto/create-update-providers` for more information.
 
 
 Provider packages functionality
@@ -110,7 +120,7 @@ the package. We are using standard mechanism of python to define
 needs to define appropriate entry-point ``apache_airflow_provider`` which has to point to a callable
 implemented by your package and return a dictionary containing the list of discoverable capabilities
 of your package. The dictionary has to follow the
-`json-schema specification <https://github.com/apache/airflow/blob/master/airflow/provider_info.schema.json>`_.
+`json-schema specification <https://github.com/apache/airflow/blob/main/airflow/provider_info.schema.json>`_.
 
 Most of the schema provides extension point for the documentation (which you might want to also use for
 your own purpose) but the important fields from the extensibility point of view are those:
@@ -144,7 +154,7 @@ they define the extensions properly. See :doc:`cli-and-env-variables-ref` for de
 sub-commands.
 
 When you write your own provider, consider following the
-`Naming conventions for provider packages <https://github.com/apache/airflow/blob/master/CONTRIBUTING.rst#naming-conventions-for-provider-packages>`_
+`Naming conventions for provider packages <https://github.com/apache/airflow/blob/main/CONTRIBUTING.rst#naming-conventions-for-provider-packages>`_
 
 
 FAQ for Airflow and Providers
@@ -245,13 +255,13 @@ Example ``myproviderpackage/somemodule.py``:
 
 **How do provider packages work under the hood?**
 
-When running airflow with your provider package, there will be (at least) three components to your airflow installation:
+When running Airflow with your provider package, there will be (at least) three components to your airflow installation:
 
 * The installation itself (for example, a ``venv`` where you installed airflow with ``pip install apache-airflow``)
   together with the related files (e.g. ``dags`` folder)
 * The ``apache-airflow`` package
 * Your own ``myproviderpackage`` package that is independent of ``apache-airflow`` or your airflow installation, which
-  can be a local Python package (that you install via ``pip pip install -e /path/to/my-package``), a normal pip package
+  can be a local Python package (that you install via ``pip install -e /path/to/my-package``), a normal pip package
   (``pip install myproviderpackage``), or any other type of Python package
 
 In the ``myproviderpackage`` package you need to add the entry point and provide the appropriate metadata as described above.
@@ -299,6 +309,12 @@ The Community only accepts providers that are generic enough, are well documente
 and with capabilities of being tested by people in the community. So we might not always be in the
 position to accept such contributions.
 
+
+After you think that your provider matches the expected values above,  you can read
+:doc:`howto/create-update-providers` to check all prerequisites for a new
+community Provider and discuss it at the `Devlist <http://airflow.apache.org/community/>`_.
+
+
 However, in case you have your own, specific provider, which you can maintain on your own or by your
 team, you are free to publish the providers in whatever form you find appropriate. The custom and
 community-managed providers have exactly the same capabilities.
@@ -326,3 +342,4 @@ Content
 
     Packages <packages-ref>
     Operators and hooks <operators-and-hooks-ref/index>
+    Howto create and update community providers <howto/create-update-providers>

@@ -50,13 +50,19 @@ python dependencies for the provided package.
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | dask                | ``pip install 'apache-airflow[dask]'``              | DaskExecutor                                                               |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
+| deprecated_api      | ``pip install 'apache-airflow[deprecated_api]'``    | Deprecated, experimental API that is replaced with the new REST API        |
++---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | github_enterprise   | ``pip install 'apache-airflow[github_enterprise]'`` | GitHub Enterprise auth backend                                             |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | google_auth         | ``pip install 'apache-airflow[google_auth]'``       | Google auth backend                                                        |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
-| kerberos            | ``pip install 'apache-airflow[kerberos]'``          | Kerberos integration for Kerberized services (Hadoop, Presto)              |
+| kerberos            | ``pip install 'apache-airflow[kerberos]'``          | Kerberos integration for Kerberized services (Hadoop, Presto, Trino)       |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | ldap                | ``pip install 'apache-airflow[ldap]'``              | LDAP authentication for users                                              |
++---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
+| leveldb             | ``pip install 'apache-airflow[leveldb]'``           | Required for use leveldb extra in google provider                          |
++---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
+| pandas              | ``pip install 'apache-airflow[pandas]'``            | Install Pandas library compatible with Airflow                             |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | password            | ``pip install 'apache-airflow[password]'``          | Password authentication for users                                          |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
@@ -84,14 +90,15 @@ For example the below command will install:
   * apache-airflow-providers-google
   * apache-airflow-providers-apache-spark
 
-with a consistent set of dependencies based on constraint files provided by Airflow  Community at the time 2.0.1 version was released.
+with a consistent set of dependencies based on constraint files provided by Airflow Community at the time |version| version was released.
 
 .. code-block:: bash
+    :substitutions:
 
-    pip install apache-airflow[google,amazon,apache.spark]==2.0.1 \
-      --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.0.1/constraints-3.6.txt"
+    pip install apache-airflow[google,amazon,apache.spark]==|version| \
+      --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-|version|/constraints-3.6.txt"
 
-Note, that this will install providers in the versions that were released at the time of Airflow 2.0.1 release. You can later
+Note, that this will install providers in the versions that were released at the time of Airflow |version| release. You can later
 upgrade those providers manually if you want to use latest versions of the providers.
 
 
@@ -110,6 +117,8 @@ custom bash/python providers).
 | apache.beam         | ``pip install 'apache-airflow[apache.beam]'``       | Apache Beam operators & hooks                  |
 +---------------------+-----------------------------------------------------+------------------------------------------------+
 | apache.cassandra    | ``pip install 'apache-airflow[apache.cassandra]'``  | Cassandra related operators & hooks            |
++---------------------+-----------------------------------------------------+------------------------------------------------+
+| apache.drill        | ``pip install 'apache-airflow[apache.drill]'``      | Drill related operators & hooks                |
 +---------------------+-----------------------------------------------------+------------------------------------------------+
 | apache.druid        | ``pip install 'apache-airflow[apache.druid]'``      | Druid related operators & hooks                |
 +---------------------+-----------------------------------------------------+------------------------------------------------+
@@ -143,7 +152,11 @@ Those are extras that add dependencies needed for integration with external serv
 +=====================+=====================================================+=====================================================+
 | airbyte             | ``pip install 'apache-airflow[airbyte]'``           | Airbyte hooks and operators                         |
 +---------------------+-----------------------------------------------------+-----------------------------------------------------+
+| alibaba             | ``pip install 'apache-airflow[alibaba]'``           | Alibaba Cloud                                       |
++---------------------+-----------------------------------------------------+-----------------------------------------------------+
 | amazon              | ``pip install 'apache-airflow[amazon]'``            | Amazon Web Services                                 |
++---------------------+-----------------------------------------------------+-----------------------------------------------------+
+| asana               | ``pip install 'apache-airflow[asana]'``             | Asana hooks and operators                           |
 +---------------------+-----------------------------------------------------+-----------------------------------------------------+
 | azure               | ``pip install 'apache-airflow[microsoft.azure]'``   | Microsoft Azure                                     |
 +---------------------+-----------------------------------------------------+-----------------------------------------------------+
@@ -235,6 +248,8 @@ Those are extras that add dependencies needed for integration with other softwar
 +---------------------+-----------------------------------------------------+-------------------------------------------+
 | singularity         | ``pip install 'apache-airflow[singularity]'``       | Singularity container operator            |
 +---------------------+-----------------------------------------------------+-------------------------------------------+
+| trino               | ``pip install 'apache-airflow[trino]'``             | All Trino related operators & hooks       |
++---------------------+-----------------------------------------------------+-------------------------------------------+
 
 
 Other extras
@@ -262,6 +277,8 @@ Those are extras that provide support for integration with external systems via 
 | sqlite              | ``pip install 'apache-airflow[sqlite]'``            | SQLite hooks and operators           |      *       |
 +---------------------+-----------------------------------------------------+--------------------------------------+--------------+
 | ssh                 | ``pip install 'apache-airflow[ssh]'``               | SSH hooks and operators              |              |
++---------------------+-----------------------------------------------------+--------------------------------------+--------------+
+| microsoft.psrp      | ``pip install 'apache-airflow[microsoft.psrp]'``    | PSRP hooks and operators             |              |
 +---------------------+-----------------------------------------------------+--------------------------------------+--------------+
 | microsoft.winrm     | ``pip install 'apache-airflow[microsoft.winrm]'``   | WinRM hooks and operators            |              |
 +---------------------+-----------------------------------------------------+--------------------------------------+--------------+

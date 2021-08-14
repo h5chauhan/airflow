@@ -28,24 +28,17 @@ export VERBOSE="true"
 . "$( dirname "${BASH_SOURCE[0]}" )/../libraries/_script_init.sh"
 
 # Builds or waits for the PROD image in the CI environment
-# Depending on the "USE_GITHUB_REGISTRY" and "GITHUB_REGISTRY_WAIT_FOR_IMAGE" setting
 function build_prod_images_on_ci() {
     build_images::prepare_prod_build
 
-    if [[ ${USE_GITHUB_REGISTRY} == "true" && ${GITHUB_REGISTRY_WAIT_FOR_IMAGE} == "true" ]]; then
-        build_images::wait_for_image_tag "${GITHUB_REGISTRY_AIRFLOW_PROD_IMAGE}" \
-            ":${GITHUB_REGISTRY_PULL_IMAGE_TAG}" "${AIRFLOW_PROD_IMAGE}"
-
-        if [[ "${WAIT_FOR_PROD_BUILD_IMAGE=}" == "true" ]]; then
-            # If specified in variable - also waits for the build image
-            build_images::wait_for_image_tag "${GITHUB_REGISTRY_AIRFLOW_PROD_BUILD_IMAGE}" \
-                ":${GITHUB_REGISTRY_PULL_IMAGE_TAG}" "${AIRFLOW_PROD_BUILD_IMAGE}"
-        fi
-
+    if [[ ${GITHUB_REGISTRY_WAIT_FOR_IMAGE} == "true" ]]; then
+        # Tries to wait for the images indefinitely
+        # Remove me on 15th of August 2021 after all users had chance to rebase
+        legacy_prod_image="ghcr.io/${GITHUB_REPOSITORY}-${BRANCH_NAME}-python${PYTHON_MAJOR_MINOR_VERSION}-v2:${GITHUB_REGISTRY_PULL_IMAGE_TAG}"
+        build_images::wait_for_image_tag "${AIRFLOW_PROD_IMAGE}" ":${GITHUB_REGISTRY_PULL_IMAGE_TAG}" "${legacy_prod_image}"
     else
         build_images::build_prod_images_from_locally_built_airflow_packages
     fi
-
 
     # Disable force pulling forced above this is needed for the subsequent scripts so that
     # They do not try to pull/build images again

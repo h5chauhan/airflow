@@ -26,30 +26,36 @@ import axios from 'axios';
 
 import Login from 'views/Login';
 import App from 'App';
-import AuthProvider from 'auth/AuthProvider';
+import AuthProvider from 'providers/auth/AuthProvider';
 
 import { url, defaultHeaders, QueryWrapper } from './utils';
 
 axios.defaults.adapter = require('axios/lib/adapters/http');
 
-nock(url)
-  .defaultReplyHeaders(defaultHeaders)
-  .persist()
-  .get('/version')
-  .reply(200, { version: '', gitVersion: '' });
-
-test('App shows Login screen by default', () => {
-  const { getByText } = render(
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>,
-    { wrapper: QueryWrapper },
-  );
-
-  expect(getByText('Password')).toBeInTheDocument();
-});
-
 describe('test login component', () => {
+  beforeAll(() => {
+    nock(url)
+      .defaultReplyHeaders(defaultHeaders)
+      .persist()
+      .get('/version')
+      .reply(200, { version: '', gitVersion: '' });
+  });
+
+  afterAll(() => {
+    nock.cleanAll();
+  });
+
+  test('App shows Login screen by default', () => {
+    const { getByText } = render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>,
+      { wrapper: QueryWrapper },
+    );
+
+    expect(getByText('Password')).toBeInTheDocument();
+  });
+
   test('Button is disabled when there is no username or password', () => {
     const { getByTestId } = render(
       <BrowserRouter>

@@ -60,19 +60,17 @@ class AwsGlueJobHook(AwsBaseHook):
         script_location: Optional[str] = None,
         retry_limit: int = 0,
         num_of_dpus: int = 10,
-        region_name: Optional[str] = None,
         iam_role_name: Optional[str] = None,
         create_job_kwargs: Optional[dict] = None,
         *args,
         **kwargs,
-    ):  # pylint: disable=too-many-arguments
+    ):
         self.job_name = job_name
         self.desc = desc
         self.concurrent_run_limit = concurrent_run_limit
         self.script_location = script_location
         self.retry_limit = retry_limit
         self.num_of_dpus = num_of_dpus
-        self.region_name = region_name
         self.s3_bucket = s3_bucket
         self.role_name = iam_role_name
         self.s3_glue_logs = 'logs/glue-logs/'
@@ -170,7 +168,7 @@ class AwsGlueJobHook(AwsBaseHook):
             return get_job_response['Job']['Name']
 
         except glue_client.exceptions.EntityNotFoundException:
-            self.log.info("Job doesnt exist. Now creating and running AWS Glue Job")
+            self.log.info("Job doesn't exist. Now creating and running AWS Glue Job")
             if self.s3_bucket is None:
                 raise AirflowException('Could not initialize glue job, error: Specify Parameter `s3_bucket`')
             s3_log_path = f's3://{self.s3_bucket}/{self.s3_glue_logs}{self.job_name}'
@@ -180,7 +178,7 @@ class AwsGlueJobHook(AwsBaseHook):
                     Name=self.job_name,
                     Description=self.desc,
                     LogUri=s3_log_path,
-                    Role=execution_role['Role']['RoleName'],
+                    Role=execution_role['Role']['Arn'],
                     ExecutionProperty={"MaxConcurrentRuns": self.concurrent_run_limit},
                     Command={"Name": "glueetl", "ScriptLocation": self.script_location},
                     MaxRetries=self.retry_limit,

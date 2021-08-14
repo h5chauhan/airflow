@@ -61,8 +61,8 @@ class TriggerRuleDep(BaseTIDep):
             yield self._passing_status(reason="The task instance did not have any upstream tasks.")
             return
 
-        if ti.task.trigger_rule == TR.DUMMY:
-            yield self._passing_status(reason="The task had a dummy trigger rule set.")
+        if ti.task.trigger_rule == TR.ALWAYS:
+            yield self._passing_status(reason="The task had a always trigger rule set.")
             return
         # see if the task name is in the task upstream for our task
         successes, skipped, failed, upstream_failed, done = self._get_states_count_upstream_ti(
@@ -81,7 +81,7 @@ class TriggerRuleDep(BaseTIDep):
         )
 
     @provide_session
-    def _evaluate_trigger_rule(  # pylint: disable=too-many-branches
+    def _evaluate_trigger_rule(
         self, ti, successes, skipped, failed, upstream_failed, done, flag_upstream_failed, session
     ):
         """
@@ -134,8 +134,12 @@ class TriggerRuleDep(BaseTIDep):
                 if successes or skipped:
                     ti.set_state(State.SKIPPED, session)
             elif trigger_rule == TR.ONE_SUCCESS:
-                if upstream_done and not successes:
+                if upstream_done and done == skipped:
+                    # if upstream is done and all are skipped mark as skipped
                     ti.set_state(State.SKIPPED, session)
+                elif upstream_done and successes <= 0:
+                    # if upstream is done and there are no successes mark as upstream failed
+                    ti.set_state(State.UPSTREAM_FAILED, session)
             elif trigger_rule == TR.ONE_FAILED:
                 if upstream_done and not (failed or upstream_failed):
                     ti.set_state(State.SKIPPED, session)

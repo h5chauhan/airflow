@@ -19,7 +19,6 @@ from typing import Optional
 
 from airflow.models import BaseOperator
 from airflow.providers.cncf.kubernetes.hooks.kubernetes import KubernetesHook
-from airflow.utils.decorators import apply_defaults
 
 
 class SparkKubernetesOperator(BaseOperator):
@@ -30,11 +29,13 @@ class SparkKubernetesOperator(BaseOperator):
         For more detail about Spark Application Object have a look at the reference:
         https://github.com/GoogleCloudPlatform/spark-on-k8s-operator/blob/v1beta2-1.1.0-2.4.5/docs/api-docs.md#sparkapplication
 
-    :param application_file: filepath to kubernetes custom_resource_definition of sparkApplication
+    :param application_file: Defines Kubernetes 'custom_resource_definition' of 'sparkApplication' as either a
+        path to a '.json' file or a JSON string.
     :type application_file:  str
     :param namespace: kubernetes namespace to put sparkApplication
     :type namespace: str
-    :param kubernetes_conn_id: the connection to Kubernetes cluster
+    :param kubernetes_conn_id: The :ref:`kubernetes connection id <howto/connection:kubernetes>`
+        for the to Kubernetes cluster.
     :type kubernetes_conn_id: str
     :param api_group: kubernetes api group of sparkApplication
     :type api_group: str
@@ -43,10 +44,9 @@ class SparkKubernetesOperator(BaseOperator):
     """
 
     template_fields = ['application_file', 'namespace']
-    template_ext = ('yaml', 'yml', 'json')
+    template_ext = ('.yaml', '.yml', '.json')
     ui_color = '#f4a460'
 
-    @apply_defaults
     def __init__(
         self,
         *,

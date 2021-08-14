@@ -133,6 +133,7 @@ info:
     |-|-|
     | v2.0 | Initial release |
     | v2.0.2    | Added /plugins endpoint |
+    | v2.1 | New providers endpoint |
 
     # Trying the API
 
@@ -144,7 +145,7 @@ info:
 
     For e.g., here is how to pause a DAG with [curl](https://curl.haxx.se/), when basic authorization is used:
     ```bash
-    curl -X POST 'https://example.com/api/v1/dags/{dag_id}?update_mask=is_paused' \
+    curl -X PATCH 'https://example.com/api/v1/dags/{dag_id}?update_mask=is_paused' \
     -H 'Content-Type: application/json' \
     --user "username:password" \
     -d '{
@@ -260,6 +261,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageLimit'
         - $ref: '#/components/parameters/PageOffset'
+        - $ref: '#/components/parameters/OrderBy'
       responses:
         '200':
           description: Success.
@@ -367,6 +369,34 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /connections/test:
+    post:
+      summary: Test a connection
+      x-openapi-router-controller: airflow.api_connexion.endpoints.connection_endpoint
+      operationId: test_connection
+      tags: [Connection]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Connection'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionTest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /dags:
     get:
       summary: List DAGs
@@ -376,6 +406,14 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageLimit'
         - $ref: '#/components/parameters/PageOffset'
+        - $ref: '#/components/parameters/OrderBy'
+        - name: only_active
+          in: query
+          schema:
+            type: boolean
+            default: true
+          required: false
+          description: Only return active DAGs.
       responses:
         '200':
           description: Success.
@@ -526,6 +564,7 @@ paths:
         - $ref: '#/components/parameters/FilterStartDateLTE'
         - $ref: '#/components/parameters/FilterEndDateGTE'
         - $ref: '#/components/parameters/FilterEndDateLTE'
+        - $ref: '#/components/parameters/OrderBy'
       responses:
         '200':
           description: List of DAG runs.
@@ -646,6 +685,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageLimit'
         - $ref: '#/components/parameters/PageOffset'
+        - $ref: '#/components/parameters/OrderBy'
       responses:
         '200':
           description: Success.
@@ -690,6 +730,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageLimit'
         - $ref: '#/components/parameters/PageOffset'
+        - $ref: '#/components/parameters/OrderBy'
+
       responses:
         '200':
           description: Success.
@@ -705,7 +747,6 @@ paths:
   /importErrors/{import_error_id}:
     parameters:
       - $ref: '#/components/parameters/ImportErrorID'
-
     get:
       summary: Get an import error
       x-openapi-router-controller: airflow.api_connexion.endpoints.import_error_endpoint
@@ -734,6 +775,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageLimit'
         - $ref: '#/components/parameters/PageOffset'
+        - $ref: '#/components/parameters/OrderBy'
       responses:
         '200':
           description: List of pools.
@@ -843,6 +885,26 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /providers:
+    get:
+      summary: List providers
+      x-openapi-router-controller: airflow.api_connexion.endpoints.provider_endpoint
+      operationId: get_providers
+      tags: [Provider]
+      responses:
+        '200':
+          description: List of providers.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ProviderCollection'
+                  - $ref: '#/components/schemas/CollectionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+
   /dags/{dag_id}/dagRuns/{dag_run_id}/taskInstances:
     parameters:
       - $ref: '#/components/parameters/DAGID'
@@ -948,6 +1010,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageLimit'
         - $ref: '#/components/parameters/PageOffset'
+        - $ref: '#/components/parameters/OrderBy'
       responses:
         '200':
           description: Success.
@@ -1209,6 +1272,7 @@ paths:
   /dags/{dag_id}/tasks:
     parameters:
       - $ref: '#/components/parameters/DAGID'
+      - $ref: '#/components/parameters/OrderBy'
 
     get:
       summary: Get tasks for DAG
@@ -1391,6 +1455,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageLimit'
         - $ref: '#/components/parameters/PageOffset'
+        - $ref: '#/components/parameters/OrderBy'
       responses:
         '200':
           description: Success.
@@ -1398,6 +1463,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoleCollection'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+
+    post:
+      summary: Create a role
+      x-openapi-router-controller: airflow.api_connexion.endpoints.role_and_permission_endpoint
+      operationId: post_role
+      tags: [Role]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -1419,6 +1509,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update a role
+      x-openapi-router-controller: airflow.api_connexion.endpoints.role_and_permission_endpoint
+      operationId: patch_role
+      tags: [Role]
+      parameters:
+        - $ref: '#/components/parameters/UpdateMask'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete a role
+      x-openapi-router-controller: airflow.api_connexion.endpoints.role_and_permission_endpoint
+      operationId: delete_role
+      tags: [Role]
+      responses:
+        '204':
+          description: Success.
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -1456,6 +1593,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageLimit'
         - $ref: '#/components/parameters/PageOffset'
+        - $ref: '#/components/parameters/OrderBy'
       responses:
         '200':
           description: Success.
@@ -1463,6 +1601,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserCollection'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+
+    post:
+      summary: Create a user
+      x-openapi-router-controller: airflow.api_connexion.endpoints.user_endpoint
+      operationId: post_user
+      tags: [User]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -1490,6 +1653,52 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+    patch:
+      summary: Update a user
+      x-openapi-router-controller: airflow.api_connexion.endpoints.user_endpoint
+      operationId: patch_user
+      tags: [User]
+      parameters:
+        - $ref: '#/components/parameters/UpdateMask'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete a user
+      x-openapi-router-controller: airflow.api_connexion.endpoints.user_endpoint
+      operationId: delete_user
+      tags: [User]
+      responses:
+        '204':
+          description: Success.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   # Reusable schemas (data models)
   schemas:
@@ -1499,10 +1708,6 @@ components:
         A user object
       type: object
       properties:
-        user_id:
-          type: integer
-          description: The user id
-          readOnly: true
         first_name:
           type: string
           description: The user firstname
@@ -1545,7 +1750,6 @@ components:
               name:
                 type: string
             nullable: true
-          readOnly: true
         created_on:
           type: string
           format: datetime
@@ -1640,6 +1844,17 @@ components:
               nullable: true
               description: Other values that cannot be put into another field, e.g. RSA keys.
 
+    ConnectionTest:
+      description: Connection test results.
+      type: object
+      properties:
+        status:
+          type: boolean
+          description: The status of the request.
+        message:
+          type: string
+          description: The success or failure message of the request.
+
     DAG:
       type: object
       description: DAG
@@ -1657,6 +1872,10 @@ components:
           type: boolean
           nullable: true
           description: Whether the DAG is paused.
+        is_active:
+          type: boolean
+          nullable: true
+          description: Whether the DAG is currently seen by the scheduler(s).
         is_subdag:
           description: Whether the DAG is SubDAG.
           type: boolean
@@ -1743,6 +1962,7 @@ components:
           description: |
             The start time. The time when DAG run was actually created.
           readOnly: true
+          nullable: true
         end_date:
           type: string
           format: date-time
@@ -1782,7 +2002,7 @@ components:
       description: Log of user operations via CLI or Web UI.
       properties:
         event_log_id:
-          description: The evnet log ID
+          description: The event log ID
           type: integer
           readOnly: true
         when:
@@ -1938,6 +2158,29 @@ components:
         - $ref: '#/components/schemas/CollectionInfo'
 
 
+    Provider:
+      description: The provider
+      type: object
+      properties:
+        package_name:
+          type: string
+          description: The package name of the provider.
+        description:
+          type: string
+          description: The description of the provider.
+        version:
+          type: string
+          description: The version of the provider.
+
+    ProviderCollection:
+      type: object
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Provider'
+
+
     SLAMiss:
       type: object
       properties:
@@ -2004,6 +2247,7 @@ components:
           type: integer
         operator:
           type: string
+          nullable: true
         queued_when:
           type: string
           nullable: true
@@ -2487,6 +2731,13 @@ components:
           type: boolean
           default: true
 
+        task_ids:
+          description: A list of task ids to clear.
+          type: array
+          items:
+            type: string
+          minItems: 1
+
         start_date:
           description: The minimum execution date to clear.
           type: string
@@ -2564,6 +2815,11 @@ components:
     ListDagRunsForm:
       type: object
       properties:
+        order_by:
+          type: string
+          description: |
+            The name of the field to order the results by. Prefix a field name
+            with `-` to reverse the sort order.
         page_offset:
           type: integer
           minimum: 0
@@ -2873,14 +3129,17 @@ components:
         - queued
         - none
         - scheduled
+        - deferred
+        - sensing
         - removed
 
     DagState:
       description: DAG State.
       type: string
       enum:
-        - success
+        - queued
         - running
+        - success
         - failed
 
     TriggerRule:
@@ -3166,7 +3425,18 @@ components:
       description:
         The value can be repeated to retrieve multiple matching values (OR condition).
 
+    OrderBy:
+      in: query
+      name: order_by
+      schema:
+        type: string
+      required: false
+      description: |
+        The name of the field to order the results by.
+        Prefix a field name with `-` to reverse the sort order.
+
     # Other parameters
+
     FileToken:
       in: path
       name: file_token
@@ -3289,6 +3559,7 @@ tags:
   - name: ImportError
   - name: Monitoring
   - name: Pool
+  - name: Provider
   - name: TaskInstance
   - name: Variable
   - name: XCom

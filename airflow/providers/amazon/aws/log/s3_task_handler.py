@@ -50,10 +50,10 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
             from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
             return S3Hook(remote_conn_id, transfer_config_args={"use_threads": False})
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:
             self.log.exception(
                 'Could not create an S3Hook with connection id "%s". '
-                'Please make sure that airflow[aws] is installed and '
+                'Please make sure that apache-airflow[aws] is installed and '
                 'the S3 connection exists. Exception : "%s"',
                 remote_conn_id,
                 e,
@@ -119,9 +119,9 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
 
         try:
             log_exists = self.s3_log_exists(remote_loc)
-        except Exception as error:  # pylint: disable=broad-except
-            self.log.exception(error)
-            log = f'*** Failed to verify remote log exists {remote_loc}.\n{str(error)}\n'
+        except Exception as error:
+            self.log.exception("Failed to verify remote log exists %s.", remote_loc)
+            log = f'*** Failed to verify remote log exists {remote_loc}.\n{error}\n'
 
         if log_exists:
             # If S3 remote file exists, we do not fetch logs from task instance
@@ -159,7 +159,7 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
         """
         try:
             return self.hook.read_key(remote_log_location)
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:
             msg = f'Could not read logs from {remote_log_location} with error: {error}'
             self.log.exception(msg)
             # return error if needed
@@ -184,8 +184,8 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
             if append and self.s3_log_exists(remote_log_location):
                 old_log = self.s3_read(remote_log_location)
                 log = '\n'.join([old_log, log]) if old_log else log
-        except Exception as error:  # pylint: disable=broad-except
-            self.log.exception('Could not verify previous log to append: %s', str(error))
+        except Exception:
+            self.log.exception('Could not verify previous log to append')
 
         try:
             self.hook.load_string(
@@ -194,5 +194,5 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
                 replace=True,
                 encrypt=conf.getboolean('logging', 'ENCRYPT_S3_LOGS'),
             )
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self.log.exception('Could not write logs to %s', remote_log_location)

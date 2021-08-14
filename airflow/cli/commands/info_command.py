@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 """Config sub-commands"""
-import getpass
 import locale
 import logging
 import os
@@ -25,7 +24,7 @@ import sys
 from typing import List, Optional
 from urllib.parse import urlsplit, urlunsplit
 
-import requests
+import httpx
 import tenacity
 
 from airflow import configuration
@@ -33,6 +32,7 @@ from airflow.cli.simple_table import AirflowConsole
 from airflow.providers_manager import ProvidersManager
 from airflow.typing_compat import Protocol
 from airflow.utils.cli import suppress_logs_and_warning
+from airflow.utils.platform import getuser
 from airflow.version import version as airflow_version
 
 log = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class PiiAnonymizer(Anonymizer):
 
     def __init__(self):
         home_path = os.path.expanduser("~")
-        username = getpass.getuser()
+        username = getuser()
         self._path_replacements = {home_path: "${HOME}", username: "${USER}"}
 
     def process_path(self, value):
@@ -188,17 +188,17 @@ class AirflowInfo:
     def _get_version(cmd: List[str], grep: Optional[bytes] = None):
         """Return tools version."""
         try:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
+                stdoutdata, _ = proc.communicate()
+                data = [f for f in stdoutdata.split(b"\n") if f]
+                if grep:
+                    data = [line for line in data if grep in line]
+                if len(data) != 1:
+                    return "NOT AVAILABLE"
+                else:
+                    return data[0].decode()
         except OSError:
             return "NOT AVAILABLE"
-        stdoutdata, _ = proc.communicate()
-        data = [f for f in stdoutdata.split(b"\n") if f]
-        if grep:
-            data = [line for line in data if grep in line]
-        if len(data) != 1:
-            return "NOT AVAILABLE"
-        else:
-            return data[0].decode()
 
     @staticmethod
     def _task_logging_handler():
@@ -214,7 +214,7 @@ class AirflowInfo:
         try:
             handler_names = [get_fullname(handler) for handler in logging.getLogger('airflow.task').handlers]
             return ", ".join(handler_names)
-        except Exception:  # noqa pylint: disable=broad-except
+        except Exception:
             return "NOT AVAILABLE"
 
     @property
@@ -349,8 +349,8 @@ class FileIoException(Exception):
 )
 def _upload_text_to_fileio(content):
     """Upload text file to File.io service and return lnk"""
-    resp = requests.post("https://file.io", data={"text": content})
-    if not resp.ok:
+    resp = httpx.post("https://file.io", content=content)
+    if resp.status_code not in [200, 201]:
         print(resp.json())
         raise FileIoException("Failed to send report to file.io service.")
     try:

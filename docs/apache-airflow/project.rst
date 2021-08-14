@@ -39,6 +39,7 @@ Committers
 - Aizhamal Nurmamat kyzy (@aijamalnk)
 - Alex Guziel (@saguziel)
 - Alex Van Boxel (@alexvanboxel)
+- Aneesh Joseph (@aneesh-joseph)
 - Arthur Wiedmer (@artwr)
 - Ash Berlin-Taylor (@ashb)
 - Bas Harenslak (@basph)
@@ -56,6 +57,7 @@ Committers
 - Jakob Homan (@jghoman)
 - James Timmins (@jhtimmins)
 - Jarek Potiuk (@potiuk)
+- Jed Cunningham (@jedcunningham)
 - Jiajie Zhong (@zhongjiajie)
 - Joshua Carp (@jmcarp)
 - Joy Gao (@joygao)
@@ -65,6 +67,7 @@ Committers
 - Kevin Yang (@KevinYang21)
 - Leah Cole (@leahecole)
 - Maxime "Max" Beauchemin (@mistercrunch)
+- Qian Yu (@yuqian90)
 - Qingping Hou (@houqp)
 - Ry Walker (@ryw)
 - Ryan Hamilton (@ryanahamilton)
@@ -72,8 +75,10 @@ Committers
 - Sumit Maheshwari (@msumit)
 - Tao Feng (@feng-tao)
 - Tomasz Urbaszek (@turbaszek)
+- Tzu-ping Chung (@uranusjr)
 - Vikram Koka (@vikramkoka)
 - Xiaodong Deng (@XD-DENG)
+- Xinbin Huang (@xinbinhuang)
 
 For the full list of contributors, take a look at `Airflow's GitHub
 Contributor page:

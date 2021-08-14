@@ -36,6 +36,7 @@ from typing import Dict, List, Optional, Union
 
 from airflow.exceptions import AirflowConfigException
 from airflow.secrets import DEFAULT_SECRETS_SEARCH_PATH, BaseSecretsBackend
+from airflow.utils import yaml
 from airflow.utils.module_loading import import_string
 
 log = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ def run_command(command):
     process = subprocess.Popen(
         shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True
     )
-    output, stderr = [stream.decode(sys.getdefaultencoding(), 'ignore') for stream in process.communicate()]
+    output, stderr = (stream.decode(sys.getdefaultencoding(), 'ignore') for stream in process.communicate())
 
     if process.returncode != 0:
         raise AirflowConfigException(
@@ -91,19 +92,17 @@ def _default_config_file_path(file_name: str):
     return os.path.join(templates_dir, file_name)
 
 
-def default_config_yaml() -> dict:
+def default_config_yaml() -> List[dict]:
     """
     Read Airflow configs from YAML file
 
     :return: Python dictionary containing configs & their info
     """
-    import airflow.utils.yaml as yaml
-
     with open(_default_config_file_path('config.yml')) as config_file:
         return yaml.safe_load(config_file)
 
 
-class AirflowConfigParser(ConfigParser):  # pylint: disable=too-many-ancestors
+class AirflowConfigParser(ConfigParser):
     """Custom Airflow Configparser supporting defaults and deprecated options"""
 
     # These configuration elements can be fetched as the stdout of commands
@@ -159,6 +158,11 @@ class AirflowConfigParser(ConfigParser):  # pylint: disable=too-many-ancestors
         ('metrics', 'statsd_datadog_tags'): ('scheduler', 'statsd_datadog_tags', '2.0.0'),
         ('metrics', 'statsd_custom_client_path'): ('scheduler', 'statsd_custom_client_path', '2.0.0'),
         ('scheduler', 'parsing_processes'): ('scheduler', 'max_threads', '1.10.14'),
+        ('operators', 'default_queue'): ('celery', 'default_queue', '2.1.0'),
+        ('core', 'hide_sensitive_var_conn_fields'): ('admin', 'hide_sensitive_variable_fields', '2.1.0'),
+        ('core', 'sensitive_var_conn_names'): ('admin', 'sensitive_variable_fields', '2.1.0'),
+        ('core', 'default_pool_task_slot_count'): ('core', 'non_pooled_task_slot_count', '1.10.4'),
+        ('core', 'max_active_tasks_per_dag'): ('core', 'dag_concurrency', '2.2.0'),
     }
 
     # A mapping of old default values that we want to change and warn the user
@@ -238,7 +242,7 @@ class AirflowConfigParser(ConfigParser):  # pylint: disable=too-many-ancestors
             if StrictVersion(sqlite3.sqlite_version) < StrictVersion(min_sqlite_version):
                 raise AirflowConfigException(
                     f"error: sqlite C library version too old (< {min_sqlite_version}). "
-                    f"See {get_docs_url('howto/set-up-database.rst#setting-up-a-sqlite-database')}"
+                    f"See {get_docs_url('howto/set-up-database.html#setting-up-a-sqlite-database')}"
                 )
 
         if self.has_option('core', 'mp_start_method'):
@@ -253,7 +257,17 @@ class AirflowConfigParser(ConfigParser):  # pylint: disable=too-many-ancestors
                     + ", ".join(start_method_options)
                 )
 
-    def _using_old_value(self, old, current_value):  # noqa
+        if self.has_option("scheduler", "file_parsing_sort_mode"):
+            list_mode = self.get("scheduler", "file_parsing_sort_mode")
+            file_parser_modes = {"modified_time", "random_seeded_by_host", "alphabetical"}
+
+            if list_mode not in file_parser_modes:
+                raise AirflowConfigException(
+                    "`[scheduler] file_parsing_sort_mode` should not be "
+                    + f"{list_mode}. Possible values are {', '.join(file_parser_modes)}."
+                )
+
+    def _using_old_value(self, old, current_value):
         return old.search(current_value) is not None
 
     def _update_env_var(self, section, name, new_value):
@@ -438,11 +452,11 @@ class AirflowConfigParser(ConfigParser):  # pylint: disable=too-many-ancestors
                 f'Current value: "{val}".'
             )
 
-    def getimport(self, section, key, **kwargs):  # noqa
+    def getimport(self, section, key, **kwargs):
         """
         Reads options, imports the full qualified name, and returns the object.
 
-        In case of failure, it throws an exception a clear message with the key aad the section names
+        In case of failure, it throws an exception with the key and section names
 
         :return: The object or None, if the option is empty
         """
@@ -767,7 +781,7 @@ def parameterized_config(template):
     :param template: a config content templated with {{variables}}
     """
     all_vars = {k: v for d in [globals(), locals()] for k, v in d.items()}
-    return template.format(**all_vars)  # noqa
+    return template.format(**all_vars)
 
 
 def get_airflow_test_config(airflow_home):
@@ -860,14 +874,11 @@ def initialize_config():
 
         log.info('Creating new FAB webserver config file in: %s', WEBSERVER_CONFIG)
         shutil.copy(_default_config_file_path('default_webserver_config.py'), WEBSERVER_CONFIG)
-
-    conf.validate()
-
     return conf
 
 
 # Historical convenience functions to access config entries
-def load_test_config():  # noqa: D103
+def load_test_config():
     """Historical load_test_config"""
     warnings.warn(
         "Accessing configuration method 'load_test_config' directly from the configuration module is "
@@ -879,7 +890,7 @@ def load_test_config():  # noqa: D103
     conf.load_test_config()
 
 
-def get(*args, **kwargs):  # noqa: D103
+def get(*args, **kwargs):
     """Historical get"""
     warnings.warn(
         "Accessing configuration method 'get' directly from the configuration module is "
@@ -891,7 +902,7 @@ def get(*args, **kwargs):  # noqa: D103
     return conf.get(*args, **kwargs)
 
 
-def getboolean(*args, **kwargs):  # noqa: D103
+def getboolean(*args, **kwargs):
     """Historical getboolean"""
     warnings.warn(
         "Accessing configuration method 'getboolean' directly from the configuration module is "
@@ -903,7 +914,7 @@ def getboolean(*args, **kwargs):  # noqa: D103
     return conf.getboolean(*args, **kwargs)
 
 
-def getfloat(*args, **kwargs):  # noqa: D103
+def getfloat(*args, **kwargs):
     """Historical getfloat"""
     warnings.warn(
         "Accessing configuration method 'getfloat' directly from the configuration module is "
@@ -915,7 +926,7 @@ def getfloat(*args, **kwargs):  # noqa: D103
     return conf.getfloat(*args, **kwargs)
 
 
-def getint(*args, **kwargs):  # noqa: D103
+def getint(*args, **kwargs):
     """Historical getint"""
     warnings.warn(
         "Accessing configuration method 'getint' directly from the configuration module is "
@@ -927,7 +938,7 @@ def getint(*args, **kwargs):  # noqa: D103
     return conf.getint(*args, **kwargs)
 
 
-def getsection(*args, **kwargs):  # noqa: D103
+def getsection(*args, **kwargs):
     """Historical getsection"""
     warnings.warn(
         "Accessing configuration method 'getsection' directly from the configuration module is "
@@ -939,7 +950,7 @@ def getsection(*args, **kwargs):  # noqa: D103
     return conf.getsection(*args, **kwargs)
 
 
-def has_option(*args, **kwargs):  # noqa: D103
+def has_option(*args, **kwargs):
     """Historical has_option"""
     warnings.warn(
         "Accessing configuration method 'has_option' directly from the configuration module is "
@@ -951,7 +962,7 @@ def has_option(*args, **kwargs):  # noqa: D103
     return conf.has_option(*args, **kwargs)
 
 
-def remove_option(*args, **kwargs):  # noqa: D103
+def remove_option(*args, **kwargs):
     """Historical remove_option"""
     warnings.warn(
         "Accessing configuration method 'remove_option' directly from the configuration module is "
@@ -963,7 +974,7 @@ def remove_option(*args, **kwargs):  # noqa: D103
     return conf.remove_option(*args, **kwargs)
 
 
-def as_dict(*args, **kwargs):  # noqa: D103
+def as_dict(*args, **kwargs):
     """Historical as_dict"""
     warnings.warn(
         "Accessing configuration method 'as_dict' directly from the configuration module is "
@@ -975,7 +986,7 @@ def as_dict(*args, **kwargs):  # noqa: D103
     return conf.as_dict(*args, **kwargs)
 
 
-def set(*args, **kwargs):  # noqa pylint: disable=redefined-builtin
+def set(*args, **kwargs):
     """Historical set"""
     warnings.warn(
         "Accessing configuration method 'set' directly from the configuration module is "
@@ -1101,6 +1112,7 @@ WEBSERVER_CONFIG = ''  # Set by initialize_config
 
 conf = initialize_config()
 secrets_backend_list = initialize_secrets_backends()
+conf.validate()
 
 
 PY37 = sys.version_info >= (3, 7)

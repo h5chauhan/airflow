@@ -16,7 +16,7 @@
 # specific language governing permissions and limitations
 # under the License.
 function verify_image::run_command_in_image() {
-    docker run --rm \
+    docker_v run --rm \
             -e COLUMNS=180 \
             --entrypoint /bin/bash "${DOCKER_IMAGE}" \
             -c "${@}"
@@ -41,6 +41,92 @@ function verify_image::check_command() {
         echo "${COLOR_BLUE}========================= OUTPUT end   ===========================${COLOR_RESET}"
         IMAGE_VALID="false"
     fi
+    set -e
+}
+
+function verify_image::verify_prod_image_commands() {
+    start_end::group_start "Checking command supports"
+    set +e
+
+    echo -n "Feature: Checking the image without a command. It should return non-zero exit code."
+    local output
+    output=$(docker_v run --rm \
+            -e COLUMNS=180 \
+            "${DOCKER_IMAGE}" \
+            2>&1)
+    local res=$?
+    if [[ ${res} == "2" ]]; then
+        echo "${COLOR_GREEN}OK${COLOR_RESET}"
+    else
+        echo "${COLOR_RED}NOK${COLOR_RESET}"
+        echo "${COLOR_BLUE}========================= OUTPUT start ============================${COLOR_RESET}"
+        echo "${output}"
+        echo "${COLOR_BLUE}========================= OUTPUT end   ===========================${COLOR_RESET}"
+        IMAGE_VALID="false"
+    fi
+    echo -n "Feature: Checking 'airflow' command  It should return non-zero exit code."
+    output=$(docker_v run --rm \
+            -e COLUMNS=180 \
+            "${DOCKER_IMAGE}" \
+            "airflow" 2>&1)
+    local res=$?
+    if [[ ${res} == "2" ]]; then
+        echo "${COLOR_GREEN}OK${COLOR_RESET}"
+    else
+        echo "${COLOR_RED}NOK${COLOR_RESET}"
+        echo "${COLOR_BLUE}========================= OUTPUT start ============================${COLOR_RESET}"
+        echo "${output}"
+        echo "${COLOR_BLUE}========================= OUTPUT end   ===========================${COLOR_RESET}"
+        IMAGE_VALID="false"
+    fi
+
+    echo -n "Feature: Checking 'airflow version' command  It should return zero exit code."
+    output=$(docker_v run --rm \
+            -e COLUMNS=180 \
+            "${DOCKER_IMAGE}" \
+            "airflow" "version" 2>&1)
+    local res=$?
+    if [[ ${res} == "0" ]]; then
+        echo "${COLOR_GREEN}OK${COLOR_RESET}"
+    else
+        echo "${COLOR_RED}NOK${COLOR_RESET}"
+        echo "${COLOR_BLUE}========================= OUTPUT start ============================${COLOR_RESET}"
+        echo "${output}"
+        echo "${COLOR_BLUE}========================= OUTPUT end   ===========================${COLOR_RESET}"
+        IMAGE_VALID="false"
+    fi
+
+    echo -n "Feature: Checking 'python --version' command  It should return zero exit code."
+    output=$(docker_v run --rm \
+            -e COLUMNS=180 \
+            "${DOCKER_IMAGE}" \
+            python --version | grep "Python 3." 2>&1)
+    local res=$?
+    if [[ ${res} == "0" ]]; then
+        echo "${COLOR_GREEN}OK${COLOR_RESET}"
+    else
+        echo "${COLOR_RED}NOK${COLOR_RESET}"
+        echo "${COLOR_BLUE}========================= OUTPUT start ============================${COLOR_RESET}"
+        echo "${output}"
+        echo "${COLOR_BLUE}========================= OUTPUT end   ===========================${COLOR_RESET}"
+        IMAGE_VALID="false"
+    fi
+    echo -n "Feature: Checking 'bash --version' command  It should return zero exit code."
+    output=$(docker_v run --rm \
+            -e COLUMNS=180 \
+            "${DOCKER_IMAGE}" \
+            bash --version | grep "GNU bash, " 2>&1)
+    local res=$?
+    if [[ ${res} == "0" ]]; then
+        echo "${COLOR_GREEN}OK${COLOR_RESET}"
+    else
+        echo "${COLOR_RED}NOK${COLOR_RESET}"
+        echo "${COLOR_BLUE}========================= OUTPUT start ============================${COLOR_RESET}"
+        echo "${output}"
+        echo "${COLOR_BLUE}========================= OUTPUT end   ===========================${COLOR_RESET}"
+        IMAGE_VALID="false"
+    fi
+
     set -e
 }
 
@@ -83,7 +169,7 @@ function verify_image::verify_prod_image_has_airflow_and_providers() {
 function verify_image::verify_ci_image_dependencies() {
     start_end::group_start "Checking if Airflow dependencies are non-conflicting in ${DOCKER_IMAGE} image."
     set +e
-    docker run --rm --entrypoint /bin/bash "${DOCKER_IMAGE}" -c 'pip check'
+    docker_v run --rm --entrypoint /bin/bash "${DOCKER_IMAGE}" -c 'pip check'
     local res=$?
     if [[ ${res} != "0" ]]; then
         echo  "${COLOR_RED}ERROR: ^^^ Some dependencies are conflicting. See instructions below on how to deal with it.  ${COLOR_RESET}"
@@ -212,7 +298,7 @@ function verify_image::verify_prod_image_as_root() {
     echo "Checking airflow as root"
     local output
     local res
-    output=$(docker run --rm --user 0 "${DOCKER_IMAGE}" "airflow" "info" 2>&1)
+    output=$(docker_v run --rm --user 0 "${DOCKER_IMAGE}" "airflow" "info" 2>&1)
     res=$?
     if [[ ${res} == "0" ]]; then
         echo "${COLOR_GREEN}OK${COLOR_RESET}"
@@ -229,7 +315,7 @@ function verify_image::verify_prod_image_as_root() {
     tmp_dir="$(mktemp -d)"
     touch "${tmp_dir}/__init__.py"
     echo 'print("Awesome")' >> "${tmp_dir}/awesome.py"
-    output=$(docker run \
+    output=$(docker_v run \
         --rm \
         -e "PYTHONPATH=${tmp_dir}" \
         -v "${tmp_dir}:${tmp_dir}" \
@@ -274,6 +360,8 @@ function verify_image::display_result {
 function verify_image::verify_prod_image {
     IMAGE_VALID="true"
     DOCKER_IMAGE="${1}"
+    verify_image::verify_prod_image_commands
+
     verify_image::verify_prod_image_has_airflow_and_providers
 
     verify_image::verify_production_image_python_modules

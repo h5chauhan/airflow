@@ -182,14 +182,17 @@ class TestCliDags(unittest.TestCase):
     @mock.patch("airflow.cli.commands.dag_command.render_dag")
     def test_show_dag_imgcat(self, mock_render_dag, mock_popen):
         mock_render_dag.return_value.pipe.return_value = b"DOT_DATA"
-        mock_popen.return_value.communicate.return_value = (b"OUT", b"ERR")
+        mock_proc = mock.MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate.return_value = (b"OUT", b"ERR")
+        mock_popen.return_value.__enter__.return_value = mock_proc
         with contextlib.redirect_stdout(io.StringIO()) as temp_stdout:
             dag_command.dag_show(
                 self.parser.parse_args(['dags', 'show', 'example_bash_operator', '--imgcat'])
             )
         out = temp_stdout.getvalue()
         mock_render_dag.return_value.pipe.assert_called_once_with(format='png')
-        mock_popen.return_value.communicate.assert_called_once_with(b'DOT_DATA')
+        mock_proc.communicate.assert_called_once_with(b'DOT_DATA')
         assert "OUT" in out
         assert "ERR" in out
 
@@ -295,10 +298,15 @@ class TestCliDags(unittest.TestCase):
 
         # The details below is determined by the schedule_interval of example DAGs
         now = DEFAULT_DATE
-        expected_output = [str(now + timedelta(days=1)), str(now + timedelta(hours=4)), "None", "None"]
+        expected_output = [
+            (now + timedelta(days=1)).isoformat(),
+            (now + timedelta(hours=4)).isoformat(),
+            "None",
+            "None",
+        ]
         expected_output_2 = [
-            str(now + timedelta(days=1)) + os.linesep + str(now + timedelta(days=2)),
-            str(now + timedelta(hours=4)) + os.linesep + str(now + timedelta(hours=8)),
+            (now + timedelta(days=1)).isoformat() + os.linesep + (now + timedelta(days=2)).isoformat(),
+            (now + timedelta(hours=4)).isoformat() + os.linesep + (now + timedelta(hours=8)).isoformat(),
             "None",
             "None",
         ]
@@ -404,8 +412,34 @@ class TestCliDags(unittest.TestCase):
 
     def test_trigger_dag(self):
         dag_command.dag_trigger(
-            self.parser.parse_args(['dags', 'trigger', 'example_bash_operator', '--conf', '{"foo": "bar"}'])
+            self.parser.parse_args(
+                [
+                    'dags',
+                    'trigger',
+                    'example_bash_operator',
+                    '--run-id=test_trigger_dag',
+                    '--exec-date=2021-06-04T09:00:00+08:00',
+                    '--conf={"foo": "bar"}',
+                ],
+            ),
         )
+        with create_session() as session:
+            dagrun = session.query(DagRun).filter(DagRun.run_id == "test_trigger_dag").one()
+
+        assert dagrun, "DagRun not created"
+        assert dagrun.run_type == DagRunType.MANUAL
+        assert dagrun.external_trigger
+        assert dagrun.conf == {"foo": "bar"}
+
+        # Coerced to UTC.
+        assert dagrun.execution_date.isoformat(timespec="seconds") == "2021-06-04T01:00:00+00:00"
+
+        # example_bash_operator runs every day at midnight, so the data interval
+        # should be aligned to the previous day.
+        assert dagrun.data_interval_start.isoformat(timespec="seconds") == "2021-06-03T00:00:00+00:00"
+        assert dagrun.data_interval_end.isoformat(timespec="seconds") == "2021-06-04T00:00:00+00:00"
+
+    def test_trigger_dag_invalid_conf(self):
         with pytest.raises(ValueError):
             dag_command.dag_trigger(
                 self.parser.parse_args(

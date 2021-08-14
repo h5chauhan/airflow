@@ -22,7 +22,6 @@ from typing import Optional
 from airflow.models import BaseOperator
 from airflow.providers.amazon.aws.hooks.glue import AwsGlueJobHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.utils.decorators import apply_defaults
 
 
 class AwsGlueJobOperator(BaseOperator):
@@ -57,9 +56,12 @@ class AwsGlueJobOperator(BaseOperator):
 
     template_fields = ('script_args',)
     template_ext = ()
+    template_fields_renderers = {
+        "script_args": "json",
+        "create_job_kwargs": "json",
+    }
     ui_color = '#ededed'
 
-    @apply_defaults
     def __init__(
         self,
         *,
@@ -76,7 +78,7 @@ class AwsGlueJobOperator(BaseOperator):
         iam_role_name: Optional[str] = None,
         create_job_kwargs: Optional[dict] = None,
         **kwargs,
-    ):  # pylint: disable=too-many-arguments
+    ):
         super().__init__(**kwargs)
         self.job_name = job_name
         self.job_desc = job_desc
@@ -102,12 +104,17 @@ class AwsGlueJobOperator(BaseOperator):
         if self.script_location and not self.script_location.startswith(self.s3_protocol):
             s3_hook = S3Hook(aws_conn_id=self.aws_conn_id)
             script_name = os.path.basename(self.script_location)
-            s3_hook.load_file(self.script_location, self.s3_bucket, self.s3_artifacts_prefix + script_name)
+            s3_hook.load_file(
+                self.script_location, self.s3_artifacts_prefix + script_name, bucket_name=self.s3_bucket
+            )
+            s3_script_location = f"s3://{self.s3_bucket}/{self.s3_artifacts_prefix}{script_name}"
+        else:
+            s3_script_location = self.script_location
         glue_job = AwsGlueJobHook(
             job_name=self.job_name,
             desc=self.job_desc,
             concurrent_run_limit=self.concurrent_run_limit,
-            script_location=self.script_location,
+            script_location=s3_script_location,
             retry_limit=self.retry_limit,
             num_of_dpus=self.num_of_dpus,
             aws_conn_id=self.aws_conn_id,

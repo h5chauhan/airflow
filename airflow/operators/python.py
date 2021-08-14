@@ -18,6 +18,7 @@
 import inspect
 import os
 import pickle
+import shutil
 import sys
 import types
 import warnings
@@ -27,17 +28,10 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
 import dill
 
-# To maintain backwards compatibility, we import the task object into this file
-# This prevents breakages in dags that use `from airflow.operators.python import task`
-from airflow.decorators.python import (  # noqa # pylint: disable=unused-import
-    PYTHON_OPERATOR_UI_COLOR,
-    python_task,
-)
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.models.skipmixin import SkipMixin
 from airflow.models.taskinstance import _CURRENT_CONTEXT
-from airflow.utils.decorators import apply_defaults
 from airflow.utils.operator_helpers import determine_kwargs
 from airflow.utils.process_utils import execute_in_subprocess
 from airflow.utils.python_virtualenv import prepare_virtualenv, write_python_script
@@ -67,6 +61,10 @@ def task(python_callable: Optional[Callable] = None, multiple_outputs: Optional[
     :type multiple_outputs: bool
     :return:
     """
+    # To maintain backwards compatibility, we import the task object into this file
+    # This prevents breakages in dags that use `from airflow.operators.python import task`
+    from airflow.decorators.python import python_task
+
     warnings.warn(
         """airflow.operators.python.task is deprecated. Please use the following instead
 
@@ -107,7 +105,8 @@ class PythonOperator(BaseOperator):
 
     template_fields = ('templates_dict', 'op_args', 'op_kwargs')
     template_fields_renderers = {"templates_dict": "json", "op_args": "py", "op_kwargs": "py"}
-    ui_color = PYTHON_OPERATOR_UI_COLOR
+    BLUE = '#ffefeb'
+    ui_color = BLUE
 
     # since we won't mutate the arguments, we should just do the shallow copy
     # there are some cases we can't deepcopy the objects(e.g protobuf).
@@ -116,7 +115,6 @@ class PythonOperator(BaseOperator):
         'op_kwargs',
     )
 
-    @apply_defaults
     def __init__(
         self,
         *,
@@ -298,8 +296,7 @@ class PythonVirtualenvOperator(PythonOperator):
     }
     AIRFLOW_SERIALIZABLE_CONTEXT_KEYS = {'macros', 'conf', 'dag', 'dag_run', 'task'}
 
-    @apply_defaults
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
         *,
         python_callable: Callable,
@@ -329,6 +326,8 @@ class PythonVirtualenvOperator(PythonOperator):
                 "Passing op_args or op_kwargs is not supported across different Python "
                 "major versions for PythonVirtualenvOperator. Please use string_args."
             )
+        if not shutil.which("virtualenv"):
+            raise AirflowException('PythonVirtualenvOperator requires virtualenv, please install it.')
         super().__init__(
             python_callable=python_callable,
             op_args=op_args,
@@ -342,8 +341,11 @@ class PythonVirtualenvOperator(PythonOperator):
         self.python_version = python_version
         self.use_dill = use_dill
         self.system_site_packages = system_site_packages
-        if not self.system_site_packages and self.use_dill and 'dill' not in self.requirements:
-            self.requirements.append('dill')
+        if not self.system_site_packages:
+            if 'lazy-object-proxy' not in self.requirements:
+                self.requirements.append('lazy-object-proxy')
+            if self.use_dill and 'dill' not in self.requirements:
+                self.requirements.append('dill')
         self.pickling_library = dill if self.use_dill else pickle
 
     def execute(self, context: Dict):
@@ -375,9 +377,10 @@ class PythonVirtualenvOperator(PythonOperator):
                     op_kwargs=self.op_kwargs,
                     pickling_library=self.pickling_library.__name__,
                     python_callable=self.python_callable.__name__,
-                    python_callable_source=dedent(inspect.getsource(self.python_callable)),
+                    python_callable_source=self.get_python_source(),
                 ),
                 filename=script_filename,
+                render_template_as_native_obj=self.dag.render_template_as_native_obj,
             )
 
             execute_in_subprocess(
@@ -391,6 +394,13 @@ class PythonVirtualenvOperator(PythonOperator):
             )
 
             return self._read_result(output_filename)
+
+    def get_python_source(self):
+        """
+        Returns the source of self.python_callable
+        @return:
+        """
+        return dedent(inspect.getsource(self.python_callable))
 
     def _write_args(self, filename):
         if self.op_args or self.op_kwargs:
@@ -428,6 +438,11 @@ class PythonVirtualenvOperator(PythonOperator):
                 )
                 raise
 
+    def __deepcopy__(self, memo):
+        # module objects can't be copied _at all__
+        memo[id(self.pickling_library)] = self.pickling_library
+        return super().__deepcopy__(memo)
+
 
 def get_current_context() -> Dict[str, Any]:
     """
@@ -447,6 +462,8 @@ def get_current_context() -> Dict[str, Any]:
     .. code:: python
 
         from airflow.operators.python import get_current_context
+
+
         def my_task():
             context = get_current_context()
             ti = context["ti"]

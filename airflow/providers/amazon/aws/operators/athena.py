@@ -26,7 +26,6 @@ except ImportError:
 
 from airflow.models import BaseOperator
 from airflow.providers.amazon.aws.hooks.athena import AWSAthenaHook
-from airflow.utils.decorators import apply_defaults
 
 
 class AWSAthenaOperator(BaseOperator):
@@ -58,9 +57,9 @@ class AWSAthenaOperator(BaseOperator):
     ui_color = '#44b5e2'
     template_fields = ('query', 'database', 'output_location')
     template_ext = ('.sql',)
+    template_fields_renderers = {"query": "sql"}
 
-    @apply_defaults
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
         *,
         query: str,
@@ -132,7 +131,7 @@ class AWSAthenaOperator(BaseOperator):
             http_status_code = None
             try:
                 http_status_code = response['ResponseMetadata']['HTTPStatusCode']
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:
                 self.log.error('Exception while cancelling query: %s', ex)
             finally:
                 if http_status_code is None or http_status_code != 200:

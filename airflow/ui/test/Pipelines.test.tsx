@@ -19,13 +19,21 @@
 
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, fireEvent } from '@testing-library/react';
 import nock from 'nock';
+import axios from 'axios';
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
 
 import Pipelines from 'views/Pipelines';
 import {
   defaultHeaders, QueryWrapper, RouterWrapper, url,
 } from './utils';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+axios.defaults.adapter = require('axios/lib/adapters/http');
 
 const sampleDag = {
   dagId: 'dagId1',
@@ -45,37 +53,59 @@ const sampleDag = {
   ],
 };
 
-nock(url)
-  .defaultReplyHeaders(defaultHeaders)
-  .persist()
-  .get('/version')
-  .reply(200, { version: '', gitVersion: '' });
-
 describe('Test Pipelines Table', () => {
-  test('Show a loading indicator and have a DAG count of 0 before data loads', async () => {
+  beforeAll(() => {
+    dayjs.tz.setDefault('UTC');
+  });
+
+  beforeEach(() => {
+    nock(url)
+      .defaultReplyHeaders(defaultHeaders)
+      .persist()
+      .get('/version')
+      .reply(200, { version: '', gitVersion: '' });
+  });
+
+  afterAll(() => {
+    nock.cleanAll();
+  });
+
+  test('Show a loading indicator before data loads', async () => {
     nock(url)
       .defaultReplyHeaders(defaultHeaders)
       .get('/dags')
+      .query(() => true)
       .reply(200, {
         dags: [sampleDag],
         totalEntries: 1,
       });
 
-    const { getByText } = render(
+    const { getByText, getAllByTestId } = render(
       <QueryWrapper><Pipelines /></QueryWrapper>,
       {
         wrapper: RouterWrapper,
       },
     );
-    expect(getByText('Loading…')).toBeInTheDocument();
+    // At least one loading bar is rendered
+    expect(getAllByTestId('pipelines-loading').length).toBeGreaterThanOrEqual(1);
     await waitFor(() => expect(getByText(sampleDag.dagId)).toBeInTheDocument());
   });
 
-  test('Show Empty State text if there are no dags', () => {
+  test('Show Empty State text if there are no dags', async () => {
     nock(url)
       .defaultReplyHeaders(defaultHeaders)
       .get('/dags')
-      .reply(404, undefined);
+      .query(() => true)
+      .reply(404, {
+        dags: [],
+        totalEntries: 0,
+      });
+
+    nock(url)
+      .defaultReplyHeaders(defaultHeaders)
+      .persist()
+      .intercept(`/dags/${sampleDag.dagId}`, 'PATCH')
+      .reply(200, { ...sampleDag, ...{ isPaused: !sampleDag.isPaused } });
 
     const { getByText } = render(
       <QueryWrapper><Pipelines /></QueryWrapper>,
@@ -83,6 +113,56 @@ describe('Test Pipelines Table', () => {
         wrapper: RouterWrapper,
       },
     );
-    waitFor(() => expect(getByText('No DAGs found.')).toBeInTheDocument());
+
+    await waitFor(() => expect(getByText('No Data found.')).toBeInTheDocument());
+  });
+
+  test('Toggle a pipeline on/off', async () => {
+    nock(url)
+      .defaultReplyHeaders(defaultHeaders)
+      .get('/dags')
+      .query(() => true)
+      .reply(200, {
+        dags: [sampleDag],
+        totalEntries: 1,
+      });
+
+    nock(url)
+      .defaultReplyHeaders(defaultHeaders)
+      .persist()
+      .intercept(`/dags/${sampleDag.dagId}`, 'PATCH')
+      .reply(200, { ...sampleDag, ...{ isPaused: !sampleDag.isPaused } });
+
+    const { getByText, getByRole } = render(
+      <QueryWrapper><Pipelines /></QueryWrapper>,
+      {
+        wrapper: RouterWrapper,
+      },
+    );
+
+    await waitFor(() => expect(getByText(sampleDag.dagId)).toBeInTheDocument());
+    const toggle = getByRole('switch');
+    const input = toggle.querySelector('input') as HTMLInputElement;
+    expect(input.checked).toBeTruthy();
+    fireEvent.click(toggle);
+    // 'Dag Updated' is the toast confirming the change happened
+    await waitFor(() => expect(getByText('Pipeline Updated')).toBeInTheDocument());
+    await waitFor(() => expect(input.checked).toBeFalsy());
+  });
+
+  test('Errors when retrieving dags are shown to the user', async () => {
+    nock(url)
+      .defaultReplyHeaders(defaultHeaders)
+      .get('/dags')
+      .query(() => true)
+      .replyWithError('something awful happened');
+
+    const { getByText } = render(
+      <QueryWrapper><Pipelines /></QueryWrapper>,
+      {
+        wrapper: RouterWrapper,
+      },
+    );
+    await waitFor(() => expect(getByText('something awful happened')).toBeInTheDocument());
   });
 });
