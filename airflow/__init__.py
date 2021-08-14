@@ -47,6 +47,7 @@ settings.initialize()
 
 login: Optional[Callable] = None
 
+PY36 = sys.version_info >= (3, 6)
 PY37 = sys.version_info >= (3, 7)
 PY38 = sys.version_info >= (3, 8)
 
@@ -68,6 +69,11 @@ if not settings.LAZY_LOAD_PLUGINS:
     from airflow import plugins_manager
 
     plugins_manager.ensure_plugins_loaded()
+
+if not settings.LAZY_LOAD_PROVIDERS:
+    from airflow import providers_manager
+
+    providers_manager.ProvidersManager().initialize_providers_manager()
 
 
 # This is never executed, but tricks static analyzers (PyDev, PyCharm,

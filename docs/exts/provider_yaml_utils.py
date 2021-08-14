@@ -23,6 +23,12 @@ from typing import Any, Dict, List
 import jsonschema
 import yaml
 
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader  # type: ignore[misc]
+
+
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 PROVIDER_DATA_SCHEMA_PATH = os.path.join(ROOT_DIR, "airflow", "provider.yaml.schema.json")
 
@@ -43,7 +49,7 @@ def get_provider_yaml_paths():
     return sorted(glob(f"{ROOT_DIR}/airflow/providers/**/provider.yaml", recursive=True))
 
 
-def load_package_data() -> List[Dict[str, Dict]]:
+def load_package_data() -> List[Dict[str, Any]]:
     """
     Load all data from providers files
 
@@ -53,11 +59,12 @@ def load_package_data() -> List[Dict[str, Dict]]:
     result = []
     for provider_yaml_path in get_provider_yaml_paths():
         with open(provider_yaml_path) as yaml_file:
-            provider = yaml.safe_load(yaml_file)
+            provider = yaml.load(yaml_file, SafeLoader)
         try:
             jsonschema.validate(provider, schema=schema)
         except jsonschema.ValidationError:
             raise Exception(f"Unable to parse: {provider_yaml_path}.")
         provider['python-module'] = _filepath_to_module(os.path.dirname(provider_yaml_path))
+        provider['package-dir'] = os.path.dirname(provider_yaml_path)
         result.append(provider)
     return result

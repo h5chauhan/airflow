@@ -106,8 +106,15 @@ class DataprepRunJobGroupOperator(BaseOperator):
     To get recipe_id please follow the Dataprep API documentation
     https://clouddataprep.com/documentation/api#operation/runJobGroup
 
-    :param recipe_id: The identifier for the recipe you would like to run.
-    :type recipe_id: int
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:DataprepRunJobGroupOperator`
+
+    :param dataprep_conn_id: The Dataprep connection ID
+    :type dataprep_conn_id: str
+    :param body_request:  Passed as the body_request to GoogleDataprepHook's run_job_group,
+        where it's the identifier for the recipe to run
+    :type body_request: dict
     """
 
     template_fields = ("body_request",)

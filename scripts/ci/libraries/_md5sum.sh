@@ -28,9 +28,9 @@ function md5sum::calculate_file_md5sum {
     mkdir -pv "${MD5SUM_CACHE_DIR}"
     MD5SUM=$(md5sum "${FILE}")
     local MD5SUM_FILE
-    MD5SUM_FILE="${MD5SUM_CACHE_DIR}"/$(basename "${FILE}").md5sum
+    MD5SUM_FILE="${MD5SUM_CACHE_DIR}"/$(basename "$(dirname "${FILE}")")-$(basename "${FILE}").md5sum
     local MD5SUM_FILE_NEW
-    MD5SUM_FILE_NEW=${CACHE_TMP_FILE_DIR}/$(basename "${FILE}").md5sum.new
+    MD5SUM_FILE_NEW=${CACHE_TMP_FILE_DIR}/$(basename "$(dirname "${FILE}")")-$(basename "${FILE}").md5sum.new
     echo "${MD5SUM}" > "${MD5SUM_FILE_NEW}"
     local RET_CODE=0
     if [[ ! -f "${MD5SUM_FILE}" ]]; then
@@ -40,7 +40,13 @@ function md5sum::calculate_file_md5sum {
         diff "${MD5SUM_FILE_NEW}" "${MD5SUM_FILE}" >/dev/null
         RES=$?
         if [[ "${RES}" != "0" ]]; then
-            verbosity::print_info "The md5sum changed for ${FILE}"
+            verbosity::print_info "The md5sum changed for ${FILE}: was $(cat "${MD5SUM_FILE}") now it is $(cat "${MD5SUM_FILE_NEW}")"
+            if [[ ${CI} == "true" ]]; then
+                echo "${COLOR_RED}The file has changed: ${FILE}${COLOR_RESET}"
+                echo "${COLOR_BLUE}==============================${COLOR_RESET}"
+                cat "${FILE}"
+                echo "${COLOR_BLUE}==============================${COLOR_RESET}"
+            fi
             RET_CODE=1
         fi
     fi
@@ -56,12 +62,12 @@ function md5sum::move_file_md5sum {
     local MD5SUM_FILE
     local MD5SUM_CACHE_DIR="${BUILD_CACHE_DIR}/${BRANCH_NAME}/${PYTHON_MAJOR_MINOR_VERSION}/${THE_IMAGE_TYPE}"
     mkdir -pv "${MD5SUM_CACHE_DIR}"
-    MD5SUM_FILE="${MD5SUM_CACHE_DIR}"/$(basename "${FILE}").md5sum
+    MD5SUM_FILE="${MD5SUM_CACHE_DIR}"/$(basename "$(dirname "${FILE}")")-$(basename "${FILE}").md5sum
     local MD5SUM_FILE_NEW
-    MD5SUM_FILE_NEW=${CACHE_TMP_FILE_DIR}/$(basename "${FILE}").md5sum.new
+    MD5SUM_FILE_NEW=${CACHE_TMP_FILE_DIR}/$(basename "$(dirname "${FILE}")")-$(basename "${FILE}").md5sum.new
     if [[ -f "${MD5SUM_FILE_NEW}" ]]; then
         mv "${MD5SUM_FILE_NEW}" "${MD5SUM_FILE}"
-        verbosity::print_info "Updated md5sum file ${MD5SUM_FILE} for ${FILE}."
+        verbosity::print_info "Updated md5sum file ${MD5SUM_FILE} for ${FILE}: $(cat "${MD5SUM_FILE}")"
     fi
 }
 
@@ -82,6 +88,11 @@ function md5sum::update_all_md5() {
     touch "${BUILT_CI_IMAGE_FLAG_FILE}"
 }
 
+function md5sum::update_all_md5_with_group() {
+    start_end::group_start "Update MD5 hashes for pulled images"
+    md5sum::update_all_md5
+    start_end::group_end
+}
 
 function md5sum::calculate_md5sum_for_all_files() {
     FILES_MODIFIED="false"
@@ -102,7 +113,6 @@ function md5sum::calculate_md5sum_for_all_files() {
 # * setup.py
 # * setup.cfg
 # * Dockerfile.ci
-# * airflow/version.py
 #
 # This is needed because we want to skip rebuilding of the image when only airflow sources change but
 # Trigger rebuild in case we need to change dependencies (setup.py, setup.cfg, change version of Airflow

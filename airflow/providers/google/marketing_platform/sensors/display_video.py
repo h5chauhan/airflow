@@ -20,7 +20,7 @@ from typing import Optional, Sequence, Union
 
 from airflow import AirflowException
 from airflow.providers.google.marketing_platform.hooks.display_video import GoogleDisplayVideo360Hook
-from airflow.sensors.base_sensor_operator import BaseSensorOperator
+from airflow.sensors.base import BaseSensorOperator
 
 
 class GoogleDisplayVideo360ReportSensor(BaseSensorOperator):
@@ -97,8 +97,8 @@ class GoogleDisplayVideo360GetSDFDownloadOperationSensor(BaseSensorOperator):
         For more information on how to use this operator, take a look at the guide:
         :ref:`howto/operator:GoogleDisplayVideo360GetSDFDownloadOperationSensor`
 
-    :param name: The name of the operation resource
-    :type name: Dict[str, Any]
+    :param operation_name: The name of the operation resource
+    :type operation_name: Dict[str, Any]
     :param api_version: The version of the api that will be requested for example 'v1'.
     :type api_version: str
     :param gcp_conn_id: The connection ID to use when fetching connection info.
