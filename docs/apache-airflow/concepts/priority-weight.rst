@@ -53,8 +53,8 @@ There are three weighting methods.
   The effective weight is the exact ``priority_weight`` specified
   without additional weighting. You may want to do this when you
   know exactly what priority weight each task should have.
-  Additionally, when set to ``absolute``, there is bonus effect of
-  significantly speeding up the task creation process as for very
+  Additionally, when set to ``absolute``, there is a bonus effect of
+  significant speed up of the task creation process for very
   large DAGs
 
 
