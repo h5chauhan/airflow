@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import os
 
@@ -49,6 +50,9 @@ def helper_two_versions():
 @pytest.mark.system("google.secret_manager")
 @pytest.mark.credential_file(GCP_SECRET_MANAGER_KEY)
 class TestSystemSecretsManager(GoogleSystemTest):
+    def setUp(self):
+        super().setUp()
+
     @pytest.mark.usefixtures("helper_one_version")
     @provide_gcp_context(GCP_SECRET_MANAGER_KEY)
     def test_read_secret_from_secret_manager(self):
@@ -73,3 +77,6 @@ class TestSystemSecretsManager(GoogleSystemTest):
         assert TEST_SECRET_VALUE == secret
         secret = hook.get_secret(secret_id=TEST_SECRET_ID, secret_version='2')
         assert TEST_SECRET_VALUE_UPDATED == secret
+
+    def tearDown(self):
+        super().tearDown()

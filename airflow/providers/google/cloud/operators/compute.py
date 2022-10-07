@@ -16,9 +16,10 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains Google Compute Engine operators."""
+from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 
 from googleapiclient.errors import HttpError
 from json_merge_patch import merge
@@ -29,6 +30,9 @@ from airflow.providers.google.cloud.hooks.compute import ComputeEngineHook
 from airflow.providers.google.cloud.utils.field_sanitizer import GcpBodyFieldSanitizer
 from airflow.providers.google.cloud.utils.field_validator import GcpBodyFieldValidator
 
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
 
 class ComputeEngineBaseOperator(BaseOperator):
     """Abstract base operator for Google Compute Engine operators to inherit from."""
@@ -38,10 +42,10 @@ class ComputeEngineBaseOperator(BaseOperator):
         *,
         zone: str,
         resource_id: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         gcp_conn_id: str = 'google_cloud_default',
         api_version: str = 'v1',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         self.project_id = project_id
@@ -61,7 +65,7 @@ class ComputeEngineBaseOperator(BaseOperator):
         if not self.resource_id:
             raise AirflowException("The required parameter 'resource_id' is missing")
 
-    def execute(self, context):
+    def execute(self, context: Context):
         pass
 
 
@@ -74,19 +78,14 @@ class ComputeEngineStartInstanceOperator(ComputeEngineBaseOperator):
         :ref:`howto/operator:ComputeEngineStartInstanceOperator`
 
     :param zone: Google Cloud zone where the instance exists.
-    :type zone: str
     :param resource_id: Name of the Compute Engine instance resource.
-    :type resource_id: str
     :param project_id: Optional, Google Cloud Project ID where the Compute
         Engine Instance exists. If set to None or missing, the default project_id from the Google Cloud
         connection is used.
-    :type project_id: str
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud.
         Defaults to 'google_cloud_default'.
-    :type gcp_conn_id: str
     :param api_version: Optional, API version used (for example v1 - or beta). Defaults
         to v1.
-    :type api_version: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -95,11 +94,10 @@ class ComputeEngineStartInstanceOperator(ComputeEngineBaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gce_instance_start_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'project_id',
         'zone',
         'resource_id',
@@ -109,7 +107,7 @@ class ComputeEngineStartInstanceOperator(ComputeEngineBaseOperator):
     )
     # [END gce_instance_start_template_fields]
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
@@ -127,19 +125,14 @@ class ComputeEngineStopInstanceOperator(ComputeEngineBaseOperator):
         :ref:`howto/operator:ComputeEngineStopInstanceOperator`
 
     :param zone: Google Cloud zone where the instance exists.
-    :type zone: str
     :param resource_id: Name of the Compute Engine instance resource.
-    :type resource_id: str
     :param project_id: Optional, Google Cloud Project ID where the Compute
         Engine Instance exists. If set to None or missing, the default project_id from the Google Cloud
         connection is used.
-    :type project_id: str
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud.
         Defaults to 'google_cloud_default'.
-    :type gcp_conn_id: str
     :param api_version: Optional, API version used (for example v1 - or beta). Defaults
         to v1.
-    :type api_version: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -148,11 +141,10 @@ class ComputeEngineStopInstanceOperator(ComputeEngineBaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gce_instance_stop_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'project_id',
         'zone',
         'resource_id',
@@ -162,7 +154,7 @@ class ComputeEngineStopInstanceOperator(ComputeEngineBaseOperator):
     )
     # [END gce_instance_stop_template_fields]
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
@@ -186,25 +178,18 @@ class ComputeEngineSetMachineTypeOperator(ComputeEngineBaseOperator):
         :ref:`howto/operator:ComputeEngineSetMachineTypeOperator`
 
     :param zone: Google Cloud zone where the instance exists.
-    :type zone: str
     :param resource_id: Name of the Compute Engine instance resource.
-    :type resource_id: str
     :param body: Body required by the Compute Engine setMachineType API, as described in
         https://cloud.google.com/compute/docs/reference/rest/v1/instances/setMachineType#request-body
-    :type body: dict
     :param project_id: Optional, Google Cloud Project ID where the Compute
         Engine Instance exists. If set to None or missing, the default project_id from the Google Cloud
         connection is used.
-    :type project_id: str
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud.
         Defaults to 'google_cloud_default'.
-    :type gcp_conn_id: str
     :param api_version: Optional, API version used (for example v1 - or beta). Defaults
         to v1.
-    :type api_version: str
     :param validate_body: Optional, If set to False, body validation is not performed.
         Defaults to False.
-    :type validate_body: bool
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -213,11 +198,10 @@ class ComputeEngineSetMachineTypeOperator(ComputeEngineBaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gce_instance_set_machine_type_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'project_id',
         'zone',
         'resource_id',
@@ -234,11 +218,11 @@ class ComputeEngineSetMachineTypeOperator(ComputeEngineBaseOperator):
         zone: str,
         resource_id: str,
         body: dict,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         gcp_conn_id: str = 'google_cloud_default',
         api_version: str = 'v1',
         validate_body: bool = True,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         self.body = body
@@ -261,7 +245,7 @@ class ComputeEngineSetMachineTypeOperator(ComputeEngineBaseOperator):
         if self._field_validator:
             self._field_validator.validate(self.body)
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
@@ -341,7 +325,6 @@ class ComputeEngineCopyInstanceTemplateOperator(ComputeEngineBaseOperator):
         :ref:`howto/operator:ComputeEngineCopyInstanceTemplateOperator`
 
     :param resource_id: Name of the Instance Template
-    :type resource_id: str
     :param body_patch: Patch to the body of instanceTemplates object following rfc7386
         PATCH semantics. The body_patch content follows
         https://cloud.google.com/compute/docs/reference/rest/v1/instanceTemplates
@@ -349,25 +332,19 @@ class ComputeEngineCopyInstanceTemplateOperator(ComputeEngineBaseOperator):
         all the other fields are optional. It is important to follow PATCH semantics
         - arrays are replaced fully, so if you need to update an array you should
         provide the whole target array as patch element.
-    :type body_patch: dict
     :param project_id: Optional, Google Cloud Project ID where the Compute
         Engine Instance exists. If set to None or missing, the default project_id from the Google Cloud
         connection is used.
-    :type project_id: str
     :param request_id: Optional, unique request_id that you might add to achieve
         full idempotence (for example when client call times out repeating the request
         with the same request id will not create a new instance template again).
         It should be in UUID format as defined in RFC 4122.
-    :type request_id: str
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud.
         Defaults to 'google_cloud_default'.
-    :type gcp_conn_id: str
     :param api_version: Optional, API version used (for example v1 - or beta). Defaults
         to v1.
-    :type api_version: str
     :param validate_body: Optional, If set to False, body validation is not performed.
         Defaults to False.
-    :type validate_body: bool
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -376,11 +353,10 @@ class ComputeEngineCopyInstanceTemplateOperator(ComputeEngineBaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gce_instance_template_copy_operator_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'project_id',
         'resource_id',
         'request_id',
@@ -395,12 +371,12 @@ class ComputeEngineCopyInstanceTemplateOperator(ComputeEngineBaseOperator):
         *,
         resource_id: str,
         body_patch: dict,
-        project_id: Optional[str] = None,
-        request_id: Optional[str] = None,
+        project_id: str | None = None,
+        request_id: str | None = None,
         gcp_conn_id: str = 'google_cloud_default',
         api_version: str = 'v1',
         validate_body: bool = True,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         self.body_patch = body_patch
@@ -408,8 +384,8 @@ class ComputeEngineCopyInstanceTemplateOperator(ComputeEngineBaseOperator):
         self._field_validator = None  # Optional[GcpBodyFieldValidator]
         if 'name' not in self.body_patch:
             raise AirflowException(
-                "The body '{}' should contain at least "
-                "name for the new operator in the 'name' field".format(body_patch)
+                f"The body '{body_patch}' should contain at least name for the new operator "
+                f"in the 'name' field"
             )
         if validate_body:
             self._field_validator = GcpBodyFieldValidator(
@@ -430,7 +406,7 @@ class ComputeEngineCopyInstanceTemplateOperator(ComputeEngineBaseOperator):
         if self._field_validator:
             self._field_validator.validate(self.body_patch)
 
-    def execute(self, context) -> dict:
+    def execute(self, context: Context) -> dict:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
@@ -479,28 +455,20 @@ class ComputeEngineInstanceGroupUpdateManagerTemplateOperator(ComputeEngineBaseO
         :ref:`howto/operator:ComputeEngineInstanceGroupUpdateManagerTemplateOperator`
 
     :param resource_id: Name of the Instance Group Manager
-    :type resource_id: str
     :param zone: Google Cloud zone where the Instance Group Manager exists.
-    :type zone: str
     :param source_template: URL of the template to replace.
-    :type source_template: str
     :param destination_template: URL of the target template.
-    :type destination_template: str
     :param project_id: Optional, Google Cloud Project ID where the Compute
         Engine Instance exists. If set to None or missing, the default project_id from the Google Cloud
         connection is used.
-    :type project_id: str
     :param request_id: Optional, unique request_id that you might add to achieve
         full idempotence (for example when client call times out repeating the request
         with the same request id will not create a new instance template again).
         It should be in UUID format as defined in RFC 4122.
-    :type request_id: str
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud.
         Defaults to 'google_cloud_default'.
-    :type gcp_conn_id: str
     :param api_version: Optional, API version used (for example v1 - or beta). Defaults
         to v1.
-    :type api_version: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -509,11 +477,10 @@ class ComputeEngineInstanceGroupUpdateManagerTemplateOperator(ComputeEngineBaseO
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gce_igm_update_template_operator_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'project_id',
         'resource_id',
         'zone',
@@ -533,12 +500,12 @@ class ComputeEngineInstanceGroupUpdateManagerTemplateOperator(ComputeEngineBaseO
         zone: str,
         source_template: str,
         destination_template: str,
-        project_id: Optional[str] = None,
-        update_policy: Optional[Dict[str, Any]] = None,
-        request_id: Optional[str] = None,
+        project_id: str | None = None,
+        update_policy: dict[str, Any] | None = None,
+        request_id: str | None = None,
         gcp_conn_id: str = 'google_cloud_default',
         api_version='beta',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         self.zone = zone
@@ -568,7 +535,7 @@ class ComputeEngineInstanceGroupUpdateManagerTemplateOperator(ComputeEngineBaseO
             dictionary['instanceTemplate'] = self.destination_template
             self._change_performed = True
 
-    def execute(self, context) -> Optional[bool]:
+    def execute(self, context: Context) -> bool | None:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,

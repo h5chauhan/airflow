@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 from airflow.models.taskreschedule import TaskReschedule
 from airflow.ti_deps.deps.base_ti_dep import BaseTIDep
@@ -40,6 +41,14 @@ class ReadyToRescheduleDep(BaseTIDep):
         considered as passed. This dependency fails if the latest reschedule
         request's reschedule date is still in future.
         """
+        is_mapped = ti.task.is_mapped
+        if not is_mapped and not getattr(ti.task, "reschedule", False):
+            # Mapped sensors don't have the reschedule property (it can only
+            # be calculated after unmapping), so we don't check them here.
+            # They are handled below by checking TaskReschedule instead.
+            yield self._passing_status(reason="Task is not in reschedule mode.")
+            return
+
         if dep_context.ignore_in_reschedule_period:
             yield self._passing_status(
                 reason="The context specified that being in a reschedule period was permitted."
@@ -58,6 +67,11 @@ class ReadyToRescheduleDep(BaseTIDep):
             .first()
         )
         if not task_reschedule:
+            # Because mapped sensors don't have the reschedule property, here's the last resort
+            # and we need a slightly different passing reason
+            if is_mapped:
+                yield self._passing_status(reason="The task is mapped and not in reschedule mode")
+                return
             yield self._passing_status(reason="There is no reschedule request for this task instance.")
             return
 
@@ -68,7 +82,9 @@ class ReadyToRescheduleDep(BaseTIDep):
             return
 
         yield self._failing_status(
-            reason="Task is not ready for reschedule yet but will be rescheduled "
-            "automatically. Current date is {} and task will be rescheduled "
-            "at {}.".format(now.isoformat(), next_reschedule_date.isoformat())
+            reason=(
+                "Task is not ready for reschedule yet but will be rescheduled automatically. "
+                f"Current date is {now.isoformat()} and task will be "
+                f"rescheduled at {next_reschedule_date.isoformat()}."
+            )
         )

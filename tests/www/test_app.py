@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import runpy
 import sys
 import unittest
@@ -211,24 +213,6 @@ class TestApp(unittest.TestCase):
 
     @conf_vars(
         {
-            ('core', 'sql_alchemy_pool_enabled'): 'True',
-            ('core', 'sql_alchemy_pool_size'): '3',
-            ('core', 'sql_alchemy_max_overflow'): '5',
-            ('core', 'sql_alchemy_pool_recycle'): '120',
-            ('core', 'sql_alchemy_pool_pre_ping'): 'True',
-        }
-    )
-    @dont_initialize_flask_app_submodules
-    @pytest.mark.backend("mysql", "postgres")
-    def test_should_set_sqlalchemy_engine_options(self):
-        app = application.cached_app(testing=True)
-        engine_params = {'pool_size': 3, 'pool_recycle': 120, 'pool_pre_ping': True, 'max_overflow': 5}
-        if app.config['SQLALCHEMY_DATABASE_URI'].startswith('mysql'):
-            engine_params['isolation_level'] = 'READ COMMITTED'
-        assert app.config['SQLALCHEMY_ENGINE_OPTIONS'] == engine_params
-
-    @conf_vars(
-        {
             ('webserver', 'session_lifetime_minutes'): '3600',
         }
     )
@@ -240,7 +224,9 @@ class TestApp(unittest.TestCase):
     @conf_vars({('webserver', 'cookie_samesite'): ''})
     @dont_initialize_flask_app_submodules
     def test_correct_default_is_set_for_cookie_samesite(self):
-        app = application.cached_app(testing=True)
+        """An empty 'cookie_samesite' should be corrected to 'Lax' with a deprecation warning."""
+        with pytest.deprecated_call():
+            app = application.cached_app(testing=True)
         assert app.config['SESSION_COOKIE_SAMESITE'] == 'Lax'
 
 
@@ -254,3 +240,13 @@ class TestFlaskCli:
 
         output = capsys.readouterr()
         assert "/login/" in output.out
+
+
+def test_app_can_json_serialize_k8s_pod():
+    # This is mostly testing that we have correctly configured the JSON provider to use. Testing the k8s pos
+    # is a side-effect of that.
+    k8s = pytest.importorskip('kubernetes.client.models')
+
+    pod = k8s.V1Pod(spec=k8s.V1PodSpec(containers=[k8s.V1Container(name="base")]))
+    app = application.cached_app(testing=True)
+    assert app.json.dumps(pod) == '{"spec": {"containers": [{"name": "base"}]}}'

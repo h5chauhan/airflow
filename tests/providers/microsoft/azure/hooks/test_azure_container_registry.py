@@ -15,11 +15,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 
 from airflow.models import Connection
-from airflow.providers.microsoft.azure.hooks.azure_container_registry import AzureContainerRegistryHook
+from airflow.providers.microsoft.azure.hooks.container_registry import AzureContainerRegistryHook
 from airflow.utils import db
 
 

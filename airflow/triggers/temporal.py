@@ -14,10 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import asyncio
 import datetime
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from airflow.triggers.base import BaseTrigger, TriggerEvent
 from airflow.utils import timezone
@@ -33,15 +34,17 @@ class DateTimeTrigger(BaseTrigger):
 
     def __init__(self, moment: datetime.datetime):
         super().__init__()
+        if not isinstance(moment, datetime.datetime):
+            raise TypeError(f"Expected datetime.datetime type for moment. Got {type(moment)}")
         # Make sure it's in UTC
-        if moment.tzinfo is None:
+        elif moment.tzinfo is None:
             raise ValueError("You cannot pass naive datetimes")
-        elif not hasattr(moment.tzinfo, "offset") or moment.tzinfo.offset != 0:
+        elif not hasattr(moment.tzinfo, "offset") or moment.tzinfo.offset != 0:  # type: ignore
             raise ValueError(f"The passed datetime must be using Pendulum's UTC, not {moment.tzinfo!r}")
         else:
             self.moment = moment
 
-    def serialize(self) -> Tuple[str, Dict[str, Any]]:
+    def serialize(self) -> tuple[str, dict[str, Any]]:
         return ("airflow.triggers.temporal.DateTimeTrigger", {"moment": self.moment})
 
     async def run(self):

@@ -16,14 +16,12 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Google Cloud Vision Hook."""
+from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Sequence
 
-try:
-    from functools import cached_property
-except ImportError:
-    from cached_property import cached_property
+from google.api_core.gapic_v1.method import DEFAULT, _MethodDefault
 from google.api_core.retry import Retry
 from google.cloud.vision_v1 import ImageAnnotatorClient, ProductSearchClient
 from google.cloud.vision_v1.types import (
@@ -36,8 +34,10 @@ from google.cloud.vision_v1.types import (
 )
 from google.protobuf.json_format import MessageToDict
 
+from airflow.compat.functools import cached_property
 from airflow.exceptions import AirflowException
-from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
+from airflow.providers.google.common.consts import CLIENT_INFO
+from airflow.providers.google.common.hooks.base_google import PROVIDE_PROJECT_ID, GoogleBaseHook
 
 ERR_DIFF_NAMES = """The {label} name provided in the object ({explicit_name}) is different
     than the name created from the input parameters ({constructed_name}). Please either:
@@ -60,7 +60,7 @@ class NameDeterminer:
         self.get_path = get_path
 
     def get_entity_with_name(
-        self, entity: Any, entity_id: Optional[str], location: Optional[str], project_id: str
+        self, entity: Any, entity_id: str | None, location: str | None, project_id: str
     ) -> Any:
         """
         Check if entity has the `name` attribute set:
@@ -78,13 +78,9 @@ class NameDeterminer:
 
 
         :param entity: Entity
-        :type entity: any
         :param entity_id: Entity id
-        :type entity_id: str
         :param location: Location
-        :type location: str
         :param project_id: The id of Google Cloud Vision project.
-        :type project_id: str
         :return: The same entity or entity with new name
         :rtype: str
         :raises: AirflowException
@@ -131,8 +127,8 @@ class CloudVisionHook(GoogleBaseHook):
     def __init__(
         self,
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -149,9 +145,7 @@ class CloudVisionHook(GoogleBaseHook):
         :rtype: google.cloud.vision_v1.ProductSearchClient
         """
         if not self._client:
-            self._client = ProductSearchClient(
-                credentials=self._get_credentials(), client_info=self.client_info
-            )
+            self._client = ProductSearchClient(credentials=self.get_credentials(), client_info=CLIENT_INFO)
         return self._client
 
     @cached_property
@@ -162,10 +156,10 @@ class CloudVisionHook(GoogleBaseHook):
         :return: Google Image Annotator client object.
         :rtype: google.cloud.vision_v1.ImageAnnotatorClient
         """
-        return ImageAnnotatorClient(credentials=self._get_credentials())
+        return ImageAnnotatorClient(credentials=self.get_credentials())
 
     @staticmethod
-    def _check_for_error(response: Dict) -> None:
+    def _check_for_error(response: dict) -> None:
         if "error" in response:
             raise AirflowException(response)
 
@@ -173,12 +167,12 @@ class CloudVisionHook(GoogleBaseHook):
     def create_product_set(
         self,
         location: str,
-        product_set: Union[dict, ProductSet],
-        project_id: str,
-        product_set_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        product_set: dict | ProductSet,
+        project_id: str = PROVIDE_PROJECT_ID,
+        product_set_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> str:
         """
         For the documentation see:
@@ -210,10 +204,10 @@ class CloudVisionHook(GoogleBaseHook):
         self,
         location: str,
         product_set_id: str,
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> dict:
         """
         For the documentation see:
@@ -230,14 +224,14 @@ class CloudVisionHook(GoogleBaseHook):
     @GoogleBaseHook.fallback_to_default_project_id
     def update_product_set(
         self,
-        product_set: Union[dict, ProductSet],
-        project_id: str,
-        location: Optional[str] = None,
-        product_set_id: Optional[str] = None,
-        update_mask: Union[dict, FieldMask] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        product_set: dict | ProductSet,
+        project_id: str = PROVIDE_PROJECT_ID,
+        location: str | None = None,
+        product_set_id: str | None = None,
+        update_mask: dict | FieldMask = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> dict:
         """
         For the documentation see:
@@ -260,10 +254,10 @@ class CloudVisionHook(GoogleBaseHook):
         self,
         location: str,
         product_set_id: str,
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         For the documentation see:
@@ -279,12 +273,12 @@ class CloudVisionHook(GoogleBaseHook):
     def create_product(
         self,
         location: str,
-        product: Union[dict, Product],
-        project_id: str,
-        product_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        product: dict | Product,
+        project_id: str = PROVIDE_PROJECT_ID,
+        product_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ):
         """
         For the documentation see:
@@ -316,10 +310,10 @@ class CloudVisionHook(GoogleBaseHook):
         self,
         location: str,
         product_id: str,
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ):
         """
         For the documentation see:
@@ -336,14 +330,14 @@ class CloudVisionHook(GoogleBaseHook):
     @GoogleBaseHook.fallback_to_default_project_id
     def update_product(
         self,
-        product: Union[dict, Product],
-        project_id: str,
-        location: Optional[str] = None,
-        product_id: Optional[str] = None,
-        update_mask: Optional[Dict[str, FieldMask]] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        product: dict | Product,
+        project_id: str = PROVIDE_PROJECT_ID,
+        location: str | None = None,
+        product_id: str | None = None,
+        update_mask: dict[str, FieldMask] | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ):
         """
         For the documentation see:
@@ -364,10 +358,10 @@ class CloudVisionHook(GoogleBaseHook):
         self,
         location: str,
         product_id: str,
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         For the documentation see:
@@ -384,12 +378,12 @@ class CloudVisionHook(GoogleBaseHook):
         self,
         location: str,
         product_id: str,
-        reference_image: Union[dict, ReferenceImage],
+        reference_image: dict | ReferenceImage,
         project_id: str,
-        reference_image_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        reference_image_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> str:
         """
         For the documentation see:
@@ -427,9 +421,9 @@ class CloudVisionHook(GoogleBaseHook):
         product_id: str,
         reference_image_id: str,
         project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> dict:
         """
         For the documentation see:
@@ -457,10 +451,10 @@ class CloudVisionHook(GoogleBaseHook):
         product_set_id: str,
         product_id: str,
         project_id: str,
-        location: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        location: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         For the documentation see:
@@ -485,10 +479,10 @@ class CloudVisionHook(GoogleBaseHook):
         product_set_id: str,
         product_id: str,
         project_id: str,
-        location: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        location: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         For the documentation see:
@@ -509,10 +503,10 @@ class CloudVisionHook(GoogleBaseHook):
 
     def annotate_image(
         self,
-        request: Union[dict, AnnotateImageRequest],
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-    ) -> Dict:
+        request: dict | AnnotateImageRequest,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+    ) -> dict:
         """
         For the documentation see:
         :py:class:`~airflow.providers.google.cloud.operators.vision.CloudVisionImageAnnotateOperator`
@@ -530,9 +524,9 @@ class CloudVisionHook(GoogleBaseHook):
     @GoogleBaseHook.quota_retry()
     def batch_annotate_images(
         self,
-        requests: Union[List[dict], List[AnnotateImageRequest]],
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
+        requests: list[dict] | list[AnnotateImageRequest],
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
     ) -> dict:
         """
         For the documentation see:
@@ -551,11 +545,11 @@ class CloudVisionHook(GoogleBaseHook):
     @GoogleBaseHook.quota_retry()
     def text_detection(
         self,
-        image: Union[dict, Image],
-        max_results: Optional[int] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        additional_properties: Optional[Dict] = None,
+        image: dict | Image,
+        max_results: int | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        additional_properties: dict | None = None,
     ) -> dict:
         """
         For the documentation see:
@@ -581,11 +575,11 @@ class CloudVisionHook(GoogleBaseHook):
     @GoogleBaseHook.quota_retry()
     def document_text_detection(
         self,
-        image: Union[dict, Image],
-        max_results: Optional[int] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        additional_properties: Optional[dict] = None,
+        image: dict | Image,
+        max_results: int | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        additional_properties: dict | None = None,
     ) -> dict:
         """
         For the documentation see:
@@ -611,11 +605,11 @@ class CloudVisionHook(GoogleBaseHook):
     @GoogleBaseHook.quota_retry()
     def label_detection(
         self,
-        image: Union[dict, Image],
-        max_results: Optional[int] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        additional_properties: Optional[dict] = None,
+        image: dict | Image,
+        max_results: int | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        additional_properties: dict | None = None,
     ) -> dict:
         """
         For the documentation see:
@@ -641,11 +635,11 @@ class CloudVisionHook(GoogleBaseHook):
     @GoogleBaseHook.quota_retry()
     def safe_search_detection(
         self,
-        image: Union[dict, Image],
-        max_results: Optional[int] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        additional_properties: Optional[dict] = None,
+        image: dict | Image,
+        max_results: int | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        additional_properties: dict | None = None,
     ) -> dict:
         """
         For the documentation see:

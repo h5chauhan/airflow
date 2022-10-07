@@ -21,11 +21,6 @@ The `Google Cloud Storage <https://cloud.google.com/storage/>`__ (GCS) service i
 used to store large data from various applications. This page shows how to copy
 data from Oracle to GCS.
 
-.. contents::
-  :depth: 1
-  :local:
-
-
 Prerequisite Tasks
 ^^^^^^^^^^^^^^^^^^
 
@@ -43,7 +38,7 @@ When you use this operator, you can optionally compress the data being uploaded 
 
 Below is an example of using this operator to upload data to GCS.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_oracle_to_gcs.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/gcs/example_oracle_to_gcs.py
     :language: python
     :dedent: 0
     :start-after: [START howto_operator_oracle_to_gcs]
@@ -54,5 +49,5 @@ Reference
 ---------
 
 For further information, look at:
-* `cx_Oracle Documentation <https://cx-oracle.readthedocs.io/en/latest/>`__
+* `oracledb Documentation <https://python-oracledb.readthedocs.io/en/latest/>`__
 * `Google Cloud Storage Documentation <https://cloud.google.com/storage/>`__

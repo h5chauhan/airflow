@@ -14,14 +14,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
-#
+from __future__ import annotations
 
 import datetime
+import warnings
 
 from airflow.models import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.subdag import SubDagOperator
+
+#
 
 
 def create_subdag_opt(main_dag):
@@ -29,22 +31,23 @@ def create_subdag_opt(main_dag):
     subdag = DAG(
         dag_id='.'.join([dag_name, subdag_name]),
         start_date=start_date,
-        schedule_interval=None,
+        schedule=None,
         max_active_tasks=2,
     )
     BashOperator(bash_command="echo 1", task_id="daily_job_subdag_task", dag=subdag)
-    return SubDagOperator(
-        task_id=subdag_name,
-        subdag=subdag,
-        dag=main_dag,
-    )
+    with warnings.catch_warnings(record=True):
+        return SubDagOperator(
+            task_id=subdag_name,
+            subdag=subdag,
+            dag=main_dag,
+        )
 
 
 dag_name = "clear_subdag_test_dag"
 
 start_date = datetime.datetime(2016, 1, 1)
 
-dag = DAG(dag_id=dag_name, max_active_tasks=3, start_date=start_date, schedule_interval="0 0 * * *")
+dag = DAG(dag_id=dag_name, max_active_tasks=3, start_date=start_date, schedule="0 0 * * *")
 
 daily_job_irrelevant = BashOperator(
     bash_command="echo 1",

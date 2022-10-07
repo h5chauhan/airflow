@@ -15,12 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """This module contains AWS S3 to Snowflake operator."""
-from typing import Any, Optional
+from __future__ import annotations
+
+import warnings
+from typing import Any, Sequence
 
 from airflow.models import BaseOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
+from airflow.providers.snowflake.utils.common import enclose_param
 
 
 class S3ToSnowflakeOperator(BaseOperator):
@@ -32,32 +35,24 @@ class S3ToSnowflakeOperator(BaseOperator):
         :ref:`howto/operator:S3ToSnowflakeOperator`
 
     :param s3_keys: reference to a list of S3 keys
-    :type s3_keys: list
     :param table: reference to a specific table in snowflake database
-    :type table: str
     :param schema: name of schema (will overwrite schema defined in
         connection)
-    :type schema: str
     :param stage: reference to a specific snowflake stage. If the stage's schema is not the same as the
         table one, it must be specified
-    :type stage: str
     :param prefix: cloud storage location specified to limit the set of files to load
-    :type prefix: str
     :param file_format: reference to a specific file format
-    :type file_format: str
     :param warehouse: name of warehouse (will overwrite any warehouse
         defined in the connection's extra JSON)
-    :type warehouse: str
     :param database: reference to a specific database in Snowflake connection
-    :type database: str
     :param columns_array: reference to a specific columns array in snowflake database
-    :type columns_array: list
+    :param pattern: regular expression pattern string specifying the file names and/or paths to match.
+        Note: regular expression will be automatically enclose in single quotes
+        and all single quotes in expression will replace by two single quotes.
     :param snowflake_conn_id: Reference to
         :ref:`Snowflake connection id<howto/connection:snowflake>`
-    :type snowflake_conn_id: str
     :param role: name of role (will overwrite any role defined in
         connection's extra JSON)
-    :type role: str
     :param authenticator: authenticator for Snowflake.
         'snowflake' (default) to use the internal Snowflake authenticator
         'externalbrowser' to authenticate using your web browser and
@@ -65,34 +60,42 @@ class S3ToSnowflakeOperator(BaseOperator):
         (IdP) that has been defined for your account
         'https://<your_okta_account_name>.okta.com' to authenticate
         through native Okta.
-    :type authenticator: str
     :param session_parameters: You can set session-level parameters at
         the time you connect to Snowflake
-    :type session_parameters: dict
     """
 
-    template_fields = ("s3_keys",)
+    template_fields: Sequence[str] = ("s3_keys",)
     template_fields_renderers = {"s3_keys": "json"}
 
     def __init__(
         self,
         *,
-        s3_keys: Optional[list] = None,
+        s3_keys: list | None = None,
         table: str,
         stage: str,
-        prefix: Optional[str] = None,
+        prefix: str | None = None,
         file_format: str,
-        schema: Optional[str] = None,
-        columns_array: Optional[list] = None,
-        warehouse: Optional[str] = None,
-        database: Optional[str] = None,
+        schema: str | None = None,
+        columns_array: list | None = None,
+        pattern: str | None = None,
+        warehouse: str | None = None,
+        database: str | None = None,
         autocommit: bool = True,
         snowflake_conn_id: str = 'snowflake_default',
-        role: Optional[str] = None,
-        authenticator: Optional[str] = None,
-        session_parameters: Optional[dict] = None,
+        role: str | None = None,
+        authenticator: str | None = None,
+        session_parameters: dict | None = None,
         **kwargs,
     ) -> None:
+        warnings.warn(
+            """
+            S3ToSnowflakeOperator is deprecated.
+            Please use
+            `airflow.providers.snowflake.transfers.copy_into_snowflake.CopyFromExternalStageToSnowflakeOperator`.
+            """,
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(**kwargs)
         self.s3_keys = s3_keys
         self.table = table
@@ -103,6 +106,7 @@ class S3ToSnowflakeOperator(BaseOperator):
         self.file_format = file_format
         self.schema = schema
         self.columns_array = columns_array
+        self.pattern = pattern
         self.autocommit = autocommit
         self.snowflake_conn_id = snowflake_conn_id
         self.role = role
@@ -132,10 +136,11 @@ class S3ToSnowflakeOperator(BaseOperator):
             f"FROM @{self.stage}/{self.prefix or ''}",
         ]
         if self.s3_keys:
-            files = ", ".join(f"'{key}'" for key in self.s3_keys)
+            files = ", ".join(map(enclose_param, self.s3_keys))
             sql_parts.append(f"files=({files})")
         sql_parts.append(f"file_format={self.file_format}")
-
+        if self.pattern:
+            sql_parts.append(f"pattern={enclose_param(self.pattern)}")
         copy_query = "\n".join(sql_parts)
 
         self.log.info('Executing COPY command...')

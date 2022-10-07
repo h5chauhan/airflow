@@ -15,9 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+from __future__ import annotations
 
 import unittest
+from time import sleep
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -89,7 +90,12 @@ class TestRedisPubSubSensor(unittest.TestCase):
 
         result = sensor.poke(self.mock_context)
         assert not result
-        result = sensor.poke(self.mock_context)
+
+        for _ in range(1, 10):
+            result = sensor.poke(self.mock_context)
+            if result:
+                break
+            sleep(0.1)
         assert result
         context_calls = [
             call.xcom_push(

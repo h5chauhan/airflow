@@ -15,10 +15,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest import mock
 
+from google.api_core.gapic_v1.method import DEFAULT
 from google.cloud.videointelligence_v1 import enums
 from google.cloud.videointelligence_v1.proto.video_intelligence_pb2 import AnnotateVideoResponse
 
@@ -62,7 +64,7 @@ class TestCloudVideoIntelligenceOperators(unittest.TestCase):
             input_content=None,
             video_context=None,
             location=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
         )
 
@@ -89,7 +91,7 @@ class TestCloudVideoIntelligenceOperators(unittest.TestCase):
             input_content=None,
             video_context=None,
             location=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
         )
 
@@ -116,6 +118,6 @@ class TestCloudVideoIntelligenceOperators(unittest.TestCase):
             input_content=None,
             video_context=None,
             location=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
         )

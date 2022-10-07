@@ -16,28 +16,33 @@
 # specific language governing permissions and limitations
 # under the License.
 """Airflow module for email backend using AWS SES"""
+from __future__ import annotations
 
-from typing import List, Optional, Union
+from typing import Any
 
-from airflow.providers.amazon.aws.hooks.ses import SESHook
+from airflow.providers.amazon.aws.hooks.ses import SesHook
 
 
 def send_email(
-    to: Union[List[str], str],
+    to: list[str] | str,
     subject: str,
     html_content: str,
-    files: Optional[List] = None,
-    cc: Optional[Union[List[str], str]] = None,
-    bcc: Optional[Union[List[str], str]] = None,
+    files: list | None = None,
+    cc: list[str] | str | None = None,
+    bcc: list[str] | str | None = None,
     mime_subtype: str = 'mixed',
     mime_charset: str = 'utf-8',
     conn_id: str = 'aws_default',
+    from_email: str | None = None,
+    custom_headers: dict[str, Any] | None = None,
     **kwargs,
 ) -> None:
     """Email backend for SES."""
-    hook = SESHook(aws_conn_id=conn_id)
+    if from_email is None:
+        raise RuntimeError("The `from_email' configuration has to be set for the SES emailer.")
+    hook = SesHook(aws_conn_id=conn_id)
     hook.send_email(
-        mail_from=None,
+        mail_from=from_email,
         to=to,
         subject=subject,
         html_content=html_content,
@@ -46,4 +51,5 @@ def send_email(
         bcc=bcc,
         mime_subtype=mime_subtype,
         mime_charset=mime_charset,
+        custom_headers=custom_headers,
     )

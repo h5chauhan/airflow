@@ -14,9 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """GRPC Hook"""
-from typing import Any, Callable, Dict, Generator, List, Optional
+from __future__ import annotations
+
+from typing import Any, Callable, Generator
 
 import grpc
 from google import auth as google_auth
@@ -35,16 +36,14 @@ class GrpcHook(BaseHook):
     General interaction with gRPC servers.
 
     :param grpc_conn_id: The connection ID to use when fetching connection info.
-    :type grpc_conn_id: str
     :param interceptors: a list of gRPC interceptor objects which would be applied
         to the connected gRPC channel. None by default.
-    :type interceptors: a list of gRPC interceptors based on or extends the four
+        Each interceptor should based on or extends the four
         official gRPC interceptors, eg, UnaryUnaryClientInterceptor,
         UnaryStreamClientInterceptor, StreamUnaryClientInterceptor,
         StreamStreamClientInterceptor.
     :param custom_connection_func: The customized connection function to return gRPC channel.
-    :type custom_connection_func: python callable objects that accept the connection as
-        its only arg. Could be partial or lambda.
+        A callable that accepts the connection as its only arg.
     """
 
     conn_name_attr = 'grpc_conn_id'
@@ -53,7 +52,7 @@ class GrpcHook(BaseHook):
     hook_name = 'GRPC Connection'
 
     @staticmethod
-    def get_connection_form_widgets() -> Dict[str, Any]:
+    def get_connection_form_widgets() -> dict[str, Any]:
         """Returns connection widgets to add to connection form"""
         from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
         from flask_babel import lazy_gettext
@@ -74,8 +73,8 @@ class GrpcHook(BaseHook):
     def __init__(
         self,
         grpc_conn_id: str = default_conn_name,
-        interceptors: Optional[List[Callable]] = None,
-        custom_connection_func: Optional[Callable] = None,
+        interceptors: list[Callable] | None = None,
+        custom_connection_func: Callable | None = None,
     ) -> None:
         super().__init__()
         self.grpc_conn_id = grpc_conn_id
@@ -116,9 +115,8 @@ class GrpcHook(BaseHook):
             channel = self.custom_connection_func(self.conn)
         else:
             raise AirflowConfigException(
-                "auth_type not supported or not provided, channel cannot be established,\
-                given value: %s"
-                % str(auth_type)
+                "auth_type not supported or not provided, channel cannot be established, "
+                f"given value: {str(auth_type)}"
             )
 
         if self.interceptors:
@@ -128,7 +126,7 @@ class GrpcHook(BaseHook):
         return channel
 
     def run(
-        self, stub_class: Callable, call_func: str, streaming: bool = False, data: Optional[dict] = None
+        self, stub_class: Callable, call_func: str, streaming: bool = False, data: dict | None = None
     ) -> Generator:
         """Call gRPC function and yield response to caller"""
         if data is None:

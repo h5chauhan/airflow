@@ -18,10 +18,6 @@
 Google Cloud Video Intelligence Operators
 =========================================
 
-.. contents::
-  :depth: 1
-  :local:
-
 Prerequisite Tasks
 ------------------
 
@@ -42,12 +38,12 @@ Using the operator
 
 Input uri is an uri to a file in Google Cloud Storage
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :start-after: [START howto_operator_video_intelligence_other_args]
       :end-before: [END howto_operator_video_intelligence_other_args]
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :dedent: 4
       :start-after: [START howto_operator_video_intelligence_detect_labels]
@@ -55,7 +51,7 @@ Input uri is an uri to a file in Google Cloud Storage
 
 You can use the annotation output via Xcom:
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :dedent: 4
       :start-after: [START howto_operator_video_intelligence_detect_labels_result]
@@ -91,7 +87,7 @@ Arguments
 
 Input uri is an uri to a file in Google Cloud Storage
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :start-after: [START howto_operator_video_intelligence_other_args]
       :end-before: [END howto_operator_video_intelligence_other_args]
@@ -99,7 +95,7 @@ Input uri is an uri to a file in Google Cloud Storage
 Using the operator
 """"""""""""""""""
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :dedent: 4
       :start-after: [START howto_operator_video_intelligence_detect_explicit_content]
@@ -107,7 +103,7 @@ Using the operator
 
 You can use the annotation output via Xcom:
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :dedent: 4
       :start-after: [START howto_operator_video_intelligence_detect_explicit_content_result]
@@ -143,7 +139,7 @@ Arguments
 
 Input uri is an uri to a file in Google Cloud Storage
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :start-after: [START howto_operator_video_intelligence_other_args]
       :end-before: [END howto_operator_video_intelligence_other_args]
@@ -151,7 +147,7 @@ Input uri is an uri to a file in Google Cloud Storage
 Using the operator
 """"""""""""""""""
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :dedent: 4
       :start-after: [START howto_operator_video_intelligence_detect_video_shots]
@@ -159,7 +155,7 @@ Using the operator
 
 You can use the annotation output via Xcom:
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_video_intelligence.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/video_intelligence/example_video_intelligence.py
       :language: python
       :dedent: 4
       :start-after: [START howto_operator_video_intelligence_detect_video_shots_result]

@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -57,7 +58,7 @@ class TestAdlsToGoogleCloudStorageOperator(unittest.TestCase):
         assert operator.azure_data_lake_conn_id == AZURE_CONN_ID
 
     @mock.patch('airflow.providers.google.cloud.transfers.adls_to_gcs.AzureDataLakeHook')
-    @mock.patch('airflow.providers.microsoft.azure.operators.adls_list.AzureDataLakeHook')
+    @mock.patch('airflow.providers.microsoft.azure.operators.adls.AzureDataLakeHook')
     @mock.patch('airflow.providers.google.cloud.transfers.adls_to_gcs.GCSHook')
     def test_execute(self, gcs_mock_hook, adls_one_mock_hook, adls_two_mock_hook):
         """Test the execute function when the run is successful."""
@@ -68,7 +69,7 @@ class TestAdlsToGoogleCloudStorageOperator(unittest.TestCase):
             dest_gcs=GCS_PATH,
             replace=False,
             azure_data_lake_conn_id=AZURE_CONN_ID,
-            google_cloud_storage_conn_id=GCS_CONN_ID,
+            gcp_conn_id=GCS_CONN_ID,
             google_impersonation_chain=IMPERSONATION_CHAIN,
         )
 
@@ -104,7 +105,7 @@ class TestAdlsToGoogleCloudStorageOperator(unittest.TestCase):
         assert sorted(MOCK_FILES) == sorted(uploaded_files)
 
     @mock.patch('airflow.providers.google.cloud.transfers.adls_to_gcs.AzureDataLakeHook')
-    @mock.patch('airflow.providers.microsoft.azure.operators.adls_list.AzureDataLakeHook')
+    @mock.patch('airflow.providers.microsoft.azure.operators.adls.AzureDataLakeHook')
     @mock.patch('airflow.providers.google.cloud.transfers.adls_to_gcs.GCSHook')
     def test_execute_with_gzip(self, gcs_mock_hook, adls_one_mock_hook, adls_two_mock_hook):
         """Test the execute function when the run is successful."""
@@ -115,7 +116,7 @@ class TestAdlsToGoogleCloudStorageOperator(unittest.TestCase):
             dest_gcs=GCS_PATH,
             replace=False,
             azure_data_lake_conn_id=AZURE_CONN_ID,
-            google_cloud_storage_conn_id=GCS_CONN_ID,
+            gcp_conn_id=GCS_CONN_ID,
             gzip=True,
         )
 

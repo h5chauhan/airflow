@@ -14,20 +14,26 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import hashlib
 import json
 import os
+import shutil
 import sys
 import tempfile
-from distutils.file_util import copy_file
 from functools import lru_cache
-from typing import Dict
 
 import requests
 from sphinx.builders import html as builders
 from sphinx.util import logging
 
 log = logging.getLogger(__name__)
+
+
+def _copy_file(src: str, dst: str) -> None:
+    log.info("Copying %s -> %s", src, dst)
+    shutil.copy2(src, dst, follow_symlinks=False)
 
 
 def _gethash(string: str):
@@ -59,7 +65,7 @@ def fetch_and_cache(script_url: str, output_filename: str):
     # Create cache directory
     os.makedirs(cache_dir, exist_ok=True)
     # Load cache metadata
-    cache_metadata: Dict[str, str] = {}
+    cache_metadata: dict[str, str] = {}
     if os.path.exists(cache_metadata_filepath):
         try:
             with open(cache_metadata_filepath) as cache_file:
@@ -107,7 +113,7 @@ def build_finished(app, exception):
     output_filename = "script.js"
 
     cache_filepath = fetch_and_cache(script_url, output_filename)
-    copy_file(cache_filepath, os.path.join(app.builder.outdir, '_static', "redoc.js"))
+    _copy_file(cache_filepath, os.path.join(app.builder.outdir, '_static', "redoc.js"))
 
 
 def setup(app):

@@ -15,7 +15,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
 """
 This module contains a Segment Hook
 which allows you to connect to your Segment account,
@@ -24,6 +23,8 @@ retrieve data from it or write to that file.
 NOTE:   this hook also relies on the Segment analytics package:
         https://github.com/segmentio/analytics-python
 """
+from __future__ import annotations
+
 import analytics
 
 from airflow.exceptions import AirflowException
@@ -41,10 +42,8 @@ class SegmentHook(BaseHook):
     :param segment_conn_id: the name of the connection that has the parameters
         we need to connect to Segment. The connection should be type `json` and include a
         write_key security token in the `Extras` field.
-    :type segment_conn_id: str
     :param segment_debug_mode: Determines whether Segment should run in debug mode.
         Defaults to False
-    :type segment_debug_mode: bool
 
     .. note::
         You must include a JSON structure in the `Extras` field.

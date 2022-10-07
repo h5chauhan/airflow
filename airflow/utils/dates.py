@@ -15,17 +15,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import warnings
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Union
 
 from croniter import croniter
 from dateutil.relativedelta import relativedelta  # for doctest
 
+from airflow.exceptions import RemovedInAirflow3Warning
 from airflow.utils import timezone
 
-cron_presets: Dict[str, str] = {
+cron_presets: dict[str, str] = {
     '@hourly': '0 * * * *',
     '@daily': '0 0 * * *',
     '@weekly': '0 0 * * 0',
@@ -37,10 +38,10 @@ cron_presets: Dict[str, str] = {
 
 def date_range(
     start_date: datetime,
-    end_date: Optional[datetime] = None,
-    num: Optional[int] = None,
-    delta: Optional[Union[str, timedelta, relativedelta]] = None,
-) -> List[datetime]:
+    end_date: datetime | None = None,
+    num: int | None = None,
+    delta: str | timedelta | relativedelta | None = None,
+) -> list[datetime]:
     """
     Get a set of dates as a list based on a start, end and delta, delta
     can be something that can be added to `datetime.datetime`
@@ -63,19 +64,15 @@ def date_range(
         datetime.datetime(2016, 3, 1, 0, 0, tzinfo=Timezone('UTC'))]
 
     :param start_date: anchor date to start the series from
-    :type start_date: datetime.datetime
     :param end_date: right boundary for the date range
-    :type end_date: datetime.datetime
     :param num: alternatively to end_date, you can specify the number of
         number of entries you want in the range. This number can be negative,
         output will always be sorted regardless
-    :type num: int
     :param delta: step length. It can be datetime.timedelta or cron expression as string
-    :type delta: datetime.timedelta or str or dateutil.relativedelta
     """
     warnings.warn(
         "`airflow.utils.dates.date_range()` is deprecated. Please use `airflow.timetables`.",
-        category=DeprecationWarning,
+        category=RemovedInAirflow3Warning,
         stacklevel=2,
     )
 
@@ -92,7 +89,7 @@ def date_range(
     delta_iscron = False
     time_zone = start_date.tzinfo
 
-    abs_delta: Union[timedelta, relativedelta]
+    abs_delta: timedelta | relativedelta
     if isinstance(delta, str):
         delta_iscron = True
         if timezone.is_localized(start_date):
@@ -257,6 +254,13 @@ def days_ago(n, hour=0, minute=0, second=0, microsecond=0):
     Get a datetime object representing `n` days ago. By default the time is
     set to midnight.
     """
+    warnings.warn(
+        "Function `days_ago` is deprecated and will be removed in Airflow 3.0. "
+        "You can achieve equivalent behavior with `pendulum.today('UTC').add(days=-N, ...)`",
+        RemovedInAirflow3Warning,
+        stacklevel=2,
+    )
+
     today = timezone.utcnow().replace(hour=hour, minute=minute, second=second, microsecond=microsecond)
     return today - timedelta(days=n)
 

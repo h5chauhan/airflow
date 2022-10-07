@@ -23,11 +23,15 @@ To obtain info about this token, run the following commands:
 
     ID_TOKEN="$(python -m airflow.providers.google.common.utils.id_token_credentials)"
     curl "https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${ID_TOKEN}" -v
+
+.. spelling::
+
+    RefreshError
 """
+from __future__ import annotations
 
 import json
 import os
-from typing import Optional
 
 import google.auth.transport
 import google.oauth2
@@ -37,7 +41,7 @@ from google.oauth2 import credentials as oauth2_credentials, service_account
 
 
 class IDTokenCredentialsAdapter(google_auth_credentials.Credentials):
-    """Convert Credentials with "openid" scope to IDTokenCredentials."""
+    """Convert Credentials with ``openid`` scope to IDTokenCredentials."""
 
     def __init__(self, credentials: oauth2_credentials.Credentials):
         super().__init__()
@@ -54,15 +58,14 @@ class IDTokenCredentialsAdapter(google_auth_credentials.Credentials):
 
 
 def _load_credentials_from_file(
-    filename: str, target_audience: Optional[str]
-) -> Optional[google_auth_credentials.Credentials]:
+    filename: str, target_audience: str | None
+) -> google_auth_credentials.Credentials | None:
     """
     Loads credentials from a file.
 
     The credentials file must be a service account key or a stored authorized user credential.
 
     :param filename: The full path to the credentials file.
-    :type filename: str
     :return: Loaded credentials
     :rtype: google.auth.credentials.Credentials
     :raise google.auth.exceptions.DefaultCredentialsError: if the file is in the wrong format or is missing.
@@ -105,8 +108,8 @@ def _load_credentials_from_file(
 
 
 def _get_explicit_environ_credentials(
-    target_audience: Optional[str],
-) -> Optional[google_auth_credentials.Credentials]:
+    target_audience: str | None,
+) -> google_auth_credentials.Credentials | None:
     """Gets credentials from the GOOGLE_APPLICATION_CREDENTIALS environment variable."""
     explicit_file = os.environ.get(environment_vars.CREDENTIALS)
 
@@ -121,8 +124,8 @@ def _get_explicit_environ_credentials(
 
 
 def _get_gcloud_sdk_credentials(
-    target_audience: Optional[str],
-) -> Optional[google_auth_credentials.Credentials]:
+    target_audience: str | None,
+) -> google_auth_credentials.Credentials | None:
     """Gets the credentials and project ID from the Cloud SDK."""
     from google.auth import _cloud_sdk
 
@@ -138,8 +141,8 @@ def _get_gcloud_sdk_credentials(
 
 
 def _get_gce_credentials(
-    target_audience: Optional[str], request: Optional[google.auth.transport.Request] = None
-) -> Optional[google_auth_credentials.Credentials]:
+    target_audience: str | None, request: google.auth.transport.Request | None = None
+) -> google_auth_credentials.Credentials | None:
     """Gets credentials and project ID from the GCE Metadata Service."""
     # Ping requires a transport, but we want application default credentials
     # to require no arguments. So, we'll use the _http_client transport which
@@ -167,7 +170,7 @@ def _get_gce_credentials(
 
 
 def get_default_id_token_credentials(
-    target_audience: Optional[str], request: google.auth.transport.Request = None
+    target_audience: str | None, request: google.auth.transport.Request = None
 ) -> google_auth_credentials.Credentials:
     """Gets the default ID Token credentials for the current environment.
 
@@ -178,11 +181,9 @@ def get_default_id_token_credentials(
         /identity/protocols/application-default-credentials
 
     :param target_audience: The intended audience for these credentials.
-    :type target_audience: Sequence[str]
     :param request: An object used to make HTTP requests. This is used to detect whether the application
             is running on Compute Engine. If not specified, then it will use the standard library http client
             to make requests.
-    :type request: google.auth.transport.Request
     :return: the current environment's credentials.
     :rtype: google.auth.credentials.Credentials
     :raises ~google.auth.exceptions.DefaultCredentialsError:

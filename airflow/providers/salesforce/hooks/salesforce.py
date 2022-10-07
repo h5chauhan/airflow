@@ -15,7 +15,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
 """
 This module contains a Salesforce Hook which allows you to connect to your Salesforce instance,
 retrieve data from it, and write that data to a file for other uses.
@@ -23,14 +22,17 @@ retrieve data from it, and write that data to a file for other uses.
 .. note:: this hook also relies on the simple_salesforce package:
       https://github.com/simple-salesforce/simple-salesforce
 """
+from __future__ import annotations
+
 import logging
 import time
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Iterable
 
 import pandas as pd
 from requests import Session
 from simple_salesforce import Salesforce, api
 
+from airflow.compat.functools import cached_property
 from airflow.hooks.base import BaseHook
 
 log = logging.getLogger(__name__)
@@ -44,12 +46,9 @@ class SalesforceHook(BaseHook):
 
     :param conn_id: The name of the connection that has the parameters needed to connect to Salesforce.
         The connection should be of type `Salesforce`.
-    :type conn_id: str
     :param session_id: The access token for a given HTTP request session.
-    :type session_id: str
     :param session: A custom HTTP request session. This enables the use of requests Session features not
         otherwise exposed by `simple_salesforce`.
-    :type session: requests.Session
 
     .. note::
         A connection to Salesforce can be created via several authentication options:
@@ -70,17 +69,16 @@ class SalesforceHook(BaseHook):
     def __init__(
         self,
         salesforce_conn_id: str = default_conn_name,
-        session_id: Optional[str] = None,
-        session: Optional[Session] = None,
+        session_id: str | None = None,
+        session: Session | None = None,
     ) -> None:
         super().__init__()
         self.conn_id = salesforce_conn_id
-        self.conn = None
         self.session_id = session_id
         self.session = session
 
     @staticmethod
-    def get_connection_form_widgets() -> Dict[str, Any]:
+    def get_connection_form_widgets() -> dict[str, Any]:
         """Returns connection widgets to add to connection form"""
         from flask_appbuilder.fieldwidgets import BS3PasswordFieldWidget, BS3TextFieldWidget
         from flask_babel import lazy_gettext
@@ -117,7 +115,7 @@ class SalesforceHook(BaseHook):
         }
 
     @staticmethod
-    def get_ui_field_behaviour() -> Dict:
+    def get_ui_field_behaviour() -> dict[str, Any]:
         """Returns custom field behaviour"""
         return {
             "hidden_fields": ["schema", "port", "extra", "host"],
@@ -126,42 +124,46 @@ class SalesforceHook(BaseHook):
             },
         }
 
+    @cached_property
+    def conn(self) -> api.Salesforce:
+        """Returns a Salesforce instance. (cached)"""
+        connection = self.get_connection(self.conn_id)
+        extras = connection.extra_dejson
+        # all extras below (besides the version one) are explicitly defaulted to None
+        # because simple-salesforce has a built-in authentication-choosing method that
+        # relies on which arguments are None and without "or None" setting this connection
+        # in the UI will result in the blank extras being empty strings instead of None,
+        # which would break the connection if "get" was used on its own.
+        conn = Salesforce(
+            username=connection.login,
+            password=connection.password,
+            security_token=extras.get('extra__salesforce__security_token') or None,
+            domain=extras.get('extra__salesforce__domain') or None,
+            session_id=self.session_id,
+            instance=extras.get('extra__salesforce__instance') or None,
+            instance_url=extras.get('extra__salesforce__instance_url') or None,
+            organizationId=extras.get('extra__salesforce__organization_id') or None,
+            version=extras.get('extra__salesforce__version') or api.DEFAULT_API_VERSION,
+            proxies=extras.get('extra__salesforce__proxies') or None,
+            session=self.session,
+            client_id=extras.get('extra__salesforce__client_id') or None,
+            consumer_key=extras.get('extra__salesforce__consumer_key') or None,
+            privatekey_file=extras.get('extra__salesforce__private_key_file_path') or None,
+            privatekey=extras.get('extra__salesforce__private_key') or None,
+        )
+        return conn
+
     def get_conn(self) -> api.Salesforce:
-        """Sign into Salesforce, only if we are not already signed in."""
-        if not self.conn:
-            connection = self.get_connection(self.conn_id)
-            extras = connection.extra_dejson
-            self.conn = Salesforce(
-                username=connection.login,
-                password=connection.password,
-                security_token=extras["extra__salesforce__security_token"] or None,
-                domain=extras["extra__salesforce__domain"] or None,
-                session_id=self.session_id,
-                instance=extras["extra__salesforce__instance"] or None,
-                instance_url=extras["extra__salesforce__instance_url"] or None,
-                organizationId=extras["extra__salesforce__organization_id"] or None,
-                version=extras["extra__salesforce__version"] or api.DEFAULT_API_VERSION,
-                proxies=extras["extra__salesforce__proxies"] or None,
-                session=self.session,
-                client_id=extras["extra__salesforce__client_id"] or None,
-                consumer_key=extras["extra__salesforce__consumer_key"] or None,
-                privatekey_file=extras["extra__salesforce__private_key_file_path"] or None,
-                privatekey=extras["extra__salesforce__private_key"] or None,
-            )
+        """Returns a Salesforce instance. (cached)"""
         return self.conn
 
-    def make_query(
-        self, query: str, include_deleted: bool = False, query_params: Optional[dict] = None
-    ) -> dict:
+    def make_query(self, query: str, include_deleted: bool = False, query_params: dict | None = None) -> dict:
         """
         Make a query to Salesforce.
 
         :param query: The query to make to Salesforce.
-        :type query: str
         :param include_deleted: True if the query should include deleted records.
-        :type include_deleted: bool
         :param query_params: Additional optional arguments
-        :type query_params: dict
         :return: The query result.
         :rtype: dict
         """
@@ -184,7 +186,6 @@ class SalesforceHook(BaseHook):
         some extra metadata that Salesforce stores for each object.
 
         :param obj: The name of the Salesforce object that we are getting a description of.
-        :type obj: str
         :return: the description of the Salesforce object.
         :rtype: dict
         """
@@ -192,17 +193,14 @@ class SalesforceHook(BaseHook):
 
         return conn.__getattr__(obj).describe()
 
-    def get_available_fields(self, obj: str) -> List[str]:
+    def get_available_fields(self, obj: str) -> list[str]:
         """
         Get a list of all available fields for an object.
 
         :param obj: The name of the Salesforce object that we are getting a description of.
-        :type obj: str
         :return: the names of the fields.
         :rtype: list(str)
         """
-        self.get_conn()
-
         obj_description = self.describe_object(obj)
 
         return [field['name'] for field in obj_description['fields']]
@@ -216,9 +214,7 @@ class SalesforceHook(BaseHook):
             SELECT <fields> FROM <obj>;
 
         :param obj: The object name to get from Salesforce.
-        :type obj: str
         :param fields: The fields to get from the object.
-        :type fields: iterable
         :return: all instances of the object from Salesforce.
         :rtype: dict
         """
@@ -237,7 +233,6 @@ class SalesforceHook(BaseHook):
         Convert a column of a dataframe to UNIX timestamps if applicable
 
         :param column: A Series object representing a column of a dataframe.
-        :type column: pandas.Series
         :return: a new series that maintains the same index as the original
         :rtype: pandas.Series
         """
@@ -271,7 +266,7 @@ class SalesforceHook(BaseHook):
 
     def write_object_to_file(
         self,
-        query_results: List[dict],
+        query_results: list[dict],
         filename: str,
         fmt: str = "csv",
         coerce_to_timestamp: bool = False,
@@ -299,18 +294,13 @@ class SalesforceHook(BaseHook):
         and makes it easier to work with in other database environments
 
         :param query_results: the results from a SQL query
-        :type query_results: list of dict
         :param filename: the name of the file where the data should be dumped to
-        :type filename: str
         :param fmt: the format you want the output in. Default:  'csv'
-        :type fmt: str
         :param coerce_to_timestamp: True if you want all datetime fields to be converted into Unix timestamps.
             False if you want them to be left in the same format as they were in Salesforce.
             Leaving the value as False will result in datetimes being strings. Default: False
-        :type coerce_to_timestamp: bool
         :param record_time_added: True if you want to add a Unix timestamp field
             to the resulting data that marks when the data was fetched from Salesforce. Default: False
-        :type record_time_added: bool
         :return: the dataframe that gets written to the file.
         :rtype: pandas.Dataframe
         """
@@ -353,7 +343,7 @@ class SalesforceHook(BaseHook):
         return df
 
     def object_to_df(
-        self, query_results: List[dict], coerce_to_timestamp: bool = False, record_time_added: bool = False
+        self, query_results: list[dict], coerce_to_timestamp: bool = False, record_time_added: bool = False
     ) -> pd.DataFrame:
         """
         Export query results to dataframe.
@@ -364,14 +354,11 @@ class SalesforceHook(BaseHook):
         and makes it easier to work with in other database environments
 
         :param query_results: the results from a SQL query
-        :type query_results: list of dict
         :param coerce_to_timestamp: True if you want all datetime fields to be converted into Unix timestamps.
             False if you want them to be left in the same format as they were in Salesforce.
             Leaving the value as False will result in datetimes being strings. Default: False
-        :type coerce_to_timestamp: bool
         :param record_time_added: True if you want to add a Unix timestamp field
             to the resulting data that marks when the data was fetched from Salesforce. Default: False
-        :type record_time_added: bool
         :return: the dataframe.
         :rtype: pandas.Dataframe
         """

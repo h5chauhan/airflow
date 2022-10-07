@@ -48,7 +48,7 @@ configure multiple connections.
 Default Connection IDs
 ----------------------
 
-All hooks and operators related to Microsoft Azure Blob Storage use ``azure_container_volume_default`` by default.
+All hooks and operators related to Microsoft Azure Blob Storage use ``wasb_default`` by default.
 
 Configuring the Connection
 --------------------------
@@ -81,4 +81,4 @@ For example connect with token credentials:
 
 .. code-block:: bash
 
-   export AIRFLOW_CONN_WASP_DEFAULT='wasb://blob%20username:blob%20password@myblob.com?tenant_id=tenant+id'
+   export AIRFLOW_CONN_WASB_DEFAULT='wasb://blob%20username:blob%20password@myblob.com?tenant_id=tenant+id'

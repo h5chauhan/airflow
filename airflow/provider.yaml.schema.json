@@ -21,8 +21,8 @@
         "type": "string"
       }
     },
-    "additional-dependencies": {
-      "description": "Additional dependencies that should be added to the provider",
+    "dependencies": {
+      "description": "Dependencies that should be added to the provider",
       "type": "array",
       "items": {
         "type": "string"
@@ -70,6 +70,7 @@
                 "apache",
                 "aws",
                 "azure",
+                "dbt",
                 "gcp",
                 "gmp",
                 "google",
@@ -193,11 +194,25 @@
         ]
       }
     },
-    "hook-class-names": {
+    "connection-types": {
       "type": "array",
-      "description": "Hook class names that provide connection types to core",
+      "description": "Array of connection types mapped to hook class names",
       "items": {
-        "type": "string"
+          "type": "object",
+          "properties": {
+              "connection-type": {
+                  "description": "Type of connection defined by the provider",
+                  "type": "string"
+              },
+              "hook-class-name": {
+                  "description": "Hook class name that implements the connection type",
+                  "type": "string"
+              }
+          },
+          "required": [
+              "connection-type",
+              "hook-class-name"
+          ]
       }
     },
     "extra-links": {
@@ -208,8 +223,59 @@
       }
     },
     "additional-extras": {
-      "type": "object",
-      "description": "Additional extras that the provider should have"
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Name of the extra",
+            "type": "string"
+          },
+          "dependencies": {
+            "description": "Dependencies that should be added for the extra",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [ "name", "dependencies"]
+      },
+
+      "description": "Additional extras that the provider should have. Replaces auto-generated cross-provider extras, if matching the same prefix, so that you can specify boundaries for existing dependencies."
+    },
+    "task-decorators": {
+        "type": "array",
+        "description": "Decorators to use with the TaskFlow API. Can be accessed by users via '@task.<name>'",
+        "items": {
+            "name": {
+                "type": "string"
+            },
+            "path": {
+                "type": "string"
+            }
+        }
+    },
+    "secrets-backends": {
+      "type": "array",
+      "description": "Secrets Backend class names",
+      "items": {
+          "type": "string"
+      }
+    },
+    "logging": {
+      "type": "array",
+      "description": "Logging Task Handlers class names",
+      "items": {
+          "type": "string"
+      }
+    },
+    "auth-backends": {
+      "type": "array",
+      "description": "API Auth Backend module names",
+      "items": {
+          "type": "string"
+      }
     }
   },
   "additionalProperties": false,
@@ -217,6 +283,7 @@
     "name",
     "package-name",
     "description",
+    "dependencies",
     "versions"
   ]
 }

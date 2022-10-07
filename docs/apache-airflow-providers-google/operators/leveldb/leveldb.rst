@@ -25,10 +25,6 @@ Google LevelDB Operator
 `LevelDB <https://github.com/google/leveldb>`__ is a fast key-value storage library written at Google that provides
 an ordered mapping from string keys to string values.
 
-.. contents::
-  :depth: 1
-  :local:
-
 .. note::
 
     To use LevelDB hooks and operators you must requires installation of ``plyvel``.  It will be
@@ -40,7 +36,7 @@ Put key
 Get, put, delete key or write_batch, create database with comparator or different options in LevelDB is performed with the
 :class:`~airflow.providers.google.leveldb.operators.leveldb.LevelDBOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/leveldb/example_dags/example_leveldb.py
+.. exampleinclude:: /../../tests/system/providers/google/leveldb/example_leveldb.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_leveldb_put_key]

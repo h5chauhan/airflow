@@ -22,12 +22,20 @@ description: |
     Yandex including `Yandex.Cloud <https://cloud.yandex.com/>`__
 
 versions:
+  - 3.1.0
+  - 3.0.0
+  - 2.2.3
+  - 2.2.2
+  - 2.2.1
+  - 2.2.0
+  - 2.1.0
   - 2.0.0
   - 1.0.1
   - 1.0.0
 
-additional-dependencies:
-  - apache-airflow>=2.1.0
+dependencies:
+  - apache-airflow>=2.2.0
+  - yandexcloud>=0.173.0
 
 integrations:
   - integration-name: Yandex.Cloud
@@ -55,5 +63,6 @@ hooks:
     python-modules:
       - airflow.providers.yandex.hooks.yandexcloud_dataproc
 
-hook-class-names:
-  - airflow.providers.yandex.hooks.yandex.YandexCloudBaseHook
+connection-types:
+  - hook-class-name: airflow.providers.yandex.hooks.yandex.YandexCloudBaseHook
+    connection-type: yandexcloud

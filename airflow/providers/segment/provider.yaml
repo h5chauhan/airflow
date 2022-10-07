@@ -22,12 +22,18 @@ description: |
     `Segment <https://segment.com/>`__
 
 versions:
+  - 3.0.0
+  - 2.0.4
+  - 2.0.3
+  - 2.0.2
+  - 2.0.1
   - 2.0.0
   - 1.0.1
   - 1.0.0
 
-additional-dependencies:
-  - apache-airflow>=2.1.0
+dependencies:
+  - apache-airflow>=2.2.0
+  - analytics-python>=1.2.9
 
 integrations:
   - integration-name: Segment
@@ -45,5 +51,6 @@ hooks:
     python-modules:
       - airflow.providers.segment.hooks.segment
 
-hook-class-names:
-  - airflow.providers.segment.hooks.segment.SegmentHook
+connection-types:
+  - hook-class-name: airflow.providers.segment.hooks.segment.SegmentHook
+    connection-type: segment

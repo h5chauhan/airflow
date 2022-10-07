@@ -15,9 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 from unittest import TestCase
@@ -26,11 +27,16 @@ from airflow.configuration import AIRFLOW_HOME, AirflowConfigParser, get_airflow
 from airflow.exceptions import AirflowException
 from airflow.models.dagbag import DagBag
 from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow.utils.state import State
 from tests.test_utils import AIRFLOW_MAIN_FOLDER
 from tests.test_utils.logging_command_executor import get_executor
 
 DEFAULT_DAG_FOLDER = os.path.join(AIRFLOW_MAIN_FOLDER, "airflow", "example_dags")
+
+
+def get_default_logs_if_none(logs: str | None) -> str:
+    if logs is None:
+        return os.path.join(AIRFLOW_HOME, 'logs')
+    return logs
 
 
 def resolve_logs_folder() -> str:
@@ -41,13 +47,13 @@ def resolve_logs_folder() -> str:
     conf = AirflowConfigParser()
     conf.read(config_file)
     try:
-        logs = conf.get("logging", "base_log_folder")
+        return get_default_logs_if_none(conf.get("logging", "base_log_folder"))
     except AirflowException:
         try:
-            logs = conf.get("core", "base_log_folder")
+            return get_default_logs_if_none(conf.get("core", "base_log_folder"))
         except AirflowException:
-            logs = os.path.join(AIRFLOW_HOME, 'logs')
-    return logs
+            pass
+    return get_default_logs_if_none(None)
 
 
 class SystemTest(TestCase, LoggingMixin):
@@ -123,37 +129,20 @@ class SystemTest(TestCase, LoggingMixin):
         Runs example dag by it's ID.
 
         :param dag_id: id of a DAG to be run
-        :type dag_id: str
         :param dag_folder: directory where to look for the specific DAG. Relative to AIRFLOW_HOME.
-        :type dag_folder: str
         """
-        if os.environ.get("RUN_AIRFLOW_1_10") == "true":
-            # For system tests purpose we are changing airflow/providers
-            # to side packages path of the installed providers package
-            python = f"python{sys.version_info.major}.{sys.version_info.minor}"
-            dag_folder = dag_folder.replace(
-                "/opt/airflow/airflow/providers",
-                f"/usr/local/lib/{python}/site-packages/airflow/providers",
-            )
         self.log.info("Looking for DAG: %s in %s", dag_id, dag_folder)
         dag_bag = DagBag(dag_folder=dag_folder, include_examples=False)
         dag = dag_bag.get_dag(dag_id)
         if dag is None:
             raise AirflowException(
-                "The Dag {dag_id} could not be found. It's either an import problem,"
-                "wrong dag_id or DAG is not in provided dag_folder."
-                "The content of the {dag_folder} folder is {content}".format(
-                    dag_id=dag_id,
-                    dag_folder=dag_folder,
-                    content=os.listdir(dag_folder),
-                )
+                f"The Dag {dag_id} could not be found. It's either an import problem, wrong dag_id or DAG is "
+                "not in provided dag_folder.The content of "
+                f"the {dag_folder} folder is {os.listdir(dag_folder)}"
             )
 
         self.log.info("Attempting to run DAG: %s", dag_id)
-        if os.environ.get("RUN_AIRFLOW_1_10") == "true":
-            dag.clear()
-        else:
-            dag.clear(dag_run_state=State.NONE)
+        dag.clear()
         try:
             dag.run(ignore_first_depends_on_past=True, verbose=True)
         except Exception:

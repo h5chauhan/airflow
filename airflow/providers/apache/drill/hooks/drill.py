@@ -15,13 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import Any, Iterable, Optional, Tuple
+from typing import Any, Iterable
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection
 
-from airflow.hooks.dbapi import DbApiHook
+from airflow.providers.common.sql.hooks.sql import DbApiHook
 
 
 class DrillHook(DbApiHook):
@@ -69,21 +70,21 @@ class DrillHook(DbApiHook):
         host = conn_md.host
         if conn_md.port is not None:
             host += f':{conn_md.port}'
-        conn_type = 'drill' if not conn_md.conn_type else conn_md.conn_type
+        conn_type = conn_md.conn_type or 'drill'
         dialect_driver = conn_md.extra_dejson.get('dialect_driver', 'drill+sadrill')
         storage_plugin = conn_md.extra_dejson.get('storage_plugin', 'dfs')
-        return f'{conn_type}://{host}/{storage_plugin}' f'?dialect_driver={dialect_driver}'
+        return f'{conn_type}://{host}/{storage_plugin}?dialect_driver={dialect_driver}'
 
-    def set_autocommit(self, conn: Connection, autocommit: bool) -> NotImplemented:
+    def set_autocommit(self, conn: Connection, autocommit: bool) -> NotImplementedError:
         raise NotImplementedError("There are no transactions in Drill.")
 
     def insert_rows(
         self,
         table: str,
-        rows: Iterable[Tuple[str]],
-        target_fields: Optional[Iterable[str]] = None,
+        rows: Iterable[tuple[str]],
+        target_fields: Iterable[str] | None = None,
         commit_every: int = 1000,
         replace: bool = False,
         **kwargs: Any,
-    ) -> NotImplemented:
+    ) -> NotImplementedError:
         raise NotImplementedError("There is no INSERT statement in Drill.")

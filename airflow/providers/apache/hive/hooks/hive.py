@@ -15,15 +15,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import contextlib
 import os
 import re
 import socket
 import subprocess
 import time
+import warnings
 from collections import OrderedDict
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Iterable, Mapping
 
 import pandas
 import unicodecsv as csv
@@ -31,7 +34,7 @@ import unicodecsv as csv
 from airflow.configuration import conf
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
-from airflow.hooks.dbapi import DbApiHook
+from airflow.providers.common.sql.hooks.sql import DbApiHook
 from airflow.security import utils
 from airflow.utils.helpers import as_flattened_list
 from airflow.utils.operator_helpers import AIRFLOW_VAR_NAME_FORMAT_MAPPING
@@ -39,7 +42,7 @@ from airflow.utils.operator_helpers import AIRFLOW_VAR_NAME_FORMAT_MAPPING
 HIVE_QUEUE_PRIORITIES = ['VERY_HIGH', 'HIGH', 'NORMAL', 'LOW', 'VERY_LOW']
 
 
-def get_context_from_env_var() -> Dict[Any, Any]:
+def get_context_from_env_var() -> dict[Any, Any]:
     """
     Extract context from env variable, e.g. dag_id, task_id and execution_date,
     so that they can be used inside BashOperator and PythonOperator.
@@ -70,15 +73,11 @@ class HiveCliHook(BaseHook):
 
     :param hive_cli_conn_id: Reference to the
         :ref:`Hive CLI connection id <howto/connection:hive_cli>`.
-    :type hive_cli_conn_id: str
     :param mapred_queue: queue used by the Hadoop Scheduler (Capacity or Fair)
-    :type  mapred_queue: str
     :param mapred_queue_priority: priority within the job queue.
         Possible settings include: VERY_HIGH, HIGH, NORMAL, LOW, VERY_LOW
-    :type  mapred_queue_priority: str
     :param mapred_job_name: This name will appear in the jobtracker.
         This can make monitoring easier.
-    :type  mapred_job_name: str
     """
 
     conn_name_attr = 'hive_cli_conn_id'
@@ -89,10 +88,10 @@ class HiveCliHook(BaseHook):
     def __init__(
         self,
         hive_cli_conn_id: str = default_conn_name,
-        run_as: Optional[str] = None,
-        mapred_queue: Optional[str] = None,
-        mapred_queue_priority: Optional[str] = None,
-        mapred_job_name: Optional[str] = None,
+        run_as: str | None = None,
+        mapred_queue: str | None = None,
+        mapred_queue_priority: str | None = None,
+        mapred_job_name: str | None = None,
     ) -> None:
         super().__init__()
         conn = self.get_connection(hive_cli_conn_id)
@@ -107,8 +106,7 @@ class HiveCliHook(BaseHook):
             mapred_queue_priority = mapred_queue_priority.upper()
             if mapred_queue_priority not in HIVE_QUEUE_PRIORITIES:
                 raise AirflowException(
-                    "Invalid Mapred Queue Priority.  Valid values are: "
-                    "{}".format(', '.join(HIVE_QUEUE_PRIORITIES))
+                    f"Invalid Mapred Queue Priority. Valid values are: {', '.join(HIVE_QUEUE_PRIORITIES)}"
                 )
 
         self.mapred_queue = mapred_queue or conf.get('hive', 'default_hive_mapred_queue')
@@ -128,7 +126,7 @@ class HiveCliHook(BaseHook):
             return f"hive.server2.proxy.user={proxy_user_value}"
         return proxy_user_value  # The default proxy user (undefined)
 
-    def _prepare_cli_cmd(self) -> List[Any]:
+    def _prepare_cli_cmd(self) -> list[Any]:
         """This function creates the command list from available information"""
         conn = self.conn
         hive_bin = 'hive'
@@ -161,13 +159,12 @@ class HiveCliHook(BaseHook):
         return [hive_bin] + cmd_extra + hive_params_list
 
     @staticmethod
-    def _prepare_hiveconf(d: Dict[Any, Any]) -> List[Any]:
+    def _prepare_hiveconf(d: dict[Any, Any]) -> list[Any]:
         """
         This function prepares a list of hiveconf params
         from a dictionary of key value pairs.
 
         :param d:
-        :type d: dict
 
         >>> hh = HiveCliHook()
         >>> hive_conf = {"hive.exec.dynamic.partition": "true",
@@ -182,22 +179,23 @@ class HiveCliHook(BaseHook):
 
     def run_cli(
         self,
-        hql: Union[str, str],
-        schema: Optional[str] = None,
+        hql: str,
+        schema: str | None = None,
         verbose: bool = True,
-        hive_conf: Optional[Dict[Any, Any]] = None,
+        hive_conf: dict[Any, Any] | None = None,
     ) -> Any:
         """
         Run an hql statement using the hive cli. If hive_conf is specified
         it should be a dict and the entries will be set as key/value pairs
-        in HiveConf
+        in HiveConf.
 
-
+        :param hql: an hql (hive query language) statement to run with hive cli
+        :param schema: Name of hive schema (database) to use
+        :param verbose: Provides additional logging. Defaults to True.
         :param hive_conf: if specified these key value pairs will be passed
             to hive as ``-hiveconf "key"="value"``. Note that they will be
             passed after the ``hive_cli_params`` and thus will override
             whatever values are specified in the database.
-        :type hive_conf: dict
 
         >>> hh = HiveCliHook()
         >>> result = hh.run_cli("USE airflow;")
@@ -264,7 +262,7 @@ class HiveCliHook(BaseHook):
 
                 return stdout
 
-    def test_hql(self, hql: Union[str, str]) -> None:
+    def test_hql(self, hql: str) -> None:
         """Test an hql statement using the hive cli and EXPLAIN"""
         create, insert, other = [], [], []
         for query in hql.split(';'):  # naive
@@ -306,7 +304,7 @@ class HiveCliHook(BaseHook):
         self,
         df: pandas.DataFrame,
         table: str,
-        field_dict: Optional[Dict[Any, Any]] = None,
+        field_dict: dict[Any, Any] | None = None,
         delimiter: str = ',',
         encoding: str = 'utf8',
         pandas_kwargs: Any = None,
@@ -319,23 +317,17 @@ class HiveCliHook(BaseHook):
         not be sanitized.
 
         :param df: DataFrame to load into a Hive table
-        :type df: pandas.DataFrame
         :param table: target Hive table, use dot notation to target a
             specific database
-        :type table: str
         :param field_dict: mapping from column name to hive data type.
             Note that it must be OrderedDict so as to keep columns' order.
-        :type field_dict: collections.OrderedDict
         :param delimiter: field delimiter in the file
-        :type delimiter: str
         :param encoding: str encoding to use when writing DataFrame to file
-        :type encoding: str
         :param pandas_kwargs: passed to DataFrame.to_csv
-        :type pandas_kwargs: dict
         :param kwargs: passed to self.load_file
         """
 
-        def _infer_field_types_from_df(df: pandas.DataFrame) -> Dict[Any, Any]:
+        def _infer_field_types_from_df(df: pandas.DataFrame) -> dict[Any, Any]:
             dtype_kind_hive_type = {
                 'b': 'BOOLEAN',  # boolean
                 'i': 'BIGINT',  # signed integer
@@ -382,12 +374,12 @@ class HiveCliHook(BaseHook):
         filepath: str,
         table: str,
         delimiter: str = ",",
-        field_dict: Optional[Dict[Any, Any]] = None,
+        field_dict: dict[Any, Any] | None = None,
         create: bool = True,
         overwrite: bool = True,
-        partition: Optional[Dict[str, Any]] = None,
+        partition: dict[str, Any] | None = None,
         recreate: bool = False,
-        tblproperties: Optional[Dict[str, Any]] = None,
+        tblproperties: dict[str, Any] | None = None,
     ) -> None:
         """
         Loads a local file into Hive
@@ -400,28 +392,19 @@ class HiveCliHook(BaseHook):
         final destination using a ``HiveOperator``.
 
         :param filepath: local filepath of the file to load
-        :type filepath: str
         :param table: target Hive table, use dot notation to target a
             specific database
-        :type table: str
         :param delimiter: field delimiter in the file
-        :type delimiter: str
         :param field_dict: A dictionary of the fields name in the file
             as keys and their Hive types as values.
             Note that it must be OrderedDict so as to keep columns' order.
-        :type field_dict: collections.OrderedDict
         :param create: whether to create the table if it doesn't exist
-        :type create: bool
         :param overwrite: whether to overwrite the data in table or partition
-        :type overwrite: bool
         :param partition: target partition as a dict of partition columns
             and values
-        :type partition: dict
         :param recreate: whether to drop and recreate the table at every
             execution
-        :type recreate: bool
         :param tblproperties: TBLPROPERTIES of the hive table being created
-        :type tblproperties: dict
         """
         hql = ''
         if recreate:
@@ -474,7 +457,6 @@ class HiveMetastoreHook(BaseHook):
 
     :param metastore_conn_id: reference to the
         :ref: `metastore thrift service connection id <howto/connection:hive_metastore>`.
-    :type metastore_conn_id: str
     """
 
     # java short max val
@@ -487,17 +469,17 @@ class HiveMetastoreHook(BaseHook):
 
     def __init__(self, metastore_conn_id: str = default_conn_name) -> None:
         super().__init__()
-        self.conn_id = metastore_conn_id
+        self.conn = self.get_connection(metastore_conn_id)
         self.metastore = self.get_metastore_client()
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         # This is for pickling to work despite the thrift hive client not
         # being picklable
         state = dict(self.__dict__)
         del state['metastore']
         return state
 
-    def __setstate__(self, d: Dict[str, Any]) -> None:
+    def __setstate__(self, d: dict[str, Any]) -> None:
         self.__dict__.update(d)
         self.__dict__['metastore'] = self.get_metastore_client()
 
@@ -507,18 +489,28 @@ class HiveMetastoreHook(BaseHook):
         from thrift.protocol import TBinaryProtocol
         from thrift.transport import TSocket, TTransport
 
-        conn = self._find_valid_server()
+        host = self._find_valid_host()
+        conn = self.conn
 
-        if not conn:
+        if not host:
             raise AirflowException("Failed to locate the valid server.")
 
-        auth_mechanism = conn.extra_dejson.get('authMechanism', 'NOSASL')
+        if 'authMechanism' in conn.extra_dejson:
+            warnings.warn(
+                "The 'authMechanism' option is deprecated. Please use 'auth_mechanism'.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            conn.extra_dejson['auth_mechanism'] = conn.extra_dejson['authMechanism']
+            del conn.extra_dejson['authMechanism']
+
+        auth_mechanism = conn.extra_dejson.get('auth_mechanism', 'NOSASL')
 
         if conf.get('core', 'security') == 'kerberos':
-            auth_mechanism = conn.extra_dejson.get('authMechanism', 'GSSAPI')
+            auth_mechanism = conn.extra_dejson.get('auth_mechanism', 'GSSAPI')
             kerberos_service_name = conn.extra_dejson.get('kerberos_service_name', 'hive')
 
-        conn_socket = TSocket.TSocket(conn.host, conn.port)
+        conn_socket = TSocket.TSocket(host, conn.port)
 
         if conf.get('core', 'security') == 'kerberos' and auth_mechanism == 'GSSAPI':
             try:
@@ -528,7 +520,7 @@ class HiveMetastoreHook(BaseHook):
 
             def sasl_factory() -> sasl.Client:
                 sasl_client = sasl.Client()
-                sasl_client.setAttr("host", conn.host)
+                sasl_client.setAttr("host", host)
                 sasl_client.setAttr("service", kerberos_service_name)
                 sasl_client.init()
                 return sasl_client
@@ -543,17 +535,18 @@ class HiveMetastoreHook(BaseHook):
 
         return hmsclient.HMSClient(iprot=protocol)
 
-    def _find_valid_server(self) -> Any:
-        conns = self.get_connections(self.conn_id)
-        for conn in conns:
+    def _find_valid_host(self) -> Any:
+        conn = self.conn
+        hosts = conn.host.split(',')
+        for host in hosts:
             host_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.log.info("Trying to connect to %s:%s", conn.host, conn.port)
-            if host_socket.connect_ex((conn.host, conn.port)) == 0:
-                self.log.info("Connected to %s:%s", conn.host, conn.port)
+            self.log.info("Trying to connect to %s:%s", host, conn.port)
+            if host_socket.connect_ex((host, conn.port)) == 0:
+                self.log.info("Connected to %s:%s", host, conn.port)
                 host_socket.close()
-                return conn
+                return host
             else:
-                self.log.error("Could not connect to %s:%s", conn.host, conn.port)
+                self.log.error("Could not connect to %s:%s", host, conn.port)
         return None
 
     def get_conn(self) -> Any:
@@ -564,12 +557,9 @@ class HiveMetastoreHook(BaseHook):
         Checks whether a partition exists
 
         :param schema: Name of hive schema (database) @table belongs to
-        :type schema: str
         :param table: Name of hive table @partition belongs to
-        :type schema: str
-        :partition: Expression that matches the partitions to check for
+        :param partition: Expression that matches the partitions to check for
             (eg `a = 'b' AND c = 'd'`)
-        :type schema: str
         :rtype: bool
 
         >>> hh = HiveMetastoreHook()
@@ -578,7 +568,9 @@ class HiveMetastoreHook(BaseHook):
         True
         """
         with self.metastore as client:
-            partitions = client.get_partitions_by_filter(schema, table, partition, 1)
+            partitions = client.get_partitions_by_filter(
+                schema, table, partition, HiveMetastoreHook.MAX_PART_COUNT
+            )
 
         return bool(partitions)
 
@@ -587,11 +579,8 @@ class HiveMetastoreHook(BaseHook):
         Checks whether a partition with a given name exists
 
         :param schema: Name of hive schema (database) @table belongs to
-        :type schema: str
         :param table: Name of hive table @partition belongs to
-        :type table: str
-        :partition: Name of the partitions to check for (eg `a=b/c=d`)
-        :type table: str
+        :param partition_name: Name of the partitions to check for (eg `a=b/c=d`)
         :rtype: bool
 
         >>> hh = HiveMetastoreHook()
@@ -630,9 +619,7 @@ class HiveMetastoreHook(BaseHook):
         with self.metastore as client:
             return client.get_databases(pattern)
 
-    def get_partitions(
-        self, schema: str, table_name: str, partition_filter: Optional[str] = None
-    ) -> List[Any]:
+    def get_partitions(self, schema: str, table_name: str, partition_filter: str | None = None) -> list[Any]:
         """
         Returns a list of all partitions in a table. Works only
         for tables with less than 32767 (java short max val).
@@ -668,7 +655,7 @@ class HiveMetastoreHook(BaseHook):
 
     @staticmethod
     def _get_max_partition_from_part_specs(
-        part_specs: List[Any], partition_key: Optional[str], filter_map: Optional[Dict[str, Any]]
+        part_specs: list[Any], partition_key: str | None, filter_map: dict[str, Any] | None
     ) -> Any:
         """
         Helper method to get max partition of partitions with partition_key
@@ -676,14 +663,11 @@ class HiveMetastoreHook(BaseHook):
         filter out partitions.
 
         :param part_specs: list of partition specs.
-        :type part_specs: list
         :param partition_key: partition key name.
-        :type partition_key: str
         :param filter_map: partition_key:partition_value map used for partition filtering,
                            e.g. {'key1': 'value1', 'key2': 'value2'}.
                            Only partitions matching all partition_key:partition_value
                            pairs will be considered as candidates of max partition.
-        :type filter_map: map
         :return: Max partition or None if part_specs is empty.
         :rtype: basestring
         """
@@ -698,10 +682,8 @@ class HiveMetastoreHook(BaseHook):
             is_subset = set(filter_map.keys()).issubset(set(part_specs[0].keys()))
         if filter_map and not is_subset:
             raise AirflowException(
-                "Keys in provided filter_map {} "
-                "are not subset of part_spec keys: {}".format(
-                    ', '.join(filter_map.keys()), ', '.join(part_specs[0].keys())
-                )
+                f"Keys in provided filter_map {', '.join(filter_map.keys())} "
+                f"are not subset of part_spec keys: {', '.join(part_specs[0].keys())}"
             )
 
         candidates = [
@@ -719,8 +701,8 @@ class HiveMetastoreHook(BaseHook):
         self,
         schema: str,
         table_name: str,
-        field: Optional[str] = None,
-        filter_map: Optional[Dict[Any, Any]] = None,
+        field: str | None = None,
+        filter_map: dict[Any, Any] | None = None,
     ) -> Any:
         """
         Returns the maximum value for all partitions with given field in a table.
@@ -729,13 +711,9 @@ class HiveMetastoreHook(BaseHook):
         filter out partitions.
 
         :param schema: schema name.
-        :type schema: str
         :param table_name: table name.
-        :type table_name: str
         :param field: partition key to get max partition from.
-        :type field: str
         :param filter_map: partition_key:partition_value map used for partition filtering.
-        :type filter_map: map
 
         >>> hh = HiveMetastoreHook()
         >>> filter_map = {'ds': '2015-01-01'}
@@ -785,14 +763,10 @@ class HiveMetastoreHook(BaseHook):
         Drop partitions from the given table matching the part_vals input
 
         :param table_name: table name.
-        :type table_name: str
         :param part_vals: list of partition specs.
-        :type part_vals: list
         :param delete_data: Setting to control if underlying data have to deleted
                             in addition to dropping partitions.
-        :type delete_data: bool
         :param db: Name of hive schema (database) @table belongs to
-        :type db: str
 
         >>> hh = HiveMetastoreHook()
         >>> hh.drop_partitions(db='airflow', table_name='static_babynames',
@@ -815,7 +789,7 @@ class HiveServer2Hook(DbApiHook):
     Wrapper around the pyhive library
 
     Notes:
-    * the default authMechanism is PLAIN, to override it you
+    * the default auth_mechanism is PLAIN, to override it you
     can specify it in the ``extra`` of your connection in the UI
     * the default for run_set_variable_statements is true, if you
     are using impala you may need to set it to false in the
@@ -823,9 +797,7 @@ class HiveServer2Hook(DbApiHook):
 
     :param hiveserver2_conn_id: Reference to the
         :ref: `Hive Server2 thrift service connection id <howto/connection:hiveserver2>`.
-    :type hiveserver2_conn_id: str
     :param schema: Hive database name.
-    :type schema: Optional[str]
     """
 
     conn_name_attr = 'hiveserver2_conn_id'
@@ -834,26 +806,35 @@ class HiveServer2Hook(DbApiHook):
     hook_name = 'Hive Server 2 Thrift'
     supports_autocommit = False
 
-    def get_conn(self, schema: Optional[str] = None) -> Any:
+    def get_conn(self, schema: str | None = None) -> Any:
         """Returns a Hive connection object."""
-        username: Optional[str] = None
-        password: Optional[str] = None
+        username: str | None = None
+        password: str | None = None
 
         db = self.get_connection(self.hiveserver2_conn_id)  # type: ignore
 
-        auth_mechanism = db.extra_dejson.get('authMechanism', 'NONE')
+        if 'authMechanism' in db.extra_dejson:
+            warnings.warn(
+                "The 'authMechanism' option is deprecated. Please use 'auth_mechanism'.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            db.extra_dejson['auth_mechanism'] = db.extra_dejson['authMechanism']
+            del db.extra_dejson['authMechanism']
+
+        auth_mechanism = db.extra_dejson.get('auth_mechanism', 'NONE')
         if auth_mechanism == 'NONE' and db.login is None:
             # we need to give a username
             username = 'airflow'
         kerberos_service_name = None
         if conf.get('core', 'security') == 'kerberos':
-            auth_mechanism = db.extra_dejson.get('authMechanism', 'KERBEROS')
+            auth_mechanism = db.extra_dejson.get('auth_mechanism', 'KERBEROS')
             kerberos_service_name = db.extra_dejson.get('kerberos_service_name', 'hive')
 
         # pyhive uses GSSAPI instead of KERBEROS as a auth_mechanism identifier
         if auth_mechanism == 'GSSAPI':
             self.log.warning(
-                "Detected deprecated 'GSSAPI' for authMechanism for %s. Please use 'KERBEROS' instead",
+                "Detected deprecated 'GSSAPI' for auth_mechanism for %s. Please use 'KERBEROS' instead",
                 self.hiveserver2_conn_id,  # type: ignore
             )
             auth_mechanism = 'KERBEROS'
@@ -876,15 +857,15 @@ class HiveServer2Hook(DbApiHook):
 
     def _get_results(
         self,
-        hql: Union[str, str, List[str]],
+        sql: str | list[str],
         schema: str = 'default',
-        fetch_size: Optional[int] = None,
-        hive_conf: Optional[Dict[Any, Any]] = None,
+        fetch_size: int | None = None,
+        hive_conf: Iterable | Mapping | None = None,
     ) -> Any:
         from pyhive.exc import ProgrammingError
 
-        if isinstance(hql, str):
-            hql = [hql]
+        if isinstance(sql, str):
+            sql = [sql]
         previous_description = None
         with contextlib.closing(self.get_conn(schema)) as conn, contextlib.closing(conn.cursor()) as cur:
 
@@ -901,7 +882,7 @@ class HiveServer2Hook(DbApiHook):
                 for k, v in env_context.items():
                     cur.execute(f"set {k}={v}")
 
-            for statement in hql:
+            for statement in sql:
                 cur.execute(statement)
                 # we only get results of statements that returns
                 lowered_statement = statement.lower().strip()
@@ -913,11 +894,9 @@ class HiveServer2Hook(DbApiHook):
                 ):
                     description = cur.description
                     if previous_description and previous_description != description:
-                        message = '''The statements are producing different descriptions:
-                                     Current: {}
-                                     Previous: {}'''.format(
-                            repr(description), repr(previous_description)
-                        )
+                        message = f'''The statements are producing different descriptions:
+                                     Current: {repr(description)}
+                                     Previous: {repr(previous_description)}'''
                         raise ValueError(message)
                     elif not previous_description:
                         previous_description = description
@@ -932,63 +911,51 @@ class HiveServer2Hook(DbApiHook):
 
     def get_results(
         self,
-        hql: Union[str, str],
+        sql: str | list[str],
         schema: str = 'default',
-        fetch_size: Optional[int] = None,
-        hive_conf: Optional[Dict[Any, Any]] = None,
-    ) -> Dict[str, Any]:
+        fetch_size: int | None = None,
+        hive_conf: Iterable | Mapping | None = None,
+    ) -> dict[str, Any]:
         """
         Get results of the provided hql in target schema.
 
-        :param hql: hql to be executed.
-        :type hql: str or list
+        :param sql: hql to be executed.
         :param schema: target schema, default to 'default'.
-        :type schema: str
         :param fetch_size: max size of result to fetch.
-        :type fetch_size: int
         :param hive_conf: hive_conf to execute alone with the hql.
-        :type hive_conf: dict
         :return: results of hql execution, dict with data (list of results) and header
         :rtype: dict
         """
-        results_iter = self._get_results(hql, schema, fetch_size=fetch_size, hive_conf=hive_conf)
+        results_iter = self._get_results(sql, schema, fetch_size=fetch_size, hive_conf=hive_conf)
         header = next(results_iter)
         results = {'data': list(results_iter), 'header': header}
         return results
 
     def to_csv(
         self,
-        hql: Union[str, str],
+        sql: str,
         csv_filepath: str,
         schema: str = 'default',
         delimiter: str = ',',
         lineterminator: str = '\r\n',
         output_header: bool = True,
         fetch_size: int = 1000,
-        hive_conf: Optional[Dict[Any, Any]] = None,
+        hive_conf: dict[Any, Any] | None = None,
     ) -> None:
         """
         Execute hql in target schema and write results to a csv file.
 
-        :param hql: hql to be executed.
-        :type hql: str or list
+        :param sql: hql to be executed.
         :param csv_filepath: filepath of csv to write results into.
-        :type csv_filepath: str
         :param schema: target schema, default to 'default'.
-        :type schema: str
         :param delimiter: delimiter of the csv file, default to ','.
-        :type delimiter: str
         :param lineterminator: lineterminator of the csv file.
-        :type lineterminator: str
         :param output_header: header of the csv file, default to True.
-        :type output_header: bool
         :param fetch_size: number of result rows to write into the csv file, default to 1000.
-        :type fetch_size: int
         :param hive_conf: hive_conf to execute alone with the hql.
-        :type hive_conf: dict
 
         """
-        results_iter = self._get_results(hql, schema, fetch_size=fetch_size, hive_conf=hive_conf)
+        results_iter = self._get_results(sql, schema, fetch_size=fetch_size, hive_conf=hive_conf)
         header = next(results_iter)
         message = None
 
@@ -1015,17 +982,14 @@ class HiveServer2Hook(DbApiHook):
         self.log.info("Done. Loaded a total of %s rows.", i)
 
     def get_records(
-        self, hql: Union[str, str], schema: str = 'default', hive_conf: Optional[Dict[Any, Any]] = None
+        self, sql: str | list[str], parameters: Iterable | Mapping | None = None, **kwargs
     ) -> Any:
         """
-        Get a set of records from a Hive query.
+        Get a set of records from a Hive query. You can optionally pass 'schema' kwarg
+        which specifies target schema and default to 'default'.
 
-        :param hql: hql to be executed.
-        :type hql: str or list
-        :param schema: target schema, default to 'default'.
-        :type schema: str
-        :param hive_conf: hive_conf to execute alone with the hql.
-        :type hive_conf: dict
+        :param sql: hql to be executed.
+        :param parameters: optional configuration passed to get_results
         :return: result of hive execution
         :rtype: list
 
@@ -1034,26 +998,23 @@ class HiveServer2Hook(DbApiHook):
         >>> len(hh.get_records(sql))
         100
         """
-        return self.get_results(hql, schema=schema, hive_conf=hive_conf)['data']
+        schema = kwargs['schema'] if 'schema' in kwargs else 'default'
+        return self.get_results(sql, schema=schema, hive_conf=parameters)['data']
 
     def get_pandas_df(  # type: ignore
         self,
-        hql: Union[str, str],
+        sql: str,
         schema: str = 'default',
-        hive_conf: Optional[Dict[Any, Any]] = None,
+        hive_conf: dict[Any, Any] | None = None,
         **kwargs,
     ) -> pandas.DataFrame:
         """
         Get a pandas dataframe from a Hive query
 
-        :param hql: hql to be executed.
-        :type hql: str or list
+        :param sql: hql to be executed.
         :param schema: target schema, default to 'default'.
-        :type schema: str
         :param hive_conf: hive_conf to execute alone with the hql.
-        :type hive_conf: dict
         :param kwargs: (optional) passed into pandas.DataFrame constructor
-        :type kwargs: dict
         :return: result of hive execution
         :rtype: DataFrame
 
@@ -1065,7 +1026,6 @@ class HiveServer2Hook(DbApiHook):
 
         :return: pandas.DateFrame
         """
-        res = self.get_results(hql, schema=schema, hive_conf=hive_conf)
-        df = pandas.DataFrame(res['data'], **kwargs)
-        df.columns = [c[0] for c in res['header']]
+        res = self.get_results(sql, schema=schema, hive_conf=hive_conf)
+        df = pandas.DataFrame(res['data'], columns=[c[0] for c in res['header']], **kwargs)
         return df

@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import base64
 import os
@@ -34,6 +35,9 @@ GCP_KMS_KEY_NAME = os.environ.get('GCP_KMS_KEY_NAME', 'test-airflow-system-tests
 
 @pytest.mark.credential_file(GCP_KMS_KEY)
 class TestKmsHook(GoogleSystemTest):
+    def setUp(self):
+        super().setUp()
+
     @provide_gcp_context(GCP_KMS_KEY)
     def test_encrypt(self):
         with TemporaryDirectory() as tmp_dir:
@@ -102,3 +106,6 @@ class TestKmsHook(GoogleSystemTest):
                 ciphertext=encrypted_secret,
             )
             assert content == b"TEST-SECRET"
+
+    def tearDown(self):
+        super().tearDown()

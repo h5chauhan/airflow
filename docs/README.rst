@@ -25,8 +25,6 @@ Development documentation preview
 
 Documentation from the development version is built and automatically published: `s.apache.org/airflow-docs <https://s.apache.org/airflow-docs>`_
 
-Documentation for your PRs is available as downloadable artifact in GitHub Actions after the CI builds your PR.
-
 Building documentation
 ======================
 
@@ -41,42 +39,46 @@ You can only run one of the steps via ``--spellcheck-only`` or ``--docs-only``.
 
 .. code-block:: bash
 
-    ./breeze build-docs
+    breeze build-docs
 
 or just to run spell-check
 
 .. code-block:: bash
 
-     ./breeze build-docs -- --spellcheck-only
+     breeze build-docs --spellcheck-only
 
 or just to run documentation building
 
 .. code-block:: bash
 
-     ./breeze build-docs -- --docs-only
+     breeze build-docs --docs-only
 
 Also, you can only build one documentation via ``--package-filter``.
 
 .. code-block:: bash
 
-    ./breeze build-docs -- --package-filter <PACKAGE-NAME>
+    breeze build-docs --package-filter <PACKAGE-NAME>
 
 You can also see all the available arguments via ``--help``.
 
 .. code-block:: bash
 
-    ./breeze build-docs -- --help
+    breeze build-docs --help
 
 Running the Docs Locally
 ------------------------
 
-Once you have built the documentation run the following command from the root directory:
+Once you have built the documentation run the following command from the root directory,
+You need to have Python installed to run the command:
 
 .. code-block:: bash
 
     docs/start_doc_server.sh
 
-Then, view your docs at ``localhost:8000``
+
+Then, view your docs at ``localhost:8000``, if you are using a virtual machine e.g WSL2,
+you need to find the WSL2 machine IP address and in your browser replace "0.0.0.0" with it
+``http://n.n.n.n:8000``, where n.n.n.n will be the IP of the WSL2.
 
 Troubleshooting
 ---------------
@@ -124,7 +126,7 @@ Role ``:class:`` works well with references between packages. If you want to use
 
 .. code-block:: rst
 
-    :doc:`apache-airflow:installation`
+    :doc:`apache-airflow:installation/index`
     :ref:`apache-airflow-providers-google:write-logs-stackdriver`
 
 If you still feel confused then you can view more possible roles for our documentation:

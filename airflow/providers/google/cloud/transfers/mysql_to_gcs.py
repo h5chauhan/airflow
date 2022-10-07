@@ -16,11 +16,11 @@
 # specific language governing permissions and limitations
 # under the License.
 """MySQL to GCS operator."""
+from __future__ import annotations
 
 import base64
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Dict
 
 from MySQLdb.constants import FIELD_TYPE
 
@@ -29,18 +29,16 @@ from airflow.providers.mysql.hooks.mysql import MySqlHook
 
 
 class MySQLToGCSOperator(BaseSQLToGCSOperator):
-    """Copy data from MySQL to Google Cloud Storage in JSON or CSV format.
+    """Copy data from MySQL to Google Cloud Storage in JSON, CSV or Parquet format.
 
     .. seealso::
         For more information on how to use this operator, take a look at the guide:
         :ref:`howto/operator:MySQLToGCSOperator`
 
     :param mysql_conn_id: Reference to :ref:`mysql connection id <howto/connection:mysql>`.
-    :type mysql_conn_id: str
     :param ensure_utc: Ensure TIMESTAMP columns exported as UTC. If set to
         `False`, TIMESTAMP columns will be exported using the MySQL server's
         default timezone.
-    :type ensure_utc: bool
     """
 
     ui_color = '#a0e08c'
@@ -82,7 +80,7 @@ class MySQLToGCSOperator(BaseSQLToGCSOperator):
         cursor.execute(self.sql)
         return cursor
 
-    def field_to_bigquery(self, field) -> Dict[str, str]:
+    def field_to_bigquery(self, field) -> dict[str, str]:
         field_type = self.type_map.get(field[1], "STRING")
         # Always allow TIMESTAMP to be nullable. MySQLdb returns None types
         # for required fields because some MySQL timestamps can't be
@@ -94,7 +92,7 @@ class MySQLToGCSOperator(BaseSQLToGCSOperator):
             'mode': field_mode,
         }
 
-    def convert_type(self, value, schema_type: str):
+    def convert_type(self, value, schema_type: str, **kwargs):
         """
         Takes a value from MySQLdb, and converts it to a value that's safe for
         JSON/Google Cloud Storage/BigQuery.
@@ -111,9 +109,7 @@ class MySQLToGCSOperator(BaseSQLToGCSOperator):
           https://cloud.google.com/bigquery/data-types
 
         :param value: MySQLdb column value
-        :type value: Any
         :param schema_type: BigQuery data type
-        :type schema_type: str
         """
         if value is None:
             return value

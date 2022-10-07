@@ -16,7 +16,9 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Google Cloud Translate Speech operator."""
-from typing import Optional, Sequence, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Sequence
 
 from google.cloud.speech_v1.types import RecognitionAudio, RecognitionConfig
 from google.protobuf.json_format import MessageToDict
@@ -25,6 +27,10 @@ from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.speech_to_text import CloudSpeechToTextHook
 from airflow.providers.google.cloud.hooks.translate import CloudTranslateHook
+from airflow.providers.google.common.links.storage import FileDetailsLink
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class CloudTranslateSpeechOperator(BaseOperator):
@@ -61,37 +67,29 @@ class CloudTranslateSpeechOperator(BaseOperator):
 
     :param audio: audio data to be recognized. See more:
         https://googleapis.github.io/google-cloud-python/latest/speech/gapic/v1/types.html#google.cloud.speech_v1.types.RecognitionAudio
-    :type audio: dict or google.cloud.speech_v1.types.RecognitionAudio
 
     :param config: information to the recognizer that specifies how to process the request. See more:
         https://googleapis.github.io/google-cloud-python/latest/speech/gapic/v1/types.html#google.cloud.speech_v1.types.RecognitionConfig
-    :type config: dict or google.cloud.speech_v1.types.RecognitionConfig
 
     :param target_language: The language to translate results into. This is required by the API and defaults
         to the target language of the current instance.
         Check the list of available languages here: https://cloud.google.com/translate/docs/languages
-    :type target_language: str
 
     :param format_: (Optional) One of ``text`` or ``html``, to specify
         if the input text is plain text or HTML.
-    :type format_: str or None
 
     :param source_language: (Optional) The language of the text to
         be translated.
-    :type source_language: str or None
 
     :param model: (Optional) The model used to translate the text, such
         as ``'base'`` or ``'nmt'``.
-    :type model: str or None
 
     :param project_id: Optional, Google Cloud Project ID where the Compute
         Engine Instance exists. If set to None or missing, the default project_id from the Google Cloud
         connection is used.
-    :type project_id: str
 
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud.
         Defaults to 'google_cloud_default'.
-    :type gcp_conn_id: str
 
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
@@ -101,12 +99,11 @@ class CloudTranslateSpeechOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
 
     """
 
     # [START translate_speech_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'target_language',
         'format_',
         'source_language',
@@ -115,6 +112,7 @@ class CloudTranslateSpeechOperator(BaseOperator):
         'gcp_conn_id',
         'impersonation_chain',
     )
+    operator_extra_links = (FileDetailsLink(),)
     # [END translate_speech_template_fields]
 
     def __init__(
@@ -124,11 +122,11 @@ class CloudTranslateSpeechOperator(BaseOperator):
         config: RecognitionConfig,
         target_language: str,
         format_: str,
-        source_language: Optional[str],
+        source_language: str | None,
         model: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -142,7 +140,7 @@ class CloudTranslateSpeechOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context) -> dict:
+    def execute(self, context: Context) -> dict:
         speech_to_text_hook = CloudSpeechToTextHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -178,6 +176,12 @@ class CloudTranslateSpeechOperator(BaseOperator):
                 model=self.model,
             )
             self.log.info('Translated output: %s', translation)
+            FileDetailsLink.persist(
+                context=context,
+                task_instance=self,
+                uri=self.audio["uri"][5:],
+                project_id=self.project_id or translate_hook.project_id,
+            )
             return translation
         except ValueError as e:
             self.log.error('An error has been thrown from translate speech method:')

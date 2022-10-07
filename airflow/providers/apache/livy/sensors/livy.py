@@ -14,12 +14,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """This module contains the Apache Livy sensor."""
-from typing import Any, Dict, Optional, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Sequence
 
 from airflow.providers.apache.livy.hooks.livy import LivyHook
 from airflow.sensors.base import BaseSensorOperator
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class LivySensor(BaseSensorOperator):
@@ -27,27 +31,26 @@ class LivySensor(BaseSensorOperator):
     Monitor a Livy sessions for termination.
 
     :param livy_conn_id: reference to a pre-defined Livy connection
-    :type livy_conn_id: str
     :param batch_id: identifier of the monitored batch
-    :type batch_id: Union[int, str]
-    :type extra_options: A dictionary of options, where key is string and value
         depends on the option that's being modified.
     """
 
-    template_fields = ('batch_id',)
+    template_fields: Sequence[str] = ('batch_id',)
 
     def __init__(
         self,
         *,
-        batch_id: Union[int, str],
+        batch_id: int | str,
         livy_conn_id: str = 'livy_default',
-        extra_options: Optional[Dict[str, Any]] = None,
+        livy_conn_auth_type: Any | None = None,
+        extra_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.batch_id = batch_id
         self._livy_conn_id = livy_conn_id
-        self._livy_hook: Optional[LivyHook] = None
+        self._livy_conn_auth_type = livy_conn_auth_type
+        self._livy_hook: LivyHook | None = None
         self._extra_options = extra_options or {}
 
     def get_hook(self) -> LivyHook:
@@ -58,10 +61,14 @@ class LivySensor(BaseSensorOperator):
         :rtype: LivyHook
         """
         if self._livy_hook is None or not isinstance(self._livy_hook, LivyHook):
-            self._livy_hook = LivyHook(livy_conn_id=self._livy_conn_id, extra_options=self._extra_options)
+            self._livy_hook = LivyHook(
+                livy_conn_id=self._livy_conn_id,
+                extra_options=self._extra_options,
+                auth_type=self._livy_conn_auth_type,
+            )
         return self._livy_hook
 
-    def poke(self, context: Dict[Any, Any]) -> bool:
+    def poke(self, context: Context) -> bool:
         batch_id = self.batch_id
 
         status = self.get_hook().get_batch_state(batch_id)

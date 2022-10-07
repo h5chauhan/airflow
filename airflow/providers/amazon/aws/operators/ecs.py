@@ -15,143 +15,334 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import re
 import sys
-from collections import deque
-from datetime import datetime
-from typing import Dict, Generator, Optional
+import warnings
+from datetime import timedelta
+from typing import TYPE_CHECKING, Sequence
 
-from botocore.waiter import Waiter
+import boto3
 
+from airflow.compat.functools import cached_property
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator, XCom
-from airflow.providers.amazon.aws.exceptions import ECSOperatorError
+from airflow.providers.amazon.aws.exceptions import EcsOperatorError, EcsTaskFailToStart
+
+# TODO: Remove the following import when EcsProtocol and EcsTaskLogFetcher deprecations are removed.
+from airflow.providers.amazon.aws.hooks import ecs
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
-from airflow.providers.amazon.aws.hooks.logs import AwsLogsHook
-from airflow.typing_compat import Protocol, runtime_checkable
+from airflow.providers.amazon.aws.hooks.ecs import (
+    EcsClusterStates,
+    EcsHook,
+    EcsTaskDefinitionStates,
+    should_retry_eni,
+)
+from airflow.providers.amazon.aws.sensors.ecs import EcsClusterStateSensor, EcsTaskDefinitionStateSensor
 from airflow.utils.session import provide_session
 
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
-def should_retry(exception: Exception):
-    """Check if exception is related to ECS resource quota (CPU, MEM)."""
-    if isinstance(exception, ECSOperatorError):
-        return any(
-            quota_reason in failure['reason']
-            for quota_reason in ['RESOURCE:MEMORY', 'RESOURCE:CPU']
-            for failure in exception.failures
-        )
-    return False
+DEFAULT_CONN_ID = 'aws_default'
 
 
-@runtime_checkable
-class ECSProtocol(Protocol):
+class EcsBaseOperator(BaseOperator):
+    """This is the base operator for all Elastic Container Service operators."""
+
+    def __init__(self, *, aws_conn_id: str | None = DEFAULT_CONN_ID, region: str | None = None, **kwargs):
+        self.aws_conn_id = aws_conn_id
+        self.region = region
+        super().__init__(**kwargs)
+
+    @cached_property
+    def hook(self) -> EcsHook:
+        """Create and return an EcsHook."""
+        return EcsHook(aws_conn_id=self.aws_conn_id, region_name=self.region)
+
+    @cached_property
+    def client(self) -> boto3.client:
+        """Create and return the EcsHook's client."""
+        return self.hook.conn
+
+    def execute(self, context: Context):
+        """Must overwrite in child classes."""
+        raise NotImplementedError('Please implement execute() in subclass')
+
+
+class EcsCreateClusterOperator(EcsBaseOperator):
     """
-    A structured Protocol for ``boto3.client('ecs')``. This is used for type hints on
-    :py:meth:`.ECSOperator.client`.
+    Creates an AWS ECS cluster.
 
     .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:EcsCreateClusterOperator`
 
-        - https://mypy.readthedocs.io/en/latest/protocols.html
-        - https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html
+    :param cluster_name: The name of your cluster. If you don't specify a name for your
+        cluster, you create a cluster that's named default.
+    :param create_cluster_kwargs: Extra arguments for Cluster Creation.
+    :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
     """
 
-    def run_task(self, **kwargs) -> Dict:
-        """https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task"""  # noqa: E501
-        ...
+    template_fields: Sequence[str] = ('cluster_name', 'create_cluster_kwargs', 'wait_for_completion')
 
-    def get_waiter(self, x: str) -> Waiter:
-        """https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.get_waiter"""  # noqa: E501
-        ...
+    def __init__(
+        self,
+        *,
+        cluster_name: str,
+        create_cluster_kwargs: dict | None = None,
+        wait_for_completion: bool = True,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.cluster_name = cluster_name
+        self.create_cluster_kwargs = create_cluster_kwargs or {}
+        self.wait_for_completion = wait_for_completion
 
-    def describe_tasks(self, cluster: str, tasks) -> Dict:
-        """https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.describe_tasks"""  # noqa: E501
-        ...
+    def execute(self, context: Context):
+        self.log.info(
+            'Creating cluster %s using the following values: %s',
+            self.cluster_name,
+            self.create_cluster_kwargs,
+        )
+        result = self.client.create_cluster(clusterName=self.cluster_name, **self.create_cluster_kwargs)
 
-    def stop_task(self, cluster, task, reason: str) -> Dict:
-        """https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.stop_task"""  # noqa: E501
-        ...
+        if self.wait_for_completion:
+            while not EcsClusterStateSensor(
+                task_id='await_cluster',
+                cluster_name=self.cluster_name,
+            ).poke(context):
+                # The sensor has a built-in delay and will try again until
+                # the cluster is ready or has reached a failed state.
+                pass
 
-    def describe_task_definition(self, taskDefinition: str) -> Dict:
-        """https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.describe_task_definition"""  # noqa: E501
-        ...
-
-    def list_tasks(self, cluster: str, launchType: str, desiredStatus: str, family: str) -> Dict:
-        """https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.list_tasks"""  # noqa: E501
-        ...
+        return result['cluster']
 
 
-class ECSOperator(BaseOperator):
+class EcsDeleteClusterOperator(EcsBaseOperator):
+    """
+    Deletes an AWS ECS cluster.
+
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:EcsDeleteClusterOperator`
+
+    :param cluster_name: The short name or full Amazon Resource Name (ARN) of the cluster to delete.
+    :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
+    """
+
+    template_fields: Sequence[str] = ('cluster_name', 'wait_for_completion')
+
+    def __init__(
+        self,
+        *,
+        cluster_name: str,
+        wait_for_completion: bool = True,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.cluster_name = cluster_name
+        self.wait_for_completion = wait_for_completion
+
+    def execute(self, context: Context):
+        self.log.info('Deleting cluster %s.', self.cluster_name)
+        result = self.client.delete_cluster(cluster=self.cluster_name)
+
+        if self.wait_for_completion:
+            while not EcsClusterStateSensor(
+                task_id='await_cluster_delete',
+                cluster_name=self.cluster_name,
+                target_state=EcsClusterStates.INACTIVE,
+                failure_states={EcsClusterStates.FAILED},
+            ).poke(context):
+                # The sensor has a built-in delay and will try again until
+                # the cluster is deleted or reaches a failed state.
+                pass
+
+        return result['cluster']
+
+
+class EcsDeregisterTaskDefinitionOperator(EcsBaseOperator):
+    """
+    Deregister a task definition on AWS ECS.
+
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:EcsDeregisterTaskDefinitionOperator`
+
+    :param task_definition: The family and revision (family:revision) or full Amazon Resource Name (ARN)
+        of the task definition to deregister. If you use a family name, you must specify a revision.
+    :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
+    """
+
+    template_fields: Sequence[str] = ('task_definition', 'wait_for_completion')
+
+    def __init__(self, *, task_definition: str, wait_for_completion: bool = True, **kwargs):
+        super().__init__(**kwargs)
+        self.task_definition = task_definition
+        self.wait_for_completion = wait_for_completion
+
+    def execute(self, context: Context):
+        self.log.info('Deregistering task definition %s.', self.task_definition)
+        result = self.client.deregister_task_definition(taskDefinition=self.task_definition)
+
+        if self.wait_for_completion:
+            while not EcsTaskDefinitionStateSensor(
+                task_id='await_deregister_task_definition',
+                task_definition=self.task_definition,
+                target_state=EcsTaskDefinitionStates.INACTIVE,
+            ).poke(context):
+                # The sensor has a built-in delay and will try again until the
+                # task definition is deregistered or reaches a failed state.
+                pass
+
+        return result['taskDefinition']['taskDefinitionArn']
+
+
+class EcsRegisterTaskDefinitionOperator(EcsBaseOperator):
+    """
+    Register a task definition on AWS ECS.
+
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:EcsRegisterTaskDefinitionOperator`
+
+    :param family: The family name of a task definition to create.
+    :param container_definitions: A list of container definitions in JSON format that describe
+        the different containers that make up your task.
+    :param register_task_kwargs: Extra arguments for Register Task Definition.
+    :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
+    """
+
+    template_fields: Sequence[str] = (
+        'family',
+        'container_definitions',
+        'register_task_kwargs',
+        'wait_for_completion',
+    )
+
+    def __init__(
+        self,
+        *,
+        family: str,
+        container_definitions: list[dict],
+        register_task_kwargs: dict | None = None,
+        wait_for_completion: bool = True,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.family = family
+        self.container_definitions = container_definitions
+        self.register_task_kwargs = register_task_kwargs or {}
+        self.wait_for_completion = wait_for_completion
+
+    def execute(self, context: Context):
+        self.log.info(
+            'Registering task definition %s using the following values: %s',
+            self.family,
+            self.register_task_kwargs,
+        )
+        self.log.info('Using container definition %s', self.container_definitions)
+        response = self.client.register_task_definition(
+            family=self.family,
+            containerDefinitions=self.container_definitions,
+            **self.register_task_kwargs,
+        )
+        task_arn = response['taskDefinition']['taskDefinitionArn']
+
+        if self.wait_for_completion:
+            while not EcsTaskDefinitionStateSensor(
+                task_id='await_register_task_definition', task_definition=task_arn
+            ).poke(context):
+                # The sensor has a built-in delay and will try again until
+                # the task definition is registered or reaches a failed state.
+                pass
+
+        context['ti'].xcom_push(key='task_definition_arn', value=task_arn)
+        return task_arn
+
+
+class EcsRunTaskOperator(EcsBaseOperator):
     """
     Execute a task on AWS ECS (Elastic Container Service)
 
     .. seealso::
         For more information on how to use this operator, take a look at the guide:
-        :ref:`howto/operator:ECSOperator`
+        :ref:`howto/operator:EcsRunTaskOperator`
 
     :param task_definition: the task definition name on Elastic Container Service
-    :type task_definition: str
     :param cluster: the cluster name on Elastic Container Service
-    :type cluster: str
     :param overrides: the same parameter that boto3 will receive (templated):
         https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task
-    :type overrides: dict
     :param aws_conn_id: connection id of AWS credentials / region name. If None,
         credential boto3 strategy will be used
-        (http://boto3.readthedocs.io/en/latest/guide/configuration.html).
-    :type aws_conn_id: str
+        (https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html).
     :param region_name: region name to use in AWS Hook.
         Override the region_name in connection (if provided)
-    :type region_name: str
-    :param launch_type: the launch type on which to run your task ('EC2' or 'FARGATE')
-    :type launch_type: str
+    :param launch_type: the launch type on which to run your task ('EC2', 'EXTERNAL', or 'FARGATE')
     :param capacity_provider_strategy: the capacity provider strategy to use for the task.
         When capacity_provider_strategy is specified, the launch_type parameter is omitted.
         If no capacity_provider_strategy or launch_type is specified,
         the default capacity provider strategy for the cluster is used.
-    :type capacity_provider_strategy: list
     :param group: the name of the task group associated with the task
-    :type group: str
     :param placement_constraints: an array of placement constraint objects to use for
         the task
-    :type placement_constraints: list
     :param placement_strategy: an array of placement strategy objects to use for
         the task
-    :type placement_strategy: list
     :param platform_version: the platform version on which your task is running
-    :type platform_version: str
     :param network_configuration: the network configuration for the task
-    :type network_configuration: dict
     :param tags: a dictionary of tags in the form of {'tagKey': 'tagValue'}.
-    :type tags: dict
     :param awslogs_group: the CloudWatch group where your ECS container logs are stored.
         Only required if you want logs to be shown in the Airflow UI after your job has
         finished.
-    :type awslogs_group: str
     :param awslogs_region: the region in which your CloudWatch logs are stored.
         If None, this is the same as the `region_name` parameter. If that is also None,
         this is the default AWS region based on your connection settings.
-    :type awslogs_region: str
     :param awslogs_stream_prefix: the stream prefix that is used for the CloudWatch logs.
         This is usually based on some custom name combined with the name of the container.
         Only required if you want logs to be shown in the Airflow UI after your job has
         finished.
-    :type awslogs_stream_prefix: str
+    :param awslogs_fetch_interval: the interval that the ECS task log fetcher should wait
+        in between each Cloudwatch logs fetches.
+    :param quota_retry: Config if and how to retry the launch of a new ECS task, to handle
+        transient errors.
     :param reattach: If set to True, will check if the task previously launched by the task_instance
         is already running. If so, the operator will attach to it instead of starting a new task.
         This is to avoid relaunching a new task when the connection drops between Airflow and ECS while
         the task is running (when the Airflow worker is restarted for example).
-    :type reattach: bool
-    :param quota_retry: Config if and how to retry _start_task() for transient errors.
-    :type quota_retry: dict
+    :param number_logs_exception: Number of lines from the last Cloudwatch logs to return in the
+        AirflowException if an ECS task is stopped (to receive Airflow alerts with the logs of what
+        failed in the code running in ECS).
+    :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
     """
 
     ui_color = '#f0ede4'
-    template_fields = ('overrides',)
+    template_fields: Sequence[str] = (
+        'task_definition',
+        'cluster',
+        'overrides',
+        'launch_type',
+        'capacity_provider_strategy',
+        'group',
+        'placement_constraints',
+        'placement_strategy',
+        'platform_version',
+        'network_configuration',
+        'tags',
+        'awslogs_group',
+        'awslogs_region',
+        'awslogs_stream_prefix',
+        'awslogs_fetch_interval',
+        'propagate_tags',
+        'reattach',
+        'number_logs_exception',
+        'wait_for_completion',
+    )
     template_fields_renderers = {
         "overrides": "json",
         "network_configuration": "json",
         "tags": "json",
-        "quota_retry": "json",
     }
     REATTACH_XCOM_KEY = "ecs_task_arn"
     REATTACH_XCOM_TASK_ID_TEMPLATE = "{task_id}_task_arn"
@@ -162,28 +353,27 @@ class ECSOperator(BaseOperator):
         task_definition: str,
         cluster: str,
         overrides: dict,
-        aws_conn_id: Optional[str] = None,
-        region_name: Optional[str] = None,
         launch_type: str = 'EC2',
-        capacity_provider_strategy: Optional[list] = None,
-        group: Optional[str] = None,
-        placement_constraints: Optional[list] = None,
-        placement_strategy: Optional[list] = None,
-        platform_version: Optional[str] = None,
-        network_configuration: Optional[dict] = None,
-        tags: Optional[dict] = None,
-        awslogs_group: Optional[str] = None,
-        awslogs_region: Optional[str] = None,
-        awslogs_stream_prefix: Optional[str] = None,
-        propagate_tags: Optional[str] = None,
-        quota_retry: Optional[dict] = None,
+        capacity_provider_strategy: list | None = None,
+        group: str | None = None,
+        placement_constraints: list | None = None,
+        placement_strategy: list | None = None,
+        platform_version: str | None = None,
+        network_configuration: dict | None = None,
+        tags: dict | None = None,
+        awslogs_group: str | None = None,
+        awslogs_region: str | None = None,
+        awslogs_stream_prefix: str | None = None,
+        awslogs_fetch_interval: timedelta = timedelta(seconds=30),
+        propagate_tags: str | None = None,
+        quota_retry: dict | None = None,
         reattach: bool = False,
+        number_logs_exception: int = 10,
+        wait_for_completion: bool = True,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.aws_conn_id = aws_conn_id
-        self.region_name = region_name
         self.task_definition = task_definition
         self.cluster = cluster
         self.overrides = overrides
@@ -199,35 +389,30 @@ class ECSOperator(BaseOperator):
         self.awslogs_group = awslogs_group
         self.awslogs_stream_prefix = awslogs_stream_prefix
         self.awslogs_region = awslogs_region
+        self.awslogs_fetch_interval = awslogs_fetch_interval
         self.propagate_tags = propagate_tags
         self.reattach = reattach
+        self.number_logs_exception = number_logs_exception
 
         if self.awslogs_region is None:
-            self.awslogs_region = region_name
+            self.awslogs_region = self.region
 
-        self.hook: Optional[AwsBaseHook] = None
-        self.client: Optional[ECSProtocol] = None
-        self.arn: Optional[str] = None
+        self.arn: str | None = None
         self.retry_args = quota_retry
+        self.task_log_fetcher: EcsTaskLogFetcher | None = None
+        self.wait_for_completion = wait_for_completion
 
     @provide_session
     def execute(self, context, session=None):
         self.log.info(
             'Running ECS Task - Task definition: %s - on cluster %s', self.task_definition, self.cluster
         )
-        self.log.info('ECSOperator overrides: %s', self.overrides)
-
-        self.client = self.get_hook().get_conn()
+        self.log.info('EcsOperator overrides: %s', self.overrides)
 
         if self.reattach:
             self._try_reattach_task(context)
 
-        if not self.arn:
-            self._start_task(context)
-
-        self._wait_for_task_ended()
-
-        self._check_success_task()
+        self._start_wait_check_task(context)
 
         self.log.info('ECS Task has been successfully executed')
 
@@ -236,10 +421,34 @@ class ECSOperator(BaseOperator):
             # as we can't reattach it anymore
             self._xcom_del(session, self.REATTACH_XCOM_TASK_ID_TEMPLATE.format(task_id=self.task_id))
 
-        if self.do_xcom_push:
-            return self._last_log_message()
+        if self.do_xcom_push and self.task_log_fetcher:
+            return self.task_log_fetcher.get_last_log_message()
 
         return None
+
+    @AwsBaseHook.retry(should_retry_eni)
+    def _start_wait_check_task(self, context):
+
+        if not self.arn:
+            self._start_task(context)
+
+        if self._aws_logs_enabled():
+            self.log.info('Starting ECS Task Log Fetcher')
+            self.task_log_fetcher = self._get_task_log_fetcher()
+            self.task_log_fetcher.start()
+
+            try:
+                if self.wait_for_completion:
+                    self._wait_for_task_ended()
+            finally:
+                self.task_log_fetcher.stop()
+
+            self.task_log_fetcher.join()
+        else:
+            if self.wait_for_completion:
+                self._wait_for_task_ended()
+
+        self._check_success_task()
 
     def _xcom_del(self, session, task_id):
         session.query(XCom).filter(XCom.dag_id == self.dag_id, XCom.task_id == task_id).delete()
@@ -275,30 +484,16 @@ class ECSOperator(BaseOperator):
 
         failures = response['failures']
         if len(failures) > 0:
-            raise ECSOperatorError(failures, response)
+            raise EcsOperatorError(failures, response)
         self.log.info('ECS Task started: %s', response)
 
         self.arn = response['tasks'][0]['taskArn']
-        ecs_task_id = self.arn.split("/")[-1]
-        self.log.info(f"ECS task ID is: {ecs_task_id}")
+        self.ecs_task_id = self.arn.split("/")[-1]
+        self.log.info("ECS task ID is: %s", self.ecs_task_id)
 
         if self.reattach:
             # Save the task ARN in XCom to be able to reattach it if needed
-            self._xcom_set(
-                context,
-                key=self.REATTACH_XCOM_KEY,
-                value=self.arn,
-                task_id=self.REATTACH_XCOM_TASK_ID_TEMPLATE.format(task_id=self.task_id),
-            )
-
-    def _xcom_set(self, context, key, value, task_id):
-        XCom.set(
-            key=key,
-            value=value,
-            task_id=task_id,
-            dag_id=self.dag_id,
-            execution_date=context["ti"].execution_date,
-        )
+            self.xcom_push(context, key=self.REATTACH_XCOM_KEY, value=self.arn)
 
     def _try_reattach_task(self, context):
         task_def_resp = self.client.describe_task_definition(taskDefinition=self.task_definition)
@@ -317,6 +512,7 @@ class ECSOperator(BaseOperator):
         )
         if previous_task_arn in running_tasks:
             self.arn = previous_task_arn
+            self.ecs_task_id = self.arn.split("/")[-1]
             self.log.info("Reattaching previously launched task: %s", self.arn)
         else:
             self.log.info("No active previously launched task found to reattach")
@@ -331,22 +527,23 @@ class ECSOperator(BaseOperator):
 
         return
 
-    def _cloudwatch_log_events(self) -> Generator:
-        if self._aws_logs_enabled():
-            task_id = self.arn.split("/")[-1]
-            stream_name = f"{self.awslogs_stream_prefix}/{task_id}"
-            yield from self.get_logs_hook().get_log_events(self.awslogs_group, stream_name)
-        else:
-            yield from ()
-
     def _aws_logs_enabled(self):
         return self.awslogs_group and self.awslogs_stream_prefix
 
-    def _last_log_message(self):
-        try:
-            return deque(self._cloudwatch_log_events(), maxlen=1).pop()["message"]
-        except IndexError:
-            return None
+    # TODO: When the deprecation wrapper below is removed, please fix the following return type hint.
+    def _get_task_log_fetcher(self) -> ecs.EcsTaskLogFetcher:
+        if not self.awslogs_group:
+            raise ValueError("must specify awslogs_group to fetch task logs")
+        log_stream_name = f"{self.awslogs_stream_prefix}/{self.ecs_task_id}"
+
+        return EcsTaskLogFetcher(
+            aws_conn_id=self.aws_conn_id,
+            region_name=self.awslogs_region,
+            log_group=self.awslogs_group,
+            log_stream_name=log_stream_name,
+            fetch_interval=self.awslogs_fetch_interval,
+            logger=self.log,
+        )
 
     def _check_success_task(self) -> None:
         if not self.client or not self.arn:
@@ -355,55 +552,107 @@ class ECSOperator(BaseOperator):
         response = self.client.describe_tasks(cluster=self.cluster, tasks=[self.arn])
         self.log.info('ECS Task stopped, check status: %s', response)
 
-        # Get logs from CloudWatch if the awslogs log driver was used
-        for event in self._cloudwatch_log_events():
-            event_dt = datetime.fromtimestamp(event['timestamp'] / 1000.0)
-            self.log.info("[%s] %s", event_dt.isoformat(), event['message'])
-
         if len(response.get('failures', [])) > 0:
             raise AirflowException(response)
 
         for task in response['tasks']:
+
+            if task.get('stopCode', '') == 'TaskFailedToStart':
+                # Reset task arn here otherwise the retry run will not start
+                # a new task but keep polling the old dead one
+                # I'm not resetting it for other exceptions here because
+                # EcsTaskFailToStart is the only exception that's being retried at the moment
+                self.arn = None
+                raise EcsTaskFailToStart(f"The task failed to start due to: {task.get('stoppedReason', '')}")
+
             # This is a `stoppedReason` that indicates a task has not
             # successfully finished, but there is no other indication of failure
             # in the response.
             # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/stopped-task-errors.html
             if re.match(r'Host EC2 \(instance .+?\) (stopped|terminated)\.', task.get('stoppedReason', '')):
                 raise AirflowException(
-                    'The task was stopped because the host instance terminated: {}'.format(
-                        task.get('stoppedReason', '')
-                    )
+                    f"The task was stopped because the host instance terminated:"
+                    f" {task.get('stoppedReason', '')}"
                 )
             containers = task['containers']
             for container in containers:
-                if container.get('lastStatus') == 'STOPPED' and container['exitCode'] != 0:
-                    raise AirflowException(f'This task is not in success state {task}')
+                if container.get('lastStatus') == 'STOPPED' and container.get('exitCode', 1) != 0:
+                    if self.task_log_fetcher:
+                        last_logs = "\n".join(
+                            self.task_log_fetcher.get_last_log_messages(self.number_logs_exception)
+                        )
+                        raise AirflowException(
+                            f"This task is not in success state - last {self.number_logs_exception} "
+                            f"logs from Cloudwatch:\n{last_logs}"
+                        )
+                    else:
+                        raise AirflowException(f'This task is not in success state {task}')
                 elif container.get('lastStatus') == 'PENDING':
                     raise AirflowException(f'This task is still pending {task}')
                 elif 'error' in container.get('reason', '').lower():
                     raise AirflowException(
-                        'This containers encounter an error during launching : {}'.format(
-                            container.get('reason', '').lower()
-                        )
+                        f"This containers encounter an error during launching: "
+                        f"{container.get('reason', '').lower()}"
                     )
-
-    def get_hook(self) -> AwsBaseHook:
-        """Create and return an AwsHook."""
-        if self.hook:
-            return self.hook
-
-        self.hook = AwsBaseHook(aws_conn_id=self.aws_conn_id, client_type='ecs', region_name=self.region_name)
-        return self.hook
-
-    def get_logs_hook(self) -> AwsLogsHook:
-        """Create and return an AwsLogsHook."""
-        return AwsLogsHook(aws_conn_id=self.aws_conn_id, region_name=self.awslogs_region)
 
     def on_kill(self) -> None:
         if not self.client or not self.arn:
             return
 
+        if self.task_log_fetcher:
+            self.task_log_fetcher.stop()
+
         response = self.client.stop_task(
             cluster=self.cluster, task=self.arn, reason='Task killed by the user'
         )
         self.log.info(response)
+
+
+class EcsOperator(EcsRunTaskOperator):
+    """
+    This operator is deprecated.
+    Please use :class:`airflow.providers.amazon.aws.operators.ecs.EcsRunTaskOperator`.
+    """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "This operator is deprecated. "
+            "Please use `airflow.providers.amazon.aws.operators.ecs.EcsRunTaskOperator`.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
+
+
+class EcsTaskLogFetcher(ecs.EcsTaskLogFetcher):
+    """
+    This class is deprecated.
+    Please use :class:`airflow.providers.amazon.aws.hooks.ecs.EcsTaskLogFetcher`.
+    """
+
+    # TODO: Note to deprecator, Be sure to fix the use of `ecs.EcsTaskLogFetcher`
+    #       in the Operators above when you remove this wrapper class.
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "This class is deprecated. "
+            "Please use `airflow.providers.amazon.aws.hooks.ecs.EcsTaskLogFetcher`.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
+
+
+class EcsProtocol(ecs.EcsProtocol):
+    """
+    This class is deprecated.
+    Please use :class:`airflow.providers.amazon.aws.hooks.ecs.EcsProtocol`.
+    """
+
+    # TODO: Note to deprecator, Be sure to fix the use of `ecs.EcsProtocol`
+    #       in the Operators above when you remove this wrapper class.
+    def __init__(self):
+        warnings.warn(
+            "This class is deprecated.  Please use `airflow.providers.amazon.aws.hooks.ecs.EcsProtocol`.",
+            DeprecationWarning,
+            stacklevel=2,
+        )

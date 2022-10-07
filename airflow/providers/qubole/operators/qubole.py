@@ -16,13 +16,14 @@
 # specific language governing permissions and limitations
 # under the License.
 """Qubole operator"""
+from __future__ import annotations
+
 import re
 from datetime import datetime
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING, Sequence
 
 from airflow.hooks.base import BaseHook
-from airflow.models import BaseOperator, BaseOperatorLink
-from airflow.models.taskinstance import TaskInstance
+from airflow.models import BaseOperator, BaseOperatorLink, XCom
 from airflow.providers.qubole.hooks.qubole import (
     COMMAND_ARGS,
     HYPHEN_ARGS,
@@ -31,13 +32,23 @@ from airflow.providers.qubole.hooks.qubole import (
     flatten_list,
 )
 
+if TYPE_CHECKING:
+    from airflow.models.taskinstance import TaskInstanceKey
+    from airflow.utils.context import Context
+
 
 class QDSLink(BaseOperatorLink):
     """Link to QDS"""
 
     name = 'Go to QDS'
 
-    def get_link(self, operator: BaseOperator, dttm: datetime) -> str:
+    def get_link(
+        self,
+        operator: BaseOperator,
+        dttm: datetime | None = None,
+        *,
+        ti_key: TaskInstanceKey | None = None,
+    ) -> str:
         """
         Get link to qubole command result page.
 
@@ -45,7 +56,6 @@ class QDSLink(BaseOperatorLink):
         :param dttm: datetime
         :return: url link
         """
-        ti = TaskInstance(task=operator, execution_date=dttm)
         conn = BaseHook.get_connection(
             getattr(operator, "qubole_conn_id", None)
             or operator.kwargs['qubole_conn_id']  # type: ignore[attr-defined]
@@ -54,7 +64,13 @@ class QDSLink(BaseOperatorLink):
             host = re.sub(r'api$', 'v2/analyze?command_id=', conn.host)
         else:
             host = 'https://api.qubole.com/v2/analyze?command_id='
-        qds_command_id = ti.xcom_pull(task_ids=operator.task_id, key='qbol_cmd_id')
+        if ti_key is not None:
+            qds_command_id = XCom.get_value(key='qbol_cmd_id', ti_key=ti_key)
+        else:
+            assert dttm
+            qds_command_id = XCom.get_one(
+                key='qbol_cmd_id', dag_id=operator.dag_id, task_id=operator.task_id, execution_date=dttm
+            )
         url = host + str(qds_command_id) if qds_command_id else ''
         return url
 
@@ -63,8 +79,11 @@ class QuboleOperator(BaseOperator):
     """
     Execute tasks (commands) on QDS (https://qubole.com).
 
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:QuboleOperator`
+
     :param qubole_conn_id: Connection id which consists of qds auth_token
-    :type qubole_conn_id: str
 
     kwargs:
         :command_type: type of command to be executed, e.g. hivecmd, shellcmd, hadoopcmd
@@ -158,8 +177,8 @@ class QuboleOperator(BaseOperator):
         jupytercmd:
             :path: Path including name of the Jupyter notebook to be run with extension.
             :arguments: Valid JSON to be sent to the notebook. Specify the parameters in notebooks and pass
-                the parameter value using the JSON format. key is the parameter’s name and value is
-                the parameter’s value. Supported types in parameters are string, integer, float and boolean.
+                the parameter value using the JSON format. key is the parameter's name and value is
+                the parameter's value. Supported types in parameters are string, integer, float and boolean.
 
     .. note:
 
@@ -179,7 +198,7 @@ class QuboleOperator(BaseOperator):
         handler in task definition.
     """
 
-    template_fields: Iterable[str] = (
+    template_fields: Sequence[str] = (
         'query',
         'script_location',
         'sub_command',
@@ -210,7 +229,7 @@ class QuboleOperator(BaseOperator):
         'cluster_label',
     )
 
-    template_ext: Iterable[str] = ('.txt',)
+    template_ext: Sequence[str] = ('.txt',)
     ui_color = '#3064A1'
     ui_fgcolor = '#fff'
     qubole_hook_allowed_args_list = ['command_type', 'qubole_conn_id', 'fetch_logs']
@@ -220,7 +239,7 @@ class QuboleOperator(BaseOperator):
     def __init__(self, *, qubole_conn_id: str = "qubole_default", **kwargs) -> None:
         self.kwargs = kwargs
         self.kwargs['qubole_conn_id'] = qubole_conn_id
-        self.hook: Optional[QuboleHook] = None
+        self.hook: QuboleHook | None = None
         filtered_base_kwargs = self._get_filtered_args(kwargs)
         super().__init__(**filtered_base_kwargs)
 
@@ -239,7 +258,7 @@ class QuboleOperator(BaseOperator):
         )
         return {key: value for key, value in all_kwargs.items() if key not in qubole_args}
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         return self.get_hook().execute(context)
 
     def on_kill(self, ti=None) -> None:

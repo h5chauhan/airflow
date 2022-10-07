@@ -35,7 +35,12 @@ if command -v aws; then
     exit 1
 fi
 
-DOWNLOAD_URL="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+HOST=$(uname -m)
+if [[ ${HOST} == "arm64" || ${HOST} == "aarch64" ]]; then
+    DOWNLOAD_URL="https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip"
+else
+    DOWNLOAD_URL="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+fi
 
 if [[ -e ${INSTALL_DIR} ]]; then
     echo "The install directory (${INSTALL_DIR}) already exists. This may mean AWS CLI is already installed."
@@ -58,7 +63,7 @@ pushd "${TMP_DIR}" && unzip "${TMP_DIR}/awscliv2.zip" && cd aws && \
     --bin-dir "/files/bin/" && \
     popd
 
-# Sanity check
+# Coherence check
 if ! command -v aws > /dev/null; then
     echo 'Installation failed. The command "aws" was not found.'
     exit 1

@@ -16,15 +16,22 @@
 # specific language governing permissions and limitations
 # under the License.
 """Base task runner"""
+from __future__ import annotations
+
 import os
 import subprocess
 import threading
-from tempfile import NamedTemporaryFile
-from typing import Optional, Union
+
+from airflow.utils.dag_parsing_context import _airflow_parsing_context_manager
+from airflow.utils.platform import IS_WINDOWS
+
+if not IS_WINDOWS:
+    # ignored to avoid flake complaining on Linux
+    from pwd import getpwnam  # noqa
+
 
 from airflow.configuration import conf
 from airflow.exceptions import AirflowConfigException
-from airflow.models.taskinstance import load_error_file
 from airflow.utils.configuration import tmp_configuration_copy
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.net import get_hostname
@@ -40,7 +47,6 @@ class BaseTaskRunner(LoggingMixin):
 
     :param local_task_job: The local task job associated with running the
         associated task instance.
-    :type local_task_job: airflow.jobs.local_task_job.LocalTaskJob
     """
 
     def __init__(self, local_task_job):
@@ -65,10 +71,10 @@ class BaseTaskRunner(LoggingMixin):
             # want to have to specify them in the sudo call - they would show
             # up in `ps` that way! And run commands now, as the other user
             # might not be able to run the cmds to get credentials
-            cfg_path = tmp_configuration_copy(chmod=0o600)
+            cfg_path = tmp_configuration_copy(chmod=0o600, include_env=True, include_cmds=True)
 
             # Give ownership of file to user; only they can read and write
-            subprocess.call(['sudo', 'chown', self.run_as_user, cfg_path], close_fds=True)
+            subprocess.check_call(['sudo', 'chown', self.run_as_user, cfg_path], close_fds=True)
 
             # propagate PYTHONPATH environment variable
             pythonpath_value = os.environ.get(PYTHONPATH_VAR, '')
@@ -82,27 +88,18 @@ class BaseTaskRunner(LoggingMixin):
             # we are running as the same user, and can pass through environment
             # variables then we don't need to include those in the config copy
             # - the runner can read/execute those values as it needs
-            cfg_path = tmp_configuration_copy(chmod=0o600)
+            cfg_path = tmp_configuration_copy(chmod=0o600, include_env=False, include_cmds=False)
 
-        self._error_file = NamedTemporaryFile(delete=True)
         self._cfg_path = cfg_path
-        self._command = (
-            popen_prepend
-            + self._task_instance.command_as_list(
-                raw=True,
-                pickle_id=local_task_job.pickle_id,
-                mark_success=local_task_job.mark_success,
-                job_id=local_task_job.id,
-                pool=local_task_job.pool,
-                cfg_path=cfg_path,
-            )
-            + ["--error-file", self._error_file.name]
+        self._command = popen_prepend + self._task_instance.command_as_list(
+            raw=True,
+            pickle_id=local_task_job.pickle_id,
+            mark_success=local_task_job.mark_success,
+            job_id=local_task_job.id,
+            pool=local_task_job.pool,
+            cfg_path=cfg_path,
         )
         self.process = None
-
-    def deserialize_run_error(self) -> Optional[Union[str, Exception]]:
-        """Return task runtime error if its written to provided error file."""
-        return load_error_file(self._error_file)
 
     def _read_task_logs(self, stream):
         while True:
@@ -123,7 +120,6 @@ class BaseTaskRunner(LoggingMixin):
         Run the task command.
 
         :param run_with: list of tokens to run the task command with e.g. ``['bash', '-c']``
-        :type run_with: list
         :return: the process that was run
         :rtype: subprocess.Popen
         """
@@ -132,16 +128,29 @@ class BaseTaskRunner(LoggingMixin):
 
         self.log.info("Running on host: %s", get_hostname())
         self.log.info('Running: %s', full_cmd)
-
-        proc = subprocess.Popen(
-            full_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-            close_fds=True,
-            env=os.environ.copy(),
-            preexec_fn=os.setsid,
-        )
+        with _airflow_parsing_context_manager(
+            dag_id=self._task_instance.dag_id,
+            task_id=self._task_instance.task_id,
+        ):
+            if IS_WINDOWS:
+                proc = subprocess.Popen(
+                    full_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True,
+                    close_fds=True,
+                    env=os.environ.copy(),
+                )
+            else:
+                proc = subprocess.Popen(
+                    full_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True,
+                    close_fds=True,
+                    env=os.environ.copy(),
+                    preexec_fn=os.setsid,
+                )
 
         # Start daemon thread to read subprocess logging output
         log_reader = threading.Thread(
@@ -156,7 +165,7 @@ class BaseTaskRunner(LoggingMixin):
         """Start running the task instance in a subprocess."""
         raise NotImplementedError()
 
-    def return_code(self) -> Optional[int]:
+    def return_code(self, timeout: int = 0) -> int | None:
         """
         :return: The return code associated with running the task instance or
             None if the task is not yet done.
@@ -175,4 +184,3 @@ class BaseTaskRunner(LoggingMixin):
                 subprocess.call(['sudo', 'rm', self._cfg_path], close_fds=True)
             else:
                 os.remove(self._cfg_path)
-        self._error_file.close()

@@ -14,17 +14,31 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import time
 import warnings
-from distutils.util import strtobool
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from tableauserverclient import Pager, PersonalAccessTokenAuth, Server, TableauAuth
 from tableauserverclient.server import Auth
 
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
+
+
+def parse_boolean(val: str) -> str | bool:
+    """Try to parse a string into boolean.
+
+    The string is returned as-is if it does not look like a boolean value.
+    """
+    val = val.lower()
+    if val in ('y', 'yes', 't', 'true', 'on', '1'):
+        return True
+    if val in ('n', 'no', 'f', 'false', 'off', '0'):
+        return False
+    return val
 
 
 class TableauJobFailedException(AirflowException):
@@ -54,10 +68,8 @@ class TableauHook(BaseHook):
 
     :param site_id: The id of the site where the workbook belongs to.
         It will connect to the default site if you don't provide an id.
-    :type site_id: Optional[str]
     :param tableau_conn_id: The :ref:`Tableau Connection id <howto/connection:tableau>`
         containing the credentials to authenticate to the Tableau Server.
-    :type tableau_conn_id: str
     """
 
     conn_name_attr = 'tableau_conn_id'
@@ -65,18 +77,15 @@ class TableauHook(BaseHook):
     conn_type = 'tableau'
     hook_name = 'Tableau'
 
-    def __init__(self, site_id: Optional[str] = None, tableau_conn_id: str = default_conn_name) -> None:
+    def __init__(self, site_id: str | None = None, tableau_conn_id: str = default_conn_name) -> None:
         super().__init__()
         self.tableau_conn_id = tableau_conn_id
         self.conn = self.get_connection(self.tableau_conn_id)
         self.site_id = site_id or self.conn.extra_dejson.get('site_id', '')
         self.server = Server(self.conn.host)
-        verify = self.conn.extra_dejson.get('verify', True)
+        verify: Any = self.conn.extra_dejson.get('verify', True)
         if isinstance(verify, str):
-            try:
-                verify = bool(strtobool(verify))
-            except ValueError:
-                pass
+            verify = parse_boolean(verify)
         self.server.add_http_options(
             options_dict={'verify': verify, 'cert': self.conn.extra_dejson.get('cert', None)}
         )
@@ -131,7 +140,6 @@ class TableauHook(BaseHook):
 
         :param resource_name: The name of the resource to paginate.
             For example: jobs or workbooks.
-        :type resource_name: str
         :return: all items by returning a Pager.
         :rtype: tableauserverclient.Pager
         """
@@ -147,8 +155,7 @@ class TableauHook(BaseHook):
         .. see also:: https://tableau.github.io/server-client-python/docs/api-ref#jobs
 
         :param job_id: The id of the job to check.
-        :type job_id: str
-        :return: An Enum that describe the Tableau job’s return code
+        :return: An Enum that describe the Tableau job's return code
         :rtype: TableauJobFinishCode
         """
         return TableauJobFinishCode(int(self.server.jobs.get_by_id(job_id).finish_code))
@@ -159,12 +166,9 @@ class TableauHook(BaseHook):
         to target_state or different from PENDING.
 
         :param job_id: The id of the job to check.
-        :type job_id: str
-        :param target_state: Enum that describe the Tableau job’s target state
-        :type target_state: TableauJobFinishCode
+        :param target_state: Enum that describe the Tableau job's target state
         :param check_interval: time in seconds that the job should wait in
             between each instance state checks until operation is completed
-        :type check_interval: float
         :return: return True if the job is equal to the target_status, False otherwise.
         :rtype: bool
         """

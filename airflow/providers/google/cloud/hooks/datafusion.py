@@ -14,12 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """This module contains Google DataFusion hook."""
+from __future__ import annotations
+
 import json
 import os
 from time import monotonic, sleep
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, Optional, Sequence
 from urllib.parse import quote, urlencode
 
 import google.auth
@@ -27,7 +28,7 @@ from google.api_core.retry import exponential_sleep_generator
 from googleapiclient.discovery import Resource, build
 
 from airflow.exceptions import AirflowException
-from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
+from airflow.providers.google.common.hooks.base_google import PROVIDE_PROJECT_ID, GoogleBaseHook
 
 Operation = Dict[str, Any]
 
@@ -59,8 +60,8 @@ class DataFusionHook(GoogleBaseHook):
         self,
         api_version: str = "v1beta1",
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -69,7 +70,7 @@ class DataFusionHook(GoogleBaseHook):
         )
         self.api_version = api_version
 
-    def wait_for_operation(self, operation: Dict[str, Any]) -> Dict[str, Any]:
+    def wait_for_operation(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Waits for long-lasting operation to complete."""
         for time_to_wait in exponential_sleep_generator(initial=10, maximum=120):
             sleep(time_to_wait)
@@ -88,8 +89,8 @@ class DataFusionHook(GoogleBaseHook):
         pipeline_id: str,
         instance_url: str,
         namespace: str = "default",
-        success_states: Optional[List[str]] = None,
-        failure_states: Optional[List[str]] = None,
+        success_states: list[str] | None = None,
+        failure_states: list[str] | None = None,
         timeout: int = 5 * 60,
     ) -> None:
         """
@@ -102,19 +103,20 @@ class DataFusionHook(GoogleBaseHook):
         current_state = None
         while monotonic() - start_time < timeout:
             try:
-                current_state = self._get_workflow_state(
+                workflow = self.get_pipeline_workflow(
                     pipeline_name=pipeline_name,
                     pipeline_id=pipeline_id,
                     instance_url=instance_url,
                     namespace=namespace,
                 )
+                current_state = workflow["status"]
             except AirflowException:
                 pass  # Because the pipeline may not be visible in system yet
             if current_state in success_states:
                 return
             if current_state in failure_states:
                 raise AirflowException(
-                    f"Pipeline {pipeline_name} state {current_state} is not " f"one of {success_states}"
+                    f"Pipeline {pipeline_name} state {current_state} is not one of {success_states}"
                 )
             sleep(30)
 
@@ -137,18 +139,28 @@ class DataFusionHook(GoogleBaseHook):
         return os.path.join(instance_url, "v3", "namespaces", quote(namespace), "apps")
 
     def _cdap_request(
-        self, url: str, method: str, body: Optional[Union[List, Dict]] = None
+        self, url: str, method: str, body: list | dict | None = None
     ) -> google.auth.transport.Response:
-        headers: Dict[str, str] = {"Content-Type": "application/json"}
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         request = google.auth.transport.requests.Request()
 
-        credentials = self._get_credentials()
+        credentials = self.get_credentials()
         credentials.before_request(request=request, method=method, url=url, headers=headers)
 
         payload = json.dumps(body) if body else None
 
         response = request(method=method, url=url, headers=headers, body=payload)
         return response
+
+    @staticmethod
+    def _check_response_status_and_data(response, message: str) -> None:
+        if response.status != 200:
+            raise AirflowException(message)
+        if response.data is None:
+            raise AirflowException(
+                "Empty response received. Please, check for possible root "
+                "causes of this behavior either in DAG code or on Cloud Datafusion side"
+            )
 
     def get_conn(self) -> Resource:
         """Retrieves connection to DataFusion."""
@@ -169,11 +181,8 @@ class DataFusionHook(GoogleBaseHook):
         At the end of an operation instance is fully restarted.
 
         :param instance_name: The name of the instance to restart.
-        :type instance_name: str
         :param location: The Cloud Data Fusion location in which to handle the request.
-        :type location: str
         :param project_id: The ID of the Google Cloud project that the instance belongs to.
-        :type project_id: str
         """
         operation = (
             self.get_conn()
@@ -191,11 +200,8 @@ class DataFusionHook(GoogleBaseHook):
         Deletes a single Date Fusion instance.
 
         :param instance_name: The name of the instance to delete.
-        :type instance_name: str
         :param location: The Cloud Data Fusion location in which to handle the request.
-        :type location: str
         :param project_id: The ID of the Google Cloud project that the instance belongs to.
-        :type project_id: str
         """
         operation = (
             self.get_conn()
@@ -211,22 +217,18 @@ class DataFusionHook(GoogleBaseHook):
     def create_instance(
         self,
         instance_name: str,
-        instance: Dict[str, Any],
+        instance: dict[str, Any],
         location: str,
-        project_id: str,
+        project_id: str = PROVIDE_PROJECT_ID,
     ) -> Operation:
         """
         Creates a new Data Fusion instance in the specified project and location.
 
         :param instance_name: The name of the instance to create.
-        :type instance_name: str
         :param instance: An instance of Instance.
             https://cloud.google.com/data-fusion/docs/reference/rest/v1beta1/projects.locations.instances#Instance
-        :type instance: Dict[str, Any]
         :param location: The Cloud Data Fusion location in which to handle the request.
-        :type location: str
         :param project_id: The ID of the Google Cloud project that the instance belongs to.
-        :type project_id: str
         """
         operation = (
             self.get_conn()
@@ -243,16 +245,13 @@ class DataFusionHook(GoogleBaseHook):
         return operation
 
     @GoogleBaseHook.fallback_to_default_project_id
-    def get_instance(self, instance_name: str, location: str, project_id: str) -> Dict[str, Any]:
+    def get_instance(self, instance_name: str, location: str, project_id: str) -> dict[str, Any]:
         """
         Gets details of a single Data Fusion instance.
 
         :param instance_name: The name of the instance.
-        :type instance_name: str
         :param location: The Cloud Data Fusion location in which to handle the request.
-        :type location: str
         :param project_id: The ID of the Google Cloud project that the instance belongs to.
-        :type project_id: str
         """
         instance = (
             self.get_conn()
@@ -268,30 +267,25 @@ class DataFusionHook(GoogleBaseHook):
     def patch_instance(
         self,
         instance_name: str,
-        instance: Dict[str, Any],
+        instance: dict[str, Any],
         update_mask: str,
         location: str,
-        project_id: str,
+        project_id: str = PROVIDE_PROJECT_ID,
     ) -> Operation:
         """
         Updates a single Data Fusion instance.
 
         :param instance_name: The name of the instance to create.
-        :type instance_name: str
         :param instance: An instance of Instance.
             https://cloud.google.com/data-fusion/docs/reference/rest/v1beta1/projects.locations.instances#Instance
-        :type instance: Dict[str, Any]
         :param update_mask: Field mask is used to specify the fields that the update will overwrite
             in an instance resource. The fields specified in the updateMask are relative to the resource,
             not the full request. A field will be overwritten if it is in the mask. If the user does not
             provide a mask, all the supported fields (labels and options currently) will be overwritten.
             A comma-separated list of fully qualified names of fields. Example: "user.displayName,photo".
             https://developers.google.com/protocol-buffers/docs/reference/google.protobuf?_ga=2.205612571.-968688242.1573564810#google.protobuf.FieldMask
-        :type update_mask: str
         :param location: The Cloud Data Fusion location in which to handle the request.
-        :type location: str
         :param project_id: The ID of the Google Cloud project that the instance belongs to.
-        :type project_id: str
         """
         operation = (
             self.get_conn()
@@ -310,7 +304,7 @@ class DataFusionHook(GoogleBaseHook):
     def create_pipeline(
         self,
         pipeline_name: str,
-        pipeline: Dict[str, Any],
+        pipeline: dict[str, Any],
         instance_url: str,
         namespace: str = "default",
     ) -> None:
@@ -318,74 +312,64 @@ class DataFusionHook(GoogleBaseHook):
         Creates a Cloud Data Fusion pipeline.
 
         :param pipeline_name: Your pipeline name.
-        :type pipeline_name: str
         :param pipeline: The pipeline definition. For more information check:
             https://docs.cdap.io/cdap/current/en/developer-manual/pipelines/developing-pipelines.html#pipeline-configuration-file-format
-        :type pipeline: Dict[str, Any]
         :param instance_url: Endpoint on which the REST APIs is accessible for the instance.
-        :type instance_url: str
         :param namespace: if your pipeline belongs to a Basic edition instance, the namespace ID
             is always default. If your pipeline belongs to an Enterprise edition instance, you
             can create a namespace.
-        :type namespace: str
         """
         url = os.path.join(self._base_url(instance_url, namespace), quote(pipeline_name))
         response = self._cdap_request(url=url, method="PUT", body=pipeline)
-        if response.status != 200:
-            raise AirflowException(f"Creating a pipeline failed with code {response.status}")
+        self._check_response_status_and_data(
+            response, f"Creating a pipeline failed with code {response.status} while calling {url}"
+        )
 
     def delete_pipeline(
         self,
         pipeline_name: str,
         instance_url: str,
-        version_id: Optional[str] = None,
+        version_id: str | None = None,
         namespace: str = "default",
     ) -> None:
         """
         Deletes a Cloud Data Fusion pipeline.
 
         :param pipeline_name: Your pipeline name.
-        :type pipeline_name: str
         :param version_id: Version of pipeline to delete
-        :type version_id: Optional[str]
         :param instance_url: Endpoint on which the REST APIs is accessible for the instance.
-        :type instance_url: str
         :param namespace: f your pipeline belongs to a Basic edition instance, the namespace ID
             is always default. If your pipeline belongs to an Enterprise edition instance, you
             can create a namespace.
-        :type namespace: str
         """
         url = os.path.join(self._base_url(instance_url, namespace), quote(pipeline_name))
         if version_id:
             url = os.path.join(url, "versions", version_id)
 
         response = self._cdap_request(url=url, method="DELETE", body=None)
-        if response.status != 200:
-            raise AirflowException(f"Deleting a pipeline failed with code {response.status}")
+        self._check_response_status_and_data(
+            response, f"Deleting a pipeline failed with code {response.status}"
+        )
 
     def list_pipelines(
         self,
         instance_url: str,
-        artifact_name: Optional[str] = None,
-        artifact_version: Optional[str] = None,
+        artifact_name: str | None = None,
+        artifact_version: str | None = None,
         namespace: str = "default",
     ) -> dict:
         """
         Lists Cloud Data Fusion pipelines.
 
         :param artifact_version: Artifact version to filter instances
-        :type artifact_version: Optional[str]
         :param artifact_name: Artifact name to filter instances
-        :type artifact_name: Optional[str]
         :param instance_url: Endpoint on which the REST APIs is accessible for the instance.
-        :type instance_url: str
         :param namespace: f your pipeline belongs to a Basic edition instance, the namespace ID
             is always default. If your pipeline belongs to an Enterprise edition instance, you
             can create a namespace.
-        :type namespace: str
         """
         url = self._base_url(instance_url, namespace)
-        query: Dict[str, str] = {}
+        query: dict[str, str] = {}
         if artifact_name:
             query = {"artifactName": artifact_name}
         if artifact_version:
@@ -394,17 +378,18 @@ class DataFusionHook(GoogleBaseHook):
             url = os.path.join(url, urlencode(query))
 
         response = self._cdap_request(url=url, method="GET", body=None)
-        if response.status != 200:
-            raise AirflowException(f"Listing pipelines failed with code {response.status}")
+        self._check_response_status_and_data(
+            response, f"Listing pipelines failed with code {response.status}"
+        )
         return json.loads(response.data)
 
-    def _get_workflow_state(
+    def get_pipeline_workflow(
         self,
         pipeline_name: str,
         instance_url: str,
         pipeline_id: str,
         namespace: str = "default",
-    ) -> str:
+    ) -> Any:
         url = os.path.join(
             self._base_url(instance_url, namespace),
             quote(pipeline_name),
@@ -414,31 +399,28 @@ class DataFusionHook(GoogleBaseHook):
             quote(pipeline_id),
         )
         response = self._cdap_request(url=url, method="GET")
-        if response.status != 200:
-            raise AirflowException(f"Retrieving a pipeline state failed with code {response.status}")
+        self._check_response_status_and_data(
+            response, f"Retrieving a pipeline state failed with code {response.status}"
+        )
         workflow = json.loads(response.data)
-        return workflow["status"]
+        return workflow
 
     def start_pipeline(
         self,
         pipeline_name: str,
         instance_url: str,
         namespace: str = "default",
-        runtime_args: Optional[Dict[str, Any]] = None,
+        runtime_args: dict[str, Any] | None = None,
     ) -> str:
         """
         Starts a Cloud Data Fusion pipeline. Works for both batch and stream pipelines.
 
         :param pipeline_name: Your pipeline name.
-        :type pipeline_name: str
         :param instance_url: Endpoint on which the REST APIs is accessible for the instance.
-        :type instance_url: str
         :param runtime_args: Optional runtime JSON args to be passed to the pipeline
-        :type runtime_args: Optional[Dict[str, Any]]
         :param namespace: f your pipeline belongs to a Basic edition instance, the namespace ID
             is always default. If your pipeline belongs to an Enterprise edition instance, you
             can create a namespace.
-        :type namespace: str
         """
         # TODO: This API endpoint starts multiple pipelines. There will eventually be a fix
         #  return the run Id as part of the API request to run a single pipeline.
@@ -460,32 +442,21 @@ class DataFusionHook(GoogleBaseHook):
             }
         ]
         response = self._cdap_request(url=url, method="POST", body=body)
-        if response.status != 200:
-            raise AirflowException(f"Starting a pipeline failed with code {response.status}")
-
-        response_json = json.loads(response.data)
-        pipeline_id = response_json[0]["runId"]
-        self.wait_for_pipeline_state(
-            success_states=SUCCESS_STATES + [PipelineStates.RUNNING],
-            pipeline_name=pipeline_name,
-            pipeline_id=pipeline_id,
-            namespace=namespace,
-            instance_url=instance_url,
+        self._check_response_status_and_data(
+            response, f"Starting a pipeline failed with code {response.status}"
         )
-        return pipeline_id
+        response_json = json.loads(response.data)
+        return response_json[0]["runId"]
 
     def stop_pipeline(self, pipeline_name: str, instance_url: str, namespace: str = "default") -> None:
         """
         Stops a Cloud Data Fusion pipeline. Works for both batch and stream pipelines.
 
         :param pipeline_name: Your pipeline name.
-        :type pipeline_name: str
         :param instance_url: Endpoint on which the REST APIs is accessible for the instance.
-        :type instance_url: str
         :param namespace: f your pipeline belongs to a Basic edition instance, the namespace ID
             is always default. If your pipeline belongs to an Enterprise edition instance, you
             can create a namespace.
-        :type namespace: str
         """
         url = os.path.join(
             self._base_url(instance_url, namespace),
@@ -495,5 +466,6 @@ class DataFusionHook(GoogleBaseHook):
             "stop",
         )
         response = self._cdap_request(url=url, method="POST")
-        if response.status != 200:
-            raise AirflowException(f"Stopping a pipeline failed with code {response.status}")
+        self._check_response_status_and_data(
+            response, f"Stopping a pipeline failed with code {response.status}"
+        )

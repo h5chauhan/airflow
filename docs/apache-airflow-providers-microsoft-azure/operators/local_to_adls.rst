@@ -22,28 +22,23 @@ The `Azure Data Lake <https://azure.microsoft.com/en-us/solutions/data-lake/>`__
 any size, shape, and speed.
 This page shows how to upload data from local filesystem to ADL.
 
-.. contents::
-  :depth: 1
-  :local:
-
-
 Prerequisite Tasks
 ^^^^^^^^^^^^^^^^^^
 
 .. include::/operators/_partials/prerequisite_tasks.rst
 
-.. _howto/operator:LocalToAzureDataLakeStorageOperator:
+.. _howto/operator:LocalFilesystemToADLSOperator:
 
-LocalToAzureDataLakeStorageOperator
+LocalFilesystemToADLSOperator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:class:`~airflow.providers.microsoft.azure.transfers.local_to_adls.LocalToAzureDataLakeStorageOperator` allows you to
+:class:`~airflow.providers.microsoft.azure.transfers.local_to_adls.LocalFilesystemToADLSOperator` allows you to
 upload data from local filesystem to ADL.
 
 
 Below is an example of using this operator to upload a file to ADL.
 
-.. exampleinclude:: /../../airflow/providers/microsoft/azure/example_dags/example_local_to_adls.py
+.. exampleinclude:: /../../tests/system/providers/microsoft/azure/example_local_to_adls.py
     :language: python
     :dedent: 0
     :start-after: [START howto_operator_local_to_adls]

@@ -14,23 +14,24 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """
 Example Airflow DAG that shows how to use SalesforceToGcsOperator.
 """
+from __future__ import annotations
+
 import os
+from datetime import datetime
 
 from airflow import models
 from airflow.providers.google.cloud.operators.bigquery import (
     BigQueryCreateEmptyDatasetOperator,
     BigQueryCreateEmptyTableOperator,
     BigQueryDeleteDatasetOperator,
-    BigQueryExecuteQueryOperator,
+    BigQueryInsertJobOperator,
 )
 from airflow.providers.google.cloud.operators.gcs import GCSCreateBucketOperator, GCSDeleteBucketOperator
 from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
 from airflow.providers.google.cloud.transfers.salesforce_to_gcs import SalesforceToGcsOperator
-from airflow.utils.dates import days_ago
 
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "example-project")
 GCS_BUCKET = os.environ.get("GCS_BUCKET", "airflow-salesforce-bucket")
@@ -44,8 +45,8 @@ SALESFORCE_CONN_ID = os.environ.get("SALESFORCE_CONN_ID", "salesforce_default")
 
 with models.DAG(
     "example_salesforce_to_gcs",
-    schedule_interval=None,  # Override to match your needs
-    start_date=days_ago(1),
+    start_date=datetime(2021, 1, 1),
+    catchup=False,
 ) as dag:
     create_bucket = GCSCreateBucketOperator(
         task_id="create_bucket",
@@ -98,10 +99,14 @@ with models.DAG(
         write_disposition='WRITE_TRUNCATE',
     )
 
-    read_data_from_gcs = BigQueryExecuteQueryOperator(
+    read_data_from_gcs = BigQueryInsertJobOperator(
         task_id="read_data_from_gcs",
-        sql=f"SELECT COUNT(*) FROM `{GCP_PROJECT_ID}.{DATASET_NAME}.{TABLE_NAME}`",
-        use_legacy_sql=False,
+        configuration={
+            "query": {
+                "query": f"SELECT COUNT(*) FROM `{GCP_PROJECT_ID}.{DATASET_NAME}.{TABLE_NAME}`",
+                "useLegacySql": False,
+            }
+        },
     )
 
     delete_bucket = GCSDeleteBucketOperator(

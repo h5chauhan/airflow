@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import bz2
 import gzip
@@ -26,8 +27,7 @@ def uncompress_file(input_file_name, file_extension, dest_dir):
     """Uncompress gz and bz2 files"""
     if file_extension.lower() not in ('.gz', '.bz2'):
         raise NotImplementedError(
-            "Received {} format. Only gz and bz2 "
-            "files can currently be uncompressed.".format(file_extension)
+            f"Received {file_extension} format. Only gz and bz2 files can currently be uncompressed."
         )
     if file_extension.lower() == '.gz':
         fmodule = gzip.GzipFile

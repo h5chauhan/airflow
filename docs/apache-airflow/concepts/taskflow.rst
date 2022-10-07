@@ -61,8 +61,25 @@ You can also use a plain value or variable to call a TaskFlow function - for exa
 
     hello_name('Airflow users')
 
-If you want to learn more about using TaskFlow, you should consult :doc:`the TaskFlow tutorial </tutorial_taskflow_api>`.
+If you want to learn more about using TaskFlow, you should consult :doc:`the TaskFlow tutorial </tutorial/taskflow>`.
 
+Context
+-------
+
+When running your callable, Airflow will pass a set of keyword arguments that can be used in your function. This set of kwargs correspond exactly to the :ref:`context variables<templates:variables>` you can use in your Jinja templates.
+
+For this to work, you need to define ``**kwargs`` in your function header, or you can add directly the keyword arguments you would like to get such as ``ti=None`` to have the task instance passed.
+
+Logging
+-------
+
+To use logging from your task functions, simply import and use Python's logging system:
+
+.. code-block:: python
+
+   logger = logging.getlogger("airflow.task")
+
+Every logging line created this way will be recorded in the task log.
 
 History
 -------
@@ -70,4 +87,4 @@ History
 The TaskFlow API is new as of Airflow 2.0, and you are likely to encounter DAGs written for previous versions of Airflow that instead use ``PythonOperator`` to achieve similar goals, albeit with a lot more code.
 
 More context around the addition and design of the TaskFlow API can be found as part of its Airflow Improvement Proposal
-`AIP-31: "Taskflow API" for clearer/simpler DAG definition <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=148638736>`_
+`AIP-31: "TaskFlow API" for clearer/simpler DAG definition <https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=148638736>`_

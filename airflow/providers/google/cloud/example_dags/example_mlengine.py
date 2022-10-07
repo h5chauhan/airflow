@@ -15,12 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """
 Example Airflow DAG for Google ML Engine service.
 """
+from __future__ import annotations
+
 import os
-from typing import Dict
+from datetime import datetime
+from typing import Any
 
 from airflow import models
 from airflow.operators.bash import BashOperator
@@ -36,7 +38,6 @@ from airflow.providers.google.cloud.operators.mlengine import (
     MLEngineStartTrainingJobOperator,
 )
 from airflow.providers.google.cloud.utils import mlengine_operator_utils
-from airflow.utils.dates import days_ago
 
 PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "example-project")
 
@@ -59,11 +60,47 @@ SUMMARY_STAGING = os.environ.get("GCP_MLENGINE_DATAFLOW_STAGING", "gs://INVALID 
 
 with models.DAG(
     "example_gcp_mlengine",
-    schedule_interval=None,  # Override to match your needs
-    start_date=days_ago(1),
+    start_date=datetime(2021, 1, 1),
+    catchup=False,
     tags=['example'],
     params={"model_name": MODEL_NAME},
 ) as dag:
+    hyperparams: dict[str, Any] = {
+        'goal': 'MAXIMIZE',
+        'hyperparameterMetricTag': 'metric1',
+        'maxTrials': 30,
+        'maxParallelTrials': 1,
+        'enableTrialEarlyStopping': True,
+        'params': [],
+    }
+
+    hyperparams['params'].append(
+        {
+            'parameterName': 'hidden1',
+            'type': 'INTEGER',
+            'minValue': 40,
+            'maxValue': 400,
+            'scaleType': 'UNIT_LINEAR_SCALE',
+        }
+    )
+
+    hyperparams['params'].append(
+        {'parameterName': 'numRnnCells', 'type': 'DISCRETE', 'discreteValues': [1, 2, 3, 4]}
+    )
+
+    hyperparams['params'].append(
+        {
+            'parameterName': 'rnnCellType',
+            'type': 'CATEGORICAL',
+            'categoricalValues': [
+                'BasicLSTMCell',
+                'BasicRNNCell',
+                'GRUCell',
+                'LSTMCell',
+                'LayerNormBasicLSTMCell',
+            ],
+        }
+    )
     # [START howto_operator_gcp_mlengine_training]
     training = MLEngineStartTrainingJobOperator(
         task_id="training",
@@ -77,6 +114,7 @@ with models.DAG(
         training_python_module=TRAINER_PY_MODULE,
         training_args=[],
         labels={"job_type": "training"},
+        hyperparameters=hyperparams,
     )
     # [END howto_operator_gcp_mlengine_training]
 
@@ -207,7 +245,7 @@ with models.DAG(
         Gets metric function and keys used to generate summary
         """
 
-        def normalize_value(inst: Dict):
+        def normalize_value(inst: dict):
             val = float(inst['dense_4'][0])
             return tuple([val])  # returns a tuple.
 
@@ -216,7 +254,7 @@ with models.DAG(
     # [END howto_operator_gcp_mlengine_get_metric]
 
     # [START howto_operator_gcp_mlengine_validate_error]
-    def validate_err_and_count(summary: Dict) -> Dict:
+    def validate_err_and_count(summary: dict) -> dict:
         """
         Validate summary result
         """

@@ -36,18 +36,20 @@ Content
     Python API <_api/airflow/providers/asana/index>
 
 .. toctree::
-    :maxdepth: 1
-    :caption: Resources
+    :hidden:
+    :caption: System tests
 
-    Example DAGs <https://github.com/apache/airflow/tree/main/airflow/providers/asana/example_dags>
+    System Tests <_api/tests/system/providers/asana/index>
 
 .. toctree::
     :maxdepth: 1
     :caption: Resources
 
+    Example DAGs <https://github.com/apache/airflow/tree/providers-asana/2.0.0/tests/system/providers/asana/example_asana.py>
     PyPI Repository <https://pypi.org/project/apache-airflow-providers-asana/>
+    Installing from sources <installing-providers-from-sources>
 
-.. THE REMINDER OF THE FILE IS AUTOMATICALLY GENERATED. IT WILL BE OVERWRITTEN AT RELEASE TIME!
+.. THE REMAINDER OF THE FILE IS AUTOMATICALLY GENERATED. IT WILL BE OVERWRITTEN AT RELEASE TIME!
 
 
 .. toctree::
@@ -63,7 +65,7 @@ Package apache-airflow-providers-asana
 `Asana <https://app.asana.com/>`__
 
 
-Release: 1.0.0
+Release: 2.0.1
 
 Provider package
 ----------------
@@ -74,18 +76,18 @@ are in ``airflow.providers.asana`` python package.
 Installation
 ------------
 
-You can install this package on top of an existing airflow 2.1+ installation via
+You can install this package on top of an existing Airflow 2 installation (see ``Requirements`` below)
+for the minimum Airflow version supported) via
 ``pip install apache-airflow-providers-asana``
 
-PIP requirements
-----------------
+Requirements
+------------
 
-===================  ==================
-PIP package          Version required
-===================  ==================
-``apache-airflow``   ``>=2.1.0``
-``asana``            ``>=0.10``
-``cached-property``  ``>=1.5.2``
-===================  ==================
+==================  ==================
+PIP package         Version required
+==================  ==================
+``apache-airflow``  ``>=2.2.0``
+``asana``           ``>=0.10``
+==================  ==================
 
 .. include:: ../../airflow/providers/asana/CHANGELOG.rst

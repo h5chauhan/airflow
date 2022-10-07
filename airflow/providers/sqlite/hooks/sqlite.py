@@ -15,10 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import sqlite3
 
-from airflow.hooks.dbapi import DbApiHook
+from airflow.providers.common.sql.hooks.sql import DbApiHook
 
 
 class SqliteHook(DbApiHook):
@@ -28,6 +29,7 @@ class SqliteHook(DbApiHook):
     default_conn_name = 'sqlite_default'
     conn_type = 'sqlite'
     hook_name = 'Sqlite'
+    placeholder = '?'
 
     def get_conn(self) -> sqlite3.dbapi2.Connection:
         """Returns a sqlite connection object"""
@@ -35,3 +37,9 @@ class SqliteHook(DbApiHook):
         airflow_conn = self.get_connection(conn_id)
         conn = sqlite3.connect(airflow_conn.host)
         return conn
+
+    def get_uri(self) -> str:
+        """Override DbApiHook get_uri method for get_sqlalchemy_engine()"""
+        conn_id = getattr(self, self.conn_name_attr)
+        airflow_conn = self.get_connection(conn_id)
+        return f"sqlite:///{airflow_conn.host}"

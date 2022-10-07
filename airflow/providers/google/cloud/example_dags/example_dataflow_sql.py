@@ -15,15 +15,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """
 Example Airflow DAG for Google Cloud Dataflow service
 """
+from __future__ import annotations
+
 import os
+from datetime import datetime
 
 from airflow import models
 from airflow.providers.google.cloud.operators.dataflow import DataflowStartSqlJobOperator
-from airflow.utils.dates import days_ago
 
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "example-project")
 
@@ -36,8 +37,8 @@ DATAFLOW_SQL_LOCATION = os.environ.get("GCP_DATAFLOW_SQL_LOCATION", "us-west1")
 
 with models.DAG(
     dag_id="example_gcp_dataflow_sql",
-    start_date=days_ago(1),
-    schedule_interval=None,  # Override to match your needs
+    start_date=datetime(2021, 1, 1),
+    catchup=False,
     tags=['example'],
 ) as dag_sql:
     # [START howto_operator_start_sql_job]

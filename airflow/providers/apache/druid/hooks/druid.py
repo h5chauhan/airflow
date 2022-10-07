@@ -15,16 +15,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import time
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Iterable
 
 import requests
 from pydruid.db import connect
 
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
-from airflow.hooks.dbapi import DbApiHook
+from airflow.providers.common.sql.hooks.sql import DbApiHook
 
 
 class DruidHook(BaseHook):
@@ -36,20 +37,17 @@ class DruidHook(BaseHook):
 
     :param druid_ingest_conn_id: The connection id to the Druid overlord machine
                                  which accepts index jobs
-    :type druid_ingest_conn_id: str
     :param timeout: The interval between polling
                     the Druid job for the status of the ingestion job.
                     Must be greater than or equal to 1
-    :type timeout: int
     :param max_ingestion_time: The maximum ingestion time before assuming the job failed
-    :type max_ingestion_time: int
     """
 
     def __init__(
         self,
         druid_ingest_conn_id: str = 'druid_ingest_default',
         timeout: int = 1,
-        max_ingestion_time: Optional[int] = None,
+        max_ingestion_time: int | None = None,
     ) -> None:
 
         super().__init__()
@@ -66,11 +64,11 @@ class DruidHook(BaseHook):
         conn = self.get_connection(self.druid_ingest_conn_id)
         host = conn.host
         port = conn.port
-        conn_type = 'http' if not conn.conn_type else conn.conn_type
+        conn_type = conn.conn_type or 'http'
         endpoint = conn.extra_dejson.get('endpoint', '')
         return f"{conn_type}://{host}:{port}/{endpoint}"
 
-    def get_auth(self) -> Optional[requests.auth.HTTPBasicAuth]:
+    def get_auth(self) -> requests.auth.HTTPBasicAuth | None:
         """
         Return username and password from connections tab as requests.auth.HTTPBasicAuth object.
 
@@ -84,7 +82,7 @@ class DruidHook(BaseHook):
         else:
             return None
 
-    def submit_indexing_job(self, json_index_spec: Dict[str, Any]) -> None:
+    def submit_indexing_job(self, json_index_spec: dict[str, Any] | str) -> None:
         """Submit Druid ingestion job"""
         url = self.get_conn_url()
 
@@ -166,20 +164,20 @@ class DruidDbApiHook(DbApiHook):
         host = conn.host
         if conn.port is not None:
             host += f':{conn.port}'
-        conn_type = 'druid' if not conn.conn_type else conn.conn_type
+        conn_type = conn.conn_type or 'druid'
         endpoint = conn.extra_dejson.get('endpoint', 'druid/v2/sql')
         return f'{conn_type}://{host}/{endpoint}'
 
-    def set_autocommit(self, conn: connect, autocommit: bool) -> NotImplemented:
+    def set_autocommit(self, conn: connect, autocommit: bool) -> NotImplementedError:
         raise NotImplementedError()
 
     def insert_rows(
         self,
         table: str,
-        rows: Iterable[Tuple[str]],
-        target_fields: Optional[Iterable[str]] = None,
+        rows: Iterable[tuple[str]],
+        target_fields: Iterable[str] | None = None,
         commit_every: int = 1000,
         replace: bool = False,
         **kwargs: Any,
-    ) -> NotImplemented:
+    ) -> NotImplementedError:
         raise NotImplementedError()

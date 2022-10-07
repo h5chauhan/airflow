@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 from airflow.ti_deps.deps.base_ti_dep import BaseTIDep
 from airflow.utils import timezone
@@ -47,7 +48,9 @@ class NotInRetryPeriodDep(BaseTIDep):
         next_task_retry_date = ti.next_retry_datetime()
         if ti.is_premature:
             yield self._failing_status(
-                reason="Task is not ready for retry yet but will be retried "
-                "automatically. Current date is {} and task will be retried "
-                "at {}.".format(cur_date.isoformat(), next_task_retry_date.isoformat())
+                reason=(
+                    f"Task is not ready for retry yet but will be retried automatically. "
+                    f"Current date is {cur_date.isoformat()} and task will be retried "
+                    f"at {next_task_retry_date.isoformat()}."
+                )
             )

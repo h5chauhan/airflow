@@ -14,16 +14,26 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
+import contextlib
 import inspect
+import io
 import logging
 import logging.config
 import os
+import sys
 import textwrap
 
 import pytest
 
-from airflow.utils.log.secrets_masker import SecretsMasker, should_hide_value_for_key
+from airflow import settings
+from airflow.utils.log.secrets_masker import RedactedIO, SecretsMasker, should_hide_value_for_key
 from tests.test_utils.config import conf_vars
+
+settings.MASK_SECRETS_IN_LOGS = True
+
+p = "password"
 
 
 @pytest.fixture
@@ -112,7 +122,6 @@ class TestSecretsMasker:
             """
         )
 
-    @pytest.mark.xfail(reason="Cannot filter secrets in traceback source")
     def test_exc_tb(self, logger, caplog):
         """
         Show it is not possible to filter secrets in the source.
@@ -140,8 +149,82 @@ class TestSecretsMasker:
             ERROR Err
             Traceback (most recent call last):
               File ".../test_secrets_masker.py", line {line}, in test_exc_tb
-                raise RuntimeError("Cannot connect to user:***)
+                raise RuntimeError("Cannot connect to user:password")
             RuntimeError: Cannot connect to user:***
+            """
+        )
+
+    def test_masking_in_implicit_context_exceptions(self, logger, caplog):
+        """
+        Show that redacting password works in context exceptions.
+        """
+        try:
+            try:
+                try:
+                    raise RuntimeError(f"Cannot connect to user:{p}")
+                except RuntimeError as ex1:
+                    raise RuntimeError(f'Exception: {ex1}')
+            except RuntimeError as ex2:
+                raise RuntimeError(f'Exception: {ex2}')
+        except RuntimeError:
+            logger.exception("Err")
+
+        line = lineno() - 8
+
+        assert caplog.text == textwrap.dedent(
+            f"""\
+            ERROR Err
+            Traceback (most recent call last):
+              File ".../test_secrets_masker.py", line {line}, in test_masking_in_implicit_context_exceptions
+                raise RuntimeError(f"Cannot connect to user:{{p}}")
+            RuntimeError: Cannot connect to user:***
+
+            During handling of the above exception, another exception occurred:
+
+            Traceback (most recent call last):
+              File ".../test_secrets_masker.py", line {line+2}, in test_masking_in_implicit_context_exceptions
+                raise RuntimeError(f'Exception: {{ex1}}')
+            RuntimeError: Exception: Cannot connect to user:***
+
+            During handling of the above exception, another exception occurred:
+
+            Traceback (most recent call last):
+              File ".../test_secrets_masker.py", line {line+4}, in test_masking_in_implicit_context_exceptions
+                raise RuntimeError(f'Exception: {{ex2}}')
+            RuntimeError: Exception: Exception: Cannot connect to user:***
+            """
+        )
+
+    def test_masking_in_explicit_context_exceptions(self, logger, caplog):
+        """
+        Show that redacting password works in context exceptions.
+        """
+        exception = None
+        try:
+            raise RuntimeError(f"Cannot connect to user:{p}")
+        except RuntimeError as ex:
+            exception = ex
+        try:
+            raise RuntimeError(f'Exception: {exception}') from exception
+        except RuntimeError:
+            logger.exception("Err")
+
+        line = lineno() - 8
+
+        assert caplog.text == textwrap.dedent(
+            f"""\
+            ERROR Err
+            Traceback (most recent call last):
+              File ".../test_secrets_masker.py", line {line}, in test_masking_in_explicit_context_exceptions
+                raise RuntimeError(f"Cannot connect to user:{{p}}")
+            RuntimeError: Cannot connect to user:***
+
+            The above exception was the direct cause of the following exception:
+
+            Traceback (most recent call last):
+              File ".../test_secrets_masker.py", line {line+4}, in test_masking_in_explicit_context_exceptions
+                raise RuntimeError(f'Exception: {{exception}}') from exception
+            RuntimeError: Exception: Cannot connect to user:***
             """
         )
 
@@ -262,3 +345,33 @@ class ShortExcFormatter(logging.Formatter):
 def lineno():
     """Returns the current line number in our program."""
     return inspect.currentframe().f_back.f_lineno
+
+
+class TestRedactedIO:
+    def test_redacts_from_print(self, capsys):
+        # Without redacting, password is printed.
+        print(p)
+        stdout = capsys.readouterr().out
+        assert stdout == f"{p}\n"
+        assert "***" not in stdout
+
+        # With context manager, password is redacted.
+        with contextlib.redirect_stdout(RedactedIO()):
+            print(p)
+        stdout = capsys.readouterr().out
+        assert stdout == "***\n"
+
+    def test_write(self, capsys):
+        RedactedIO().write(p)
+        stdout = capsys.readouterr().out
+        assert stdout == "***"
+
+    def test_input_builtin(self, monkeypatch):
+        """
+        Test that when redirect is inplace the `input()` builtin works.
+
+        This is used by debuggers!
+        """
+        monkeypatch.setattr(sys, 'stdin', io.StringIO("a\n"))
+        with contextlib.redirect_stdout(RedactedIO()):
+            assert input() == "a"

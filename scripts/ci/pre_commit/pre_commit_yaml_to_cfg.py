@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -17,8 +17,9 @@
 # specific language governing permissions and limitations
 # under the License.
 """
-Module to covert Airflow configs in config.yml to default_airflow.cfg file
+Module to convert Airflow configs in config.yml to default_airflow.cfg file
 """
+from __future__ import annotations
 
 import os
 
@@ -41,7 +42,6 @@ FILE_HEADER = """#
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 
 # This is the template for Airflow's default configuration. When Airflow is
 # imported, it looks for a configuration file at $AIRFLOW_HOME/airflow.cfg. If
@@ -126,8 +126,8 @@ def _write_option(configfile, idx, option):
     if option["default"] is not None:
         if not isinstance(option["default"], str):
             raise Exception(
-                "Key \"default\" in element with name=\"{}\" has an invalid type. "
-                "Current type: {}".format(option["name"], type(option["default"]))
+                f"Key \"default\" in element with name=\"{option['name']}\" has an invalid type. "
+                f"Current type: {type(option['default'])}"
             )
         # Remove trailing whitespace on empty string
         if option["default"]:

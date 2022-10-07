@@ -19,11 +19,14 @@
 """
 Test for an order of dependencies in setup.py
 """
+from __future__ import annotations
+
+import difflib
 import os
 import re
 import sys
+import textwrap
 from os.path import abspath, dirname
-from typing import List
 
 from rich import print
 
@@ -34,22 +37,28 @@ SOURCE_DIR_PATH = os.path.abspath(os.path.join(MY_DIR_PATH, os.pardir, os.pardir
 sys.path.insert(0, SOURCE_DIR_PATH)
 
 
-def _check_list_sorted(the_list: List[str], message: str) -> None:
-    print(the_list)
+class ConsoleDiff(difflib.Differ):
+    def _dump(self, tag, x, lo, hi):
+        """Generate comparison results for a same-tagged range."""
+        for i in range(lo, hi):
+            if tag == "+":
+                yield f'[green]{tag} {x[i]}[/]'
+            elif tag == "-":
+                yield f'[red]{tag} {x[i]}[/]'
+            else:
+                yield f'{tag} {x[i]}'
+
+
+def _check_list_sorted(the_list: list[str], message: str) -> None:
     sorted_list = sorted(the_list)
     if the_list == sorted_list:
         print(f"{message} is [green]ok[/]")
+        print(the_list)
         print()
         return
-    i = 0
-    while sorted_list[i] == the_list[i]:
-        i += 1
-    print(f"{message} [red]NOK[/]")
+    print(textwrap.indent("\n".join(ConsoleDiff().compare(the_list, sorted_list)), " " * 4))
     print()
-    errors.append(
-        f"ERROR in {message}. First wrongly sorted element {repr(the_list[i])}. Should "
-        f"be {repr(sorted_list[i])}"
-    )
+    errors.append(f"ERROR in {message}. The elements are not sorted.")
 
 
 def check_main_dependent_group(setup_contents: str) -> None:
@@ -57,7 +66,7 @@ def check_main_dependent_group(setup_contents: str) -> None:
     Test for an order of dependencies groups between mark
     '# Start dependencies group' and '# End dependencies group' in setup.py
     """
-    print("[blue]Checking main dependency group[/]")
+    print("[info]Checking main dependency group[/]")
     pattern_main_dependent_group = re.compile(
         '# Start dependencies group\n(.*)# End dependencies group', re.DOTALL
     )
@@ -78,7 +87,7 @@ def check_sub_dependent_group(group_name: str) -> None:
     Test for an order of each dependencies groups declare like
     `^dependent_group_name = [.*?]\n` in setup.py
     """
-    print(f"[blue]Checking dependency group {group_name}[/]")
+    print(f"[info]Checking dependency group {group_name}[/]")
     _check_list_sorted(getattr(setup, group_name), f"Order of dependency group: {group_name}")
 
 
@@ -91,13 +100,13 @@ def check_alias_dependent_group(setup_context: str) -> None:
     dependents = pattern.findall(setup_context)
 
     for dependent in dependents:
-        print(f"[blue]Checking alias-dependent group {dependent}[/]")
+        print(f"[info]Checking alias-dependent group {dependent}[/]")
         src = dependent.split(' + ')
         _check_list_sorted(src, f"Order of alias dependencies group: {dependent}")
 
 
 def check_variable_order(var_name: str) -> None:
-    print(f"[blue]Checking {var_name}[/]")
+    print(f"[info]Checking {var_name}[/]")
 
     var = getattr(setup, var_name)
 
@@ -121,7 +130,7 @@ def check_install_and_setup_requires() -> None:
     pattern_dependent_version = re.compile('[~|><=;].*')
 
     for key in ('install_requires', 'setup_requires'):
-        print(f"[blue]Checking setup.cfg group {key}[/]")
+        print(f"[info]Checking setup.cfg group {key}[/]")
         deps = config['options'][key]
         dists = [pattern_dependent_version.sub('', p) for p in deps]
         _check_list_sorted(dists, f"Order of dependencies in do_setup section: {key}")
@@ -134,9 +143,8 @@ if __name__ == '__main__':
         file_contents = setup_file.read()
     check_main_dependent_group(file_contents)
     check_alias_dependent_group(file_contents)
-    check_variable_order("PROVIDERS_REQUIREMENTS")
-    check_variable_order("CORE_EXTRAS_REQUIREMENTS")
-    check_variable_order("ADDITIONAL_EXTRAS_REQUIREMENTS")
+    check_variable_order("CORE_EXTRAS_DEPENDENCIES")
+    check_variable_order("ADDITIONAL_EXTRAS_DEPENDENCIES")
     check_variable_order("EXTRAS_DEPRECATED_ALIASES")
     check_variable_order("PREINSTALLED_PROVIDERS")
     check_install_and_setup_requires()

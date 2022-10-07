@@ -14,18 +14,22 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import contextlib
 from functools import wraps
 from inspect import signature
-from typing import Callable, TypeVar
+from typing import Callable, Generator, TypeVar, cast
 
 from airflow import settings
+from airflow.typing_compat import ParamSpec
 
 
 @contextlib.contextmanager
-def create_session():
+def create_session() -> Generator[settings.SASession, None, None]:
     """Contextmanager that will create and teardown a session."""
+    if not settings.Session:
+        raise RuntimeError("Session must be set before!")
     session = settings.Session()
     try:
         yield session
@@ -37,10 +41,11 @@ def create_session():
         session.close()
 
 
+PS = ParamSpec("PS")
 RT = TypeVar("RT")
 
 
-def find_session_idx(func: Callable[..., RT]) -> int:
+def find_session_idx(func: Callable[PS, RT]) -> int:
     """Find session index in function call parameter."""
     func_params = signature(func).parameters
     try:
@@ -52,7 +57,7 @@ def find_session_idx(func: Callable[..., RT]) -> int:
     return session_args_idx
 
 
-def provide_session(func: Callable[..., RT]) -> Callable[..., RT]:
+def provide_session(func: Callable[PS, RT]) -> Callable[PS, RT]:
     """
     Function decorator that provides a session if it isn't provided.
     If you want to reuse a session or run the function as part of a
@@ -72,36 +77,8 @@ def provide_session(func: Callable[..., RT]) -> Callable[..., RT]:
     return wrapper
 
 
-@provide_session
-@contextlib.contextmanager
-def create_global_lock(session=None, pg_lock_id=1, lock_name='init', mysql_lock_timeout=1800):
-    """Contextmanager that will create and teardown a global db lock."""
-    dialect = session.connection().dialect
-    try:
-        if dialect.name == 'postgresql':
-            session.connection().execute(f'select PG_ADVISORY_LOCK({pg_lock_id});')
-
-        if dialect.name == 'mysql' and dialect.server_version_info >= (
-            5,
-            6,
-        ):
-            session.connection().execute(f"select GET_LOCK('{lock_name}',{mysql_lock_timeout});")
-
-        if dialect.name == 'mssql':
-            # TODO: make locking works for MSSQL
-            pass
-
-        yield None
-    finally:
-        if dialect.name == 'postgresql':
-            session.connection().execute(f'select PG_ADVISORY_UNLOCK({pg_lock_id});')
-
-        if dialect.name == 'mysql' and dialect.server_version_info >= (
-            5,
-            6,
-        ):
-            session.connection().execute(f"select RELEASE_LOCK('{lock_name}');")
-
-        if dialect.name == 'mssql':
-            # TODO: make locking works for MSSQL
-            pass
+# A fake session to use in functions decorated by provide_session. This allows
+# the 'session' argument to be of type Session instead of Optional[Session],
+# making it easier to type hint the function body without dealing with the None
+# case that can never happen at runtime.
+NEW_SESSION: settings.SASession = cast(settings.SASession, None)

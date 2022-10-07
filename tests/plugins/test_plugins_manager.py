@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import importlib
 import logging
 import os
@@ -25,6 +27,7 @@ from unittest import mock
 import pytest
 
 from airflow.hooks.base import BaseHook
+from airflow.listeners.listener import get_listener_manager
 from airflow.plugins_manager import AirflowPlugin
 from airflow.www import app as application
 from tests.test_utils.config import conf_vars
@@ -42,7 +45,7 @@ except ImportError:
         import importlib.metadata
 
         # only when we do not have importlib_metadata, the importlib.metadata is actually used
-        importlib_metadata = 'importlib.metadata'
+        importlib_metadata = 'importlib.metadata'  # type: ignore
     except ImportError:
         raise Exception(
             "Either importlib_metadata must be installed or importlib.metadata must be"
@@ -58,6 +61,12 @@ class AirflowTestOnLoadExceptionPlugin(AirflowPlugin):
     def on_load(self, *args, **kwargs):
         raise Exception("oops")
 """
+
+
+@pytest.fixture(autouse=True, scope='module')
+def clean_plugins():
+    yield
+    get_listener_manager().clear()
 
 
 class TestPluginsRBAC:
@@ -291,6 +300,7 @@ class TestPluginsManager:
         from airflow.plugins_manager import import_errors, load_entrypoint_plugins
 
         mock_dist = mock.Mock()
+        mock_dist.metadata = {"Name": "test-dist"}
 
         mock_entrypoint = mock.Mock()
         mock_entrypoint.name = 'test-entrypoint'
@@ -350,6 +360,16 @@ class TestPluginsManager:
             # rendering templates.
             assert hasattr(macros, MacroPlugin.name)
 
+    def test_registering_plugin_listeners(self):
+        from airflow import plugins_manager
+
+        with mock.patch('airflow.plugins_manager.plugins', []):
+            plugins_manager.load_plugins_from_plugin_directory()
+            plugins_manager.integrate_listener_plugins(get_listener_manager())
+
+            assert get_listener_manager().has_listeners
+            assert get_listener_manager().pm.get_plugins().pop().__name__ == "tests.listeners.empty_listener"
+
 
 class TestPluginsDirectorySource:
     def test_should_return_correct_path_name(self):
@@ -370,7 +390,7 @@ class TestEntryPointSource:
         mock_entrypoint.module = 'module_name_plugin'
 
         mock_dist = mock.Mock()
-        mock_dist.metadata = {'name': 'test-entrypoint-plugin'}
+        mock_dist.metadata = {'Name': 'test-entrypoint-plugin'}
         mock_dist.version = '1.0.0'
         mock_dist.entry_points = [mock_entrypoint]
 

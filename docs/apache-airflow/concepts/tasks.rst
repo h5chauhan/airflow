@@ -36,6 +36,12 @@ Relationships
 
 The key part of using Tasks is defining how they relate to each other - their *dependencies*, or as we say in Airflow, their *upstream* and *downstream* tasks. You declare your Tasks first, and then you declare their dependencies second.
 
+.. note::
+
+    We call the *upstream* task the one that is directly preceding the other task. We used to call it a parent task before.
+    Be aware that this concept does not describe the tasks that are higher in the tasks hierarchy (i.e. they are not a direct parents of the task).
+    Same definition applies to *downstream* task, which needs to be a direct child of the other task.
+
 There are two ways of declaring dependencies - using the ``>>`` and ``<<`` (bitshift) operators::
 
     first_task >> second_task >> [third_task, fourth_task]
@@ -47,7 +53,7 @@ Or the more explicit ``set_upstream`` and ``set_downstream`` methods::
 
 These both do exactly the same thing, but in general we recommend you use the bitshift operators, as they are easier to read in most cases.
 
-By default, a Task will run when all of its upstream (parent) tasks have succeeded, but there are many ways of modifying this behaviour to add branching, only wait for some upstream tasks, or change behaviour based on where the current run is in history. For more, see :ref:`concepts:control-flow`.
+By default, a Task will run when all of its upstream (parent) tasks have succeeded, but there are many ways of modifying this behaviour to add branching, to only wait for some upstream tasks, or to change behaviour based on where the current run is in history. For more, see :ref:`concepts:control-flow`.
 
 Tasks don't pass information to each other by default, and run entirely independently. If you want to pass information from one Task to another, you should use :doc:`xcoms`.
 
@@ -59,7 +65,7 @@ Task Instances
 
 Much in the same way that a DAG is instantiated into a :ref:`DAG Run <concepts:dag-run>` each time it runs, the tasks under a DAG are instantiated into *Task Instances*.
 
-An instance of a Task is a specific run of that task for a given DAG (and thus for a given ``execution_date``). They are also the representation of a Task that has *state*, representing what stage of the lifecycle it is in.
+An instance of a Task is a specific run of that task for a given DAG (and thus for a given data interval). They are also the representation of a Task that has *state*, representing what stage of the lifecycle it is in.
 
 .. _concepts:task-states:
 
@@ -77,7 +83,6 @@ The possible states for a Task Instance are:
 * ``upstream_failed``: An upstream task failed and the :ref:`Trigger Rule <concepts:trigger-rules>` says we needed it
 * ``up_for_retry``: The task failed, but has retry attempts left and will be rescheduled.
 * ``up_for_reschedule``: The task is a :doc:`Sensor <sensors>` that is in ``reschedule`` mode
-* ``sensing``: The task is a :doc:`Smart Sensor <smart-sensors>`
 * ``deferred``: The task has been :doc:`deferred to a trigger <deferring>`
 * ``removed``: The task has vanished from the DAG since the run started
 
@@ -97,9 +102,9 @@ Firstly, it can have *upstream* and *downstream* tasks::
 
     task1 >> task2 >> task3
 
-When a DAG runs, it will create instances for each of these tasks that are upstream/downstream of each other, but which all have the same ``execution_date``.
+When a DAG runs, it will create instances for each of these tasks that are upstream/downstream of each other, but which all have the same data interval.
 
-There may also be instances of the *same task*, but for different values of ``execution_date`` - from other runs of the same DAG. We call these *previous* and *next* - it is a different relationship to *upstream* and *downstream*!
+There may also be instances of the *same task*, but for different data intervals - from other runs of the same DAG. We call these *previous* and *next* - it is a different relationship to *upstream* and *downstream*!
 
 .. note::
 
@@ -123,7 +128,7 @@ without retrying.
 The following ``SFTPSensor`` example illustrates this. The ``sensor`` is in ``reschedule`` mode, meaning it
 is periodically executed and rescheduled until it succeeds.
 
-- Each time the sensor pokes the SFTP server, it is allowed to take maximum 60 seconds as defined by ``execution_time``.
+- Each time the sensor pokes the SFTP server, it is allowed to take maximum 60 seconds as defined by ``execution_timeout``.
 - If it takes the sensor more than 60 seconds to poke the SFTP server, ``AirflowTaskTimeout`` will be raised.
   The sensor is allowed to retry when this happens. It can retry up to 2 times as defined by ``retries``.
 - From the start of the first execution, till it eventually succeeds (i.e. after the file 'root/test' appears),
@@ -153,15 +158,73 @@ If you merely want to be notified if a task runs over but still let it run to co
 SLAs
 ----
 
-An SLA, or a Service Level Agreement, is an expectation for the maximum time a Task should take. If a task takes longer than this to run, then it visible in the "SLA Misses" part of the user interface, as well going out in an email of all tasks that missed their SLA.
+An SLA, or a Service Level Agreement, is an expectation for the maximum time a Task should take. If a task takes longer than this to run, it is then visible in the "SLA Misses" part of the user interface, as well as going out in an email of all tasks that missed their SLA.
 
 Tasks over their SLA are not cancelled, though - they are allowed to run to completion. If you want to cancel a task after a certain runtime is reached, you want :ref:`concepts:timeouts` instead.
 
-To set an SLA for a task, pass a ``datetime.timedelta`` object to the Task/Operator's ``sla`` parameter. You can also supply an ``sla_miss_callback`` that will be called when the SLA is missed if you want to run your own logic.
+To set an SLA for a task, pass a ``datetime.timedelta`` object to the Task/Operator's ``sla`` parameter.  You can also supply an ``sla_miss_callback`` that will be called when the SLA is missed if you want to run your own logic.
 
 If you want to disable SLA checking entirely, you can set ``check_slas = False`` in Airflow's ``[core]`` configuration.
 
 To read more about configuring the emails, see :doc:`/howto/email-config`.
+
+.. note::
+
+    Manually-triggered tasks and tasks in event-driven DAGs will not be checked for an SLA miss. For more information on DAG ``schedule`` values see :doc:`DAG Run </dag-run>`.
+
+.. _concepts:sla_miss_callback:
+
+sla_miss_callback
+~~~~~~~~~~~~~~~~~
+
+You can also supply an ``sla_miss_callback`` that will be called when the SLA is missed if you want to run your own logic.
+The function signature of an ``sla_miss_callback`` requires 5 parameters.
+
+#. ``dag``
+
+    * Parent :ref:`DAG <concepts:dags>` Object for the :doc:`DAGRun </dag-run>` in which tasks missed their
+      :ref:`SLA <concepts:slas>`.
+
+#. ``task_list``
+
+    * String list (new-line separated, \\n) of all tasks that missed their :ref:`SLA <concepts:slas>`
+      since the last time that the ``sla_miss_callback`` ran.
+
+#. ``blocking_task_list``
+
+    * Any task in the :doc:`DAGRun(s)</dag-run>` (with the same ``execution_date`` as a task that missed
+      :ref:`SLA <concepts:slas>`) that is not in a **SUCCESS** state at the time that the ``sla_miss_callback``
+      runs. i.e. 'running', 'failed'.  These tasks are described as tasks that are blocking itself or another
+      task from completing before its SLA window is complete.
+
+#. ``slas``
+
+    * List of :py:mod:`SlaMiss<airflow.models.slamiss>` objects associated with the tasks in the
+      ``task_list`` parameter.
+
+#. ``blocking_tis``
+
+    * List of the :ref:`TaskInstance <concepts:task-instances>` objects that are associated with the tasks
+      in the ``blocking_task_list`` parameter.
+
+Examples of ``sla_miss_callback`` function signature:
+
+.. code-block:: python
+
+    def my_sla_miss_callback(dag, task_list, blocking_task_list, slas, blocking_tis):
+        ...
+
+.. code-block:: python
+
+    def my_sla_miss_callback(*args):
+        ...
+
+Example DAG:
+
+.. exampleinclude:: /../../airflow/example_dags/example_sla_dag.py
+    :language: python
+    :start-after: [START howto_task_sla]
+    :end-before: [END howto_task_sla]
 
 
 Special Exceptions

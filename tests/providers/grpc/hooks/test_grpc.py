@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from io import StringIO
@@ -27,13 +28,11 @@ from airflow.providers.grpc.hooks.grpc import GrpcHook
 
 
 def get_airflow_connection(auth_type="NO_AUTH", credential_pem_file=None, scopes=None):
-    extra = (
-        '{{"extra__grpc__auth_type": "{auth_type}",'
-        '"extra__grpc__credential_pem_file": "{credential_pem_file}",'
-        '"extra__grpc__scopes": "{scopes}"}}'.format(
-            auth_type=auth_type, credential_pem_file=credential_pem_file, scopes=scopes
-        )
-    )
+    extra = {
+        "extra__grpc__auth_type": f"{auth_type}",
+        "extra__grpc__credential_pem_file": f"{credential_pem_file}",
+        "extra__grpc__scopes": f"{scopes}",
+    }
 
     return Connection(conn_id='grpc_default', conn_type='grpc', host='test:8080', extra=extra)
 

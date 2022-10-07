@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -50,7 +52,7 @@ class TestCloudFormationCreateStackOperator(unittest.TestCase):
         operator = CloudFormationCreateStackOperator(
             task_id='test_task',
             stack_name=stack_name,
-            params={'TimeoutInMinutes': timeout, 'TemplateBody': template_body},
+            cloudformation_parameters={'TimeoutInMinutes': timeout, 'TemplateBody': template_body},
             dag=DAG('test_dag_id', default_args=self.args),
         )
 

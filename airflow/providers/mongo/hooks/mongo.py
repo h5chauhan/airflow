@@ -16,9 +16,10 @@
 # specific language governing permissions and limitations
 # under the License.
 """Hook for Mongo DB"""
+from __future__ import annotations
+
 from ssl import CERT_NONE
 from types import TracebackType
-from typing import List, Optional, Type, Union
 
 import pymongo
 from pymongo import MongoClient, ReplaceOne
@@ -42,7 +43,6 @@ class MongoHook(BaseHook):
 
     :param mongo_conn_id: The :ref:`Mongo connection id <howto/connection:mongo>` to use
         when connecting to MongoDB.
-    :type mongo: str
     """
 
     conn_name_attr = 'conn_id'
@@ -61,22 +61,18 @@ class MongoHook(BaseHook):
         srv = self.extras.pop('srv', False)
         scheme = 'mongodb+srv' if srv else 'mongodb'
 
-        self.uri = '{scheme}://{creds}{host}{port}/{database}'.format(
-            scheme=scheme,
-            creds=f'{self.connection.login}:{self.connection.password}@' if self.connection.login else '',
-            host=self.connection.host,
-            port='' if self.connection.port is None else f':{self.connection.port}',
-            database=self.connection.schema,
-        )
+        creds = f'{self.connection.login}:{self.connection.password}@' if self.connection.login else ''
+        port = '' if self.connection.port is None else f':{self.connection.port}'
+        self.uri = f'{scheme}://{creds}{self.connection.host}{port}/{self.connection.schema}'
 
     def __enter__(self):
         return self
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         if self.client is not None:
             self.close_conn()
@@ -105,7 +101,7 @@ class MongoHook(BaseHook):
             self.client = None
 
     def get_collection(
-        self, mongo_collection: str, mongo_db: Optional[str] = None
+        self, mongo_collection: str, mongo_db: str | None = None
     ) -> pymongo.collection.Collection:
         """
         Fetches a mongo collection object for querying.
@@ -118,7 +114,7 @@ class MongoHook(BaseHook):
         return mongo_conn.get_database(mongo_db).get_collection(mongo_collection)
 
     def aggregate(
-        self, mongo_collection: str, aggregate_query: list, mongo_db: Optional[str] = None, **kwargs
+        self, mongo_collection: str, aggregate_query: list, mongo_db: str | None = None, **kwargs
     ) -> pymongo.command_cursor.CommandCursor:
         """
         Runs an aggregation pipeline and returns the results
@@ -134,8 +130,8 @@ class MongoHook(BaseHook):
         mongo_collection: str,
         query: dict,
         find_one: bool = False,
-        mongo_db: Optional[str] = None,
-        projection: Optional[Union[list, dict]] = None,
+        mongo_db: str | None = None,
+        projection: list | dict | None = None,
         **kwargs,
     ) -> pymongo.cursor.Cursor:
         """
@@ -150,7 +146,7 @@ class MongoHook(BaseHook):
             return collection.find(query, projection, **kwargs)
 
     def insert_one(
-        self, mongo_collection: str, doc: dict, mongo_db: Optional[str] = None, **kwargs
+        self, mongo_collection: str, doc: dict, mongo_db: str | None = None, **kwargs
     ) -> pymongo.results.InsertOneResult:
         """
         Inserts a single document into a mongo collection
@@ -161,7 +157,7 @@ class MongoHook(BaseHook):
         return collection.insert_one(doc, **kwargs)
 
     def insert_many(
-        self, mongo_collection: str, docs: dict, mongo_db: Optional[str] = None, **kwargs
+        self, mongo_collection: str, docs: dict, mongo_db: str | None = None, **kwargs
     ) -> pymongo.results.InsertManyResult:
         """
         Inserts many docs into a mongo collection.
@@ -176,7 +172,7 @@ class MongoHook(BaseHook):
         mongo_collection: str,
         filter_doc: dict,
         update_doc: dict,
-        mongo_db: Optional[str] = None,
+        mongo_db: str | None = None,
         **kwargs,
     ) -> pymongo.results.UpdateResult:
         """
@@ -184,14 +180,10 @@ class MongoHook(BaseHook):
         https://pymongo.readthedocs.io/en/stable/api/pymongo/collection.html#pymongo.collection.Collection.update_one
 
         :param mongo_collection: The name of the collection to update.
-        :type mongo_collection: str
         :param filter_doc: A query that matches the documents to update.
-        :type filter_doc: dict
         :param update_doc: The modifications to apply.
-        :type update_doc: dict
         :param mongo_db: The name of the database to use.
             Can be omitted; then the database from the connection string is used.
-        :type mongo_db: str
 
         """
         collection = self.get_collection(mongo_collection, mongo_db=mongo_db)
@@ -203,7 +195,7 @@ class MongoHook(BaseHook):
         mongo_collection: str,
         filter_doc: dict,
         update_doc: dict,
-        mongo_db: Optional[str] = None,
+        mongo_db: str | None = None,
         **kwargs,
     ) -> pymongo.results.UpdateResult:
         """
@@ -211,14 +203,10 @@ class MongoHook(BaseHook):
         https://pymongo.readthedocs.io/en/stable/api/pymongo/collection.html#pymongo.collection.Collection.update_many
 
         :param mongo_collection: The name of the collection to update.
-        :type mongo_collection: str
         :param filter_doc: A query that matches the documents to update.
-        :type filter_doc: dict
         :param update_doc: The modifications to apply.
-        :type update_doc: dict
         :param mongo_db: The name of the database to use.
             Can be omitted; then the database from the connection string is used.
-        :type mongo_db: str
 
         """
         collection = self.get_collection(mongo_collection, mongo_db=mongo_db)
@@ -229,8 +217,8 @@ class MongoHook(BaseHook):
         self,
         mongo_collection: str,
         doc: dict,
-        filter_doc: Optional[dict] = None,
-        mongo_db: Optional[str] = None,
+        filter_doc: dict | None = None,
+        mongo_db: str | None = None,
         **kwargs,
     ) -> pymongo.results.UpdateResult:
         """
@@ -242,15 +230,11 @@ class MongoHook(BaseHook):
             document contain the ``_id`` field which is then used as filters.
 
         :param mongo_collection: The name of the collection to update.
-        :type mongo_collection: str
         :param doc: The new document.
-        :type doc: dict
         :param filter_doc: A query that matches the documents to replace.
             Can be omitted; then the _id field from doc will be used.
-        :type filter_doc: dict
         :param mongo_db: The name of the database to use.
             Can be omitted; then the database from the connection string is used.
-        :type mongo_db: str
         """
         collection = self.get_collection(mongo_collection, mongo_db=mongo_db)
 
@@ -262,11 +246,11 @@ class MongoHook(BaseHook):
     def replace_many(
         self,
         mongo_collection: str,
-        docs: List[dict],
-        filter_docs: Optional[List[dict]] = None,
-        mongo_db: Optional[str] = None,
+        docs: list[dict],
+        filter_docs: list[dict] | None = None,
+        mongo_db: str | None = None,
         upsert: bool = False,
-        collation: Optional[pymongo.collation.Collation] = None,
+        collation: pymongo.collation.Collation | None = None,
         **kwargs,
     ) -> pymongo.results.BulkWriteResult:
         """
@@ -281,22 +265,16 @@ class MongoHook(BaseHook):
             used as filters.
 
         :param mongo_collection: The name of the collection to update.
-        :type mongo_collection: str
         :param docs: The new documents.
-        :type docs: list[dict]
         :param filter_docs: A list of queries that match the documents to replace.
-            Can be omitted; then the _id fields from docs will be used.
-        :type filter_docs: list[dict]
+            Can be omitted; then the _id fields from airflow.docs will be used.
         :param mongo_db: The name of the database to use.
             Can be omitted; then the database from the connection string is used.
-        :type mongo_db: str
         :param upsert: If ``True``, perform an insert if no documents
             match the filters for the replace operation.
-        :type upsert: bool
         :param collation: An instance of
             :class:`~pymongo.collation.Collation`. This option is only
             supported on MongoDB 3.4 and above.
-        :type collation: pymongo.collation.Collation
 
         """
         collection = self.get_collection(mongo_collection, mongo_db=mongo_db)
@@ -311,19 +289,16 @@ class MongoHook(BaseHook):
         return collection.bulk_write(requests, **kwargs)
 
     def delete_one(
-        self, mongo_collection: str, filter_doc: dict, mongo_db: Optional[str] = None, **kwargs
+        self, mongo_collection: str, filter_doc: dict, mongo_db: str | None = None, **kwargs
     ) -> pymongo.results.DeleteResult:
         """
         Deletes a single document in a mongo collection.
         https://pymongo.readthedocs.io/en/stable/api/pymongo/collection.html#pymongo.collection.Collection.delete_one
 
         :param mongo_collection: The name of the collection to delete from.
-        :type mongo_collection: str
         :param filter_doc: A query that matches the document to delete.
-        :type filter_doc: dict
         :param mongo_db: The name of the database to use.
             Can be omitted; then the database from the connection string is used.
-        :type mongo_db: str
 
         """
         collection = self.get_collection(mongo_collection, mongo_db=mongo_db)
@@ -331,19 +306,16 @@ class MongoHook(BaseHook):
         return collection.delete_one(filter_doc, **kwargs)
 
     def delete_many(
-        self, mongo_collection: str, filter_doc: dict, mongo_db: Optional[str] = None, **kwargs
+        self, mongo_collection: str, filter_doc: dict, mongo_db: str | None = None, **kwargs
     ) -> pymongo.results.DeleteResult:
         """
         Deletes one or more documents in a mongo collection.
         https://pymongo.readthedocs.io/en/stable/api/pymongo/collection.html#pymongo.collection.Collection.delete_many
 
         :param mongo_collection: The name of the collection to delete from.
-        :type mongo_collection: str
         :param filter_doc: A query that matches the documents to delete.
-        :type filter_doc: dict
         :param mongo_db: The name of the database to use.
             Can be omitted; then the database from the connection string is used.
-        :type mongo_db: str
 
         """
         collection = self.get_collection(mongo_collection, mongo_db=mongo_db)

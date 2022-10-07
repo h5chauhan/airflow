@@ -15,7 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import json
 import unittest
@@ -124,13 +124,27 @@ class TestExasolHook(unittest.TestCase):
         sql = ['SQL1', 'SQL2']
         self.db_hook.run(sql, autocommit=True)
         self.conn.set_autocommit.assert_called_once_with(True)
-        for i in range(len(self.conn.execute.call_args_list)):
-            args, kwargs = self.conn.execute.call_args_list[i]
+        for i, item in enumerate(self.conn.execute.call_args_list):
+            args, kwargs = item
             assert len(args) == 2
             assert args[0] == sql[i]
             assert kwargs == {}
         self.conn.execute.assert_called_with(sql[1], None)
         self.conn.commit.assert_not_called()
+
+    def test_run_no_queries(self):
+        with pytest.raises(ValueError) as err:
+            self.db_hook.run(sql=[])
+        assert err.value.args[0] == "List of SQL statements is empty"
+
+    def test_no_result_set(self):
+        """Queries like DROP and SELECT are of type rowCount (not resultSet),
+        which raises an error in pyexasol if trying to iterate over them"""
+        self.cur.result_type = mock.Mock()
+        self.cur.result_type.return_value = 'rowCount'
+
+        sql = 'SQL'
+        self.db_hook.run(sql)
 
     def test_bulk_load(self):
         with pytest.raises(NotImplementedError):

@@ -14,8 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 from airflow import settings
+from airflow.timetables.base import Timetable
 from airflow.timetables.interval import CronDataIntervalTimetable, DeltaDataIntervalTimetable
 
 
@@ -25,3 +27,25 @@ def cron_timetable(expr: str) -> CronDataIntervalTimetable:
 
 def delta_timetable(delta) -> DeltaDataIntervalTimetable:
     return DeltaDataIntervalTimetable(delta)
+
+
+class CustomSerializationTimetable(Timetable):
+    def __init__(self, value: str):
+        self.value = value
+
+    @classmethod
+    def deserialize(cls, data):
+        return cls(data["value"])
+
+    def __eq__(self, other) -> bool:
+        """Only for testing purposes."""
+        if not isinstance(other, CustomSerializationTimetable):
+            return False
+        return self.value == other.value
+
+    def serialize(self):
+        return {"value": self.value}
+
+    @property
+    def summary(self):
+        return f"{type(self).__name__}({self.value!r})"

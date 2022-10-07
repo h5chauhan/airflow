@@ -15,16 +15,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """Plugins metabrowser"""
+from __future__ import annotations
 
 import json
 from datetime import datetime
 from typing import List
 
 import pandas as pd
-from flask import Blueprint, Markup, request
+from flask import Blueprint, request
 from flask_appbuilder import BaseView, expose
+from markupsafe import Markup
 
 from airflow.plugins_manager import AirflowPlugin
 from airflow.providers.apache.hive.hooks.hive import HiveCliHook, HiveMetastoreHook

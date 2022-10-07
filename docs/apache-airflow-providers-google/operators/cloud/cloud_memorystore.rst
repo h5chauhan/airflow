@@ -25,10 +25,6 @@ Redis service for the Google Cloud. Applications running on Google Cloud can ach
 extreme performance by leveraging the highly scalable, available, secure Redis service without the burden
 of managing complex Redis deployments.
 
-.. contents::
-  :depth: 1
-  :local:
-
 Prerequisite Tasks
 ^^^^^^^^^^^^^^^^^^
 
@@ -45,7 +41,7 @@ presented as a compatible dictionary also.
 
 Here is an example of instance
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :start-after: [START howto_operator_instance]
     :end-before: [END howto_operator_instance]
@@ -63,7 +59,7 @@ make a use of the service account listed under ``persistenceIamIdentity``.
 You can use :class:`~airflow.providers.google.cloud.operators.gcs.GCSBucketCreateAclEntryOperator`
 operator to set permissions.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_set_acl_permission]
@@ -80,7 +76,7 @@ Create instance
 Create a instance is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreCreateInstanceOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_create_instance]
@@ -91,7 +87,7 @@ You can use :ref:`Jinja templating <concepts:jinja-templating>` with
 parameters which allows you to dynamically determine values. The result is saved to :ref:`XCom <concepts:xcom>`, which allows it
 to be used by other operators.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_create_instance_result]
@@ -106,7 +102,7 @@ Delete instance
 Delete a instance is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreDeleteInstanceOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_delete_instance]
@@ -124,7 +120,7 @@ Export instance
 Delete a instance is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreExportInstanceOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_export_instance]
@@ -142,7 +138,7 @@ Failover instance
 Delete a instance is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreFailoverInstanceOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_failover_instance]
@@ -160,7 +156,7 @@ Get instance
 Delete a instance is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreGetInstanceOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_get_instance]
@@ -178,7 +174,7 @@ Import instance
 Delete a instance is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreImportOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_import_instance]
@@ -196,7 +192,7 @@ List instances
 List a instances is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreListInstancesOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_list_instances]
@@ -207,7 +203,7 @@ You can use :ref:`Jinja templating <concepts:jinja-templating>` with
 parameters which allows you to dynamically determine values. The result is saved to :ref:`XCom <concepts:xcom>`, which allows it
 to be used by other operators.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_list_instances_result]
@@ -221,7 +217,7 @@ Update instance
 Update a instance is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreUpdateInstanceOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_update_instance]
@@ -240,7 +236,7 @@ Scale instance
 Scale a instance is performed with the
 :class:`~airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreScaleInstanceOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_cloud_memorystore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/cloud_memorystore/example_cloud_memorystore_redis.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_scale_instance]

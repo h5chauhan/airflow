@@ -15,14 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
+import datetime
 import logging
 import socket
 import string
-import textwrap
 import time
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, TypeVar, cast
 
 from airflow.configuration import conf
 from airflow.exceptions import AirflowConfigException, InvalidStatsNameException
@@ -45,7 +46,7 @@ class TimerProtocol(Protocol):
         ...
 
     def stop(self, send=True):
-        """Stop, and (by default) submit the timer to statsd"""
+        """Stop, and (by default) submit the timer to StatsD"""
         ...
 
 
@@ -65,7 +66,7 @@ class StatsLogger(Protocol):
         """Gauge stat"""
 
     @classmethod
-    def timing(cls, stat: str, dt) -> None:
+    def timing(cls, stat: str, dt: float | datetime.timedelta) -> None:
         """Stats timing"""
 
     @classmethod
@@ -75,7 +76,7 @@ class StatsLogger(Protocol):
 
 class Timer:
     """
-    Timer that records duration, and optional sends to statsd backend.
+    Timer that records duration, and optional sends to StatsD backend.
 
     This class lets us have an accurate timer with the logic in one place (so
     that we don't use datetime math for duration -- it is error prone).
@@ -125,8 +126,8 @@ class Timer:
     # pystatsd and dogstatsd both have a timer class, but present different API
     # so we can't use this as a mixin on those, instead this class is contains the "real" timer
 
-    _start_time: Optional[int]
-    duration: Optional[int]
+    _start_time: int | None
+    duration: int | None
 
     def __init__(self, real_timer=None):
         self.real_timer = real_timer
@@ -182,31 +183,18 @@ ALLOWED_CHARACTERS = set(string.ascii_letters + string.digits + '_.-')
 
 
 def stat_name_default_handler(stat_name, max_length=250) -> str:
-    """A function that validate the statsd stat name, apply changes to the stat name
+    """A function that validate the StatsD stat name, apply changes to the stat name
     if necessary and return the transformed stat name.
     """
     if not isinstance(stat_name, str):
         raise InvalidStatsNameException('The stat_name has to be a string')
     if len(stat_name) > max_length:
         raise InvalidStatsNameException(
-            textwrap.dedent(
-                """\
-            The stat_name ({stat_name}) has to be less than {max_length} characters.
-        """.format(
-                    stat_name=stat_name, max_length=max_length
-                )
-            )
+            f"The stat_name ({stat_name}) has to be less than {max_length} characters."
         )
     if not all((c in ALLOWED_CHARACTERS) for c in stat_name):
         raise InvalidStatsNameException(
-            textwrap.dedent(
-                """\
-            The stat name ({stat_name}) has to be composed with characters in
-            {allowed_characters}.
-            """.format(
-                    stat_name=stat_name, allowed_characters=ALLOWED_CHARACTERS
-                )
-            )
+            f"The stat name ({stat_name}) has to be composed with characters in {ALLOWED_CHARACTERS}."
         )
     return stat_name
 
@@ -257,7 +245,7 @@ class AllowListValidator:
 
 
 class SafeStatsdLogger:
-    """Statsd Logger"""
+    """StatsD Logger"""
 
     def __init__(self, statsd_client, allow_list_validator=AllowListValidator()):
         self.statsd = statsd_client
@@ -331,10 +319,12 @@ class SafeDogStatsdLogger:
         return None
 
     @validate_stat
-    def timing(self, stat, dt, tags=None):
+    def timing(self, stat, dt: float | datetime.timedelta, tags: list[str] | None = None):
         """Stats timing"""
         if self.allow_list_validator.test(stat):
             tags = tags or []
+            if isinstance(dt, datetime.timedelta):
+                dt = dt.total_seconds()
             return self.dogstatsd.timing(metric=stat, value=dt, tags=tags)
         return None
 
@@ -349,7 +339,7 @@ class SafeDogStatsdLogger:
 
 class _Stats(type):
     factory = None
-    instance: Optional[StatsLogger] = None
+    instance: StatsLogger | None = None
 
     def __getattr__(cls, name):
         if not cls.instance:
@@ -373,7 +363,7 @@ class _Stats(type):
 
     @classmethod
     def get_statsd_logger(cls):
-        """Returns logger for statsd"""
+        """Returns logger for StatsD"""
         # no need to check for the scheduler/statsd_on -> this method is only called when it is set
         # and previously it would crash with None is callable if it was called without it.
         from statsd import StatsClient
@@ -383,11 +373,11 @@ class _Stats(type):
         if stats_class:
             if not issubclass(stats_class, StatsClient):
                 raise AirflowConfigException(
-                    "Your custom Statsd client must extend the statsd.StatsClient in order to ensure "
+                    "Your custom StatsD client must extend the statsd.StatsClient in order to ensure "
                     "backwards compatibility."
                 )
             else:
-                log.info("Successfully loaded custom Statsd client")
+                log.info("Successfully loaded custom StatsD client")
 
         else:
             stats_class = StatsClient
@@ -402,7 +392,7 @@ class _Stats(type):
 
     @classmethod
     def get_dogstatsd_logger(cls):
-        """Get DataDog statsd logger"""
+        """Get DataDog StatsD logger"""
         from datadog import DogStatsd
 
         dogstatsd = DogStatsd(

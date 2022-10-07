@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import io
 import unittest
 from unittest import mock
@@ -111,14 +113,28 @@ class TestFTPHook(unittest.TestCase):
         _buffer = io.StringIO('buffer')
         with fh.FTPHook() as ftp_hook:
             ftp_hook.retrieve_file(self.path, _buffer)
-        self.conn_mock.retrbinary.assert_called_once_with('RETR path', _buffer.write)
+        self.conn_mock.retrbinary.assert_called_once_with('RETR path', _buffer.write, 8192)
 
     def test_retrieve_file_with_callback(self):
         func = mock.Mock()
         _buffer = io.StringIO('buffer')
         with fh.FTPHook() as ftp_hook:
             ftp_hook.retrieve_file(self.path, _buffer, callback=func)
-        self.conn_mock.retrbinary.assert_called_once_with('RETR path', func)
+        self.conn_mock.retrbinary.assert_called_once_with('RETR path', func, 8192)
+
+    def test_connection_success(self):
+        with fh.FTPHook() as ftp_hook:
+            status, msg = ftp_hook.test_connection()
+            assert status is True
+            assert msg == 'Connection successfully tested'
+
+    def test_connection_failure(self):
+        self.conn_mock = mock.MagicMock(name='conn_mock', side_effect=Exception('Test'))
+        fh.FTPHook.get_conn = self.conn_mock
+        with fh.FTPHook() as ftp_hook:
+            status, msg = ftp_hook.test_connection()
+            assert status is False
+            assert msg == 'Test'
 
 
 class TestIntegrationFTPHook(unittest.TestCase):

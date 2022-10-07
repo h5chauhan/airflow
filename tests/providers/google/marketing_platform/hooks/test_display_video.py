@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 from unittest import TestCase, mock
 
 from airflow.providers.google.marketing_platform.hooks.display_video import GoogleDisplayVideo360Hook
@@ -367,5 +369,5 @@ class TestGoogleDisplayVideo360Hook(TestCase):
 
         self.hook.download_media(resource_name=resource_name)
         get_conn_to_display_video.return_value.media.return_value.download_media.assert_called_once_with(
-            resource_name=resource_name
+            resourceName=resource_name
         )

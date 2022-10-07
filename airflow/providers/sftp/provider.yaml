@@ -22,6 +22,18 @@ description: |
     `SSH File Transfer Protocol (SFTP) <https://tools.ietf.org/wg/secsh/draft-ietf-secsh-filexfer/>`__
 
 versions:
+  - 4.1.0
+  - 4.0.0
+  - 3.0.0
+  - 2.6.0
+  - 2.5.2
+  - 2.5.1
+  - 2.5.0
+  - 2.4.1
+  - 2.4.0
+  - 2.3.0
+  - 2.2.0
+  - 2.1.1
   - 2.1.0
   - 2.0.0
   - 1.2.0
@@ -29,8 +41,8 @@ versions:
   - 1.1.0
   - 1.0.0
 
-additional-dependencies:
-  - apache-airflow>=2.1.0
+dependencies:
+  - apache-airflow>=2.2.0
   - apache-airflow-providers-ssh>=2.1.0
 
 integrations:
@@ -54,5 +66,7 @@ hooks:
     python-modules:
       - airflow.providers.sftp.hooks.sftp
 
-hook-class-names:
-  - airflow.providers.sftp.hooks.sftp.SFTPHook
+
+connection-types:
+  - hook-class-name: airflow.providers.sftp.hooks.sftp.SFTPHook
+    connection-type: sftp

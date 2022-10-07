@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 ---
-version: "2.2"
+version: "3.7"
 services:
   mongo:
     image: mongo:3
@@ -27,7 +27,7 @@ services:
       interval: 5s
       timeout: 30s
       retries: 50
-    restart: always
+    restart: "on-failure"
 
   airflow:
     environment:

@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
 from datetime import datetime as dt
@@ -90,7 +91,7 @@ class DateTimeWithTimezoneField(Field):
 class DateTimeForm(FlaskForm):
     """Date filter form needed for task views"""
 
-    execution_date = DateTimeWithTimezoneField("Execution date", widget=AirflowDateTimePickerWidget())
+    execution_date = DateTimeWithTimezoneField("Logical date", widget=AirflowDateTimePickerWidget())
 
 
 class DateTimeWithNumRunsForm(FlaskForm):
@@ -133,13 +134,13 @@ class DagRunEditForm(DynamicForm):
     run_id = StringField(lazy_gettext('Run Id'), widget=BS3TextFieldROWidget())
     state = StringField(lazy_gettext('State'), widget=BS3TextFieldROWidget())
     execution_date = DateTimeWithTimezoneField(
-        lazy_gettext('Execution Date'),
+        lazy_gettext('Logical Date'),
         widget=AirflowDateTimePickerROWidget(),
     )
     conf = TextAreaField(lazy_gettext('Conf'), widget=BS3TextAreaROWidget())
 
     def populate_obj(self, item):
-        """Populates the attributes of the passed obj with data from the form’s fields."""
+        """Populates the attributes of the passed obj with data from the form's fields."""
         super().populate_obj(item)
         item.run_type = DagRunType.from_run_id(item.run_id)
         if item.conf:
@@ -167,7 +168,7 @@ class TaskInstanceEditForm(DynamicForm):
         validators=[InputRequired()],
     )
     execution_date = DateTimeWithTimezoneField(
-        lazy_gettext('Execution Date'),
+        lazy_gettext('Logical Date'),
         widget=AirflowDateTimePickerROWidget(),
         validators=[InputRequired()],
     )
@@ -176,7 +177,9 @@ class TaskInstanceEditForm(DynamicForm):
 class ConnectionForm(DynamicForm):
     """Form for editing and adding Connection"""
 
-    conn_id = StringField(lazy_gettext('Conn Id'), validators=[InputRequired()], widget=BS3TextFieldWidget())
+    conn_id = StringField(
+        lazy_gettext('Connection Id'), validators=[InputRequired()], widget=BS3TextFieldWidget()
+    )
     description = StringField(lazy_gettext('Description'), widget=BS3TextAreaFieldWidget())
     host = StringField(lazy_gettext('Host'), widget=BS3TextFieldWidget())
     schema = StringField(lazy_gettext('Schema'), widget=BS3TextFieldWidget())

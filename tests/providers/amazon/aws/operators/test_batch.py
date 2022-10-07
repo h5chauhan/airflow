@@ -15,8 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
-
+from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -24,8 +23,8 @@ from unittest import mock
 import pytest
 
 from airflow.exceptions import AirflowException
-from airflow.providers.amazon.aws.hooks.batch_client import AwsBatchClientHook
-from airflow.providers.amazon.aws.operators.batch import AwsBatchOperator
+from airflow.providers.amazon.aws.hooks.batch_client import BatchClientHook
+from airflow.providers.amazon.aws.operators.batch import BatchCreateComputeEnvironmentOperator, BatchOperator
 
 # Use dummy AWS credentials
 AWS_REGION = "eu-west-1"
@@ -41,7 +40,7 @@ RESPONSE_WITHOUT_FAILURES = {
 }
 
 
-class TestAwsBatchOperator(unittest.TestCase):
+class TestBatchOperator(unittest.TestCase):
 
     MAX_RETRIES = 2
     STATUS_RETRIES = 3
@@ -52,7 +51,7 @@ class TestAwsBatchOperator(unittest.TestCase):
     @mock.patch("airflow.providers.amazon.aws.hooks.batch_client.AwsBaseHook.get_client_type")
     def setUp(self, get_client_type_mock):
         self.get_client_type_mock = get_client_type_mock
-        self.batch = AwsBatchOperator(
+        self.batch = BatchOperator(
             task_id="task",
             job_name=JOB_NAME,
             job_queue="queue",
@@ -67,6 +66,9 @@ class TestAwsBatchOperator(unittest.TestCase):
             tags={},
         )
         self.client_mock = self.get_client_type_mock.return_value
+        # We're mocking all actual AWS calls and don't need a connection. This
+        # avoids an Airflow warning about connection cannot be found.
+        self.batch.hook.get_connection = lambda _: None
         assert self.batch.hook.client == self.client_mock  # setup client property
 
         # don't pause in unit tests
@@ -78,6 +80,8 @@ class TestAwsBatchOperator(unittest.TestCase):
         # Assign a job ID for most tests, so they don't depend on a job submission.
         assert self.batch.job_id is None
         self.batch.job_id = JOB_ID
+
+        self.mock_context = mock.MagicMock()
 
     def test_init(self):
         assert self.batch.job_id == JOB_ID
@@ -94,25 +98,34 @@ class TestAwsBatchOperator(unittest.TestCase):
         assert self.batch.hook.aws_conn_id == "airflow_test"
         assert self.batch.hook.client == self.client_mock
         assert self.batch.tags == {}
+        assert self.batch.wait_for_completion is True
 
-        self.get_client_type_mock.assert_called_once_with("batch", region_name="eu-west-1")
+        self.get_client_type_mock.assert_called_once_with(region_name="eu-west-1")
 
     def test_template_fields_overrides(self):
         assert self.batch.template_fields == (
+            "job_id",
             "job_name",
+            "job_definition",
+            "job_queue",
             "overrides",
+            "array_properties",
             "parameters",
+            "waiters",
+            "tags",
+            "wait_for_completion",
         )
 
-    @mock.patch.object(AwsBatchClientHook, "wait_for_job")
-    @mock.patch.object(AwsBatchClientHook, "check_job_success")
-    def test_execute_without_failures(self, check_mock, wait_mock):
+    @mock.patch.object(BatchClientHook, "get_job_description")
+    @mock.patch.object(BatchClientHook, "wait_for_job")
+    @mock.patch.object(BatchClientHook, "check_job_success")
+    def test_execute_without_failures(self, check_mock, wait_mock, job_description_mock):
         # JOB_ID is in RESPONSE_WITHOUT_FAILURES
         self.client_mock.submit_job.return_value = RESPONSE_WITHOUT_FAILURES
         self.batch.job_id = None
         self.batch.waiters = None  # use default wait
 
-        self.batch.execute(None)
+        self.batch.execute(self.mock_context)
 
         self.client_mock.submit_job.assert_called_once_with(
             jobQueue="queue",
@@ -128,11 +141,15 @@ class TestAwsBatchOperator(unittest.TestCase):
         wait_mock.assert_called_once_with(JOB_ID)
         check_mock.assert_called_once_with(JOB_ID)
 
+        # First Call: Retrieve Batch Queue and Job Definition
+        # Second Call: Retrieve CloudWatch information
+        assert job_description_mock.call_count == 2
+
     def test_execute_with_failures(self):
-        self.client_mock.submit_job.return_value = ""
+        self.client_mock.submit_job.side_effect = Exception()
 
         with pytest.raises(AirflowException):
-            self.batch.execute(None)
+            self.batch.execute(self.mock_context)
 
         self.client_mock.submit_job.assert_called_once_with(
             jobQueue="queue",
@@ -144,19 +161,54 @@ class TestAwsBatchOperator(unittest.TestCase):
             tags={},
         )
 
-    @mock.patch.object(AwsBatchClientHook, "check_job_success")
+    @mock.patch.object(BatchClientHook, "check_job_success")
     def test_wait_job_complete_using_waiters(self, check_mock):
         mock_waiters = mock.Mock()
         self.batch.waiters = mock_waiters
 
         self.client_mock.submit_job.return_value = RESPONSE_WITHOUT_FAILURES
         self.client_mock.describe_jobs.return_value = {"jobs": [{"jobId": JOB_ID, "status": "SUCCEEDED"}]}
-        self.batch.execute(None)
+        self.batch.execute(self.mock_context)
 
         mock_waiters.wait_for_job.assert_called_once_with(JOB_ID)
         check_mock.assert_called_once_with(JOB_ID)
+
+    @mock.patch.object(BatchClientHook, "check_job_success")
+    def test_do_not_wait_job_complete(self, check_mock):
+        self.batch.wait_for_completion = False
+
+        self.client_mock.submit_job.return_value = RESPONSE_WITHOUT_FAILURES
+        self.batch.execute(self.mock_context)
+
+        check_mock.assert_not_called()
 
     def test_kill_job(self):
         self.client_mock.terminate_job.return_value = {}
         self.batch.on_kill()
         self.client_mock.terminate_job.assert_called_once_with(jobId=JOB_ID, reason="Task killed by the user")
+
+
+class TestBatchCreateComputeEnvironmentOperator(unittest.TestCase):
+    @mock.patch.object(BatchClientHook, 'client')
+    def test_execute(self, mock_conn):
+        environment_name = 'environment_name'
+        environment_type = 'environment_type'
+        environment_state = 'environment_state'
+        compute_resources = {}
+        tags = {}
+        operator = BatchCreateComputeEnvironmentOperator(
+            task_id='task',
+            compute_environment_name=environment_name,
+            environment_type=environment_type,
+            state=environment_state,
+            compute_resources=compute_resources,
+            tags=tags,
+        )
+        operator.execute(None)
+        mock_conn.create_compute_environment.assert_called_once_with(
+            computeEnvironmentName=environment_name,
+            type=environment_type,
+            state=environment_state,
+            computeResources=compute_resources,
+            tags=tags,
+        )

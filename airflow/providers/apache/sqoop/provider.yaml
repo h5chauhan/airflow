@@ -19,21 +19,29 @@
 package-name: apache-airflow-providers-apache-sqoop
 name: Apache Sqoop
 description: |
-    `Apache Sqoop <https://sqoop.apache.org/>`__
+  `Apache Sqoop <https://sqoop.apache.org/>`__
 
 versions:
+  - 3.0.0
+  - 2.1.3
+  - 2.1.2
+  - 2.1.1
+  - 2.1.0
+  - 2.0.2
   - 2.0.1
   - 2.0.0
   - 1.0.1
   - 1.0.0
 
-additional-dependencies:
-  - apache-airflow>=2.1.0
+dependencies:
+  - apache-airflow>=2.2.0
 
 integrations:
   - integration-name: Apache Sqoop
     external-doc-url: https://sqoop.apache.org/
     logo: /integration-logos/apache/sqoop.png
+    how-to-guide:
+      - /docs/apache-airflow-providers-apache-sqoop/operators.rst
     tags: [apache]
 
 operators:
@@ -46,5 +54,7 @@ hooks:
     python-modules:
       - airflow.providers.apache.sqoop.hooks.sqoop
 
-hook-class-names:
-  - airflow.providers.apache.sqoop.hooks.sqoop.SqoopHook
+
+connection-types:
+  - hook-class-name: airflow.providers.apache.sqoop.hooks.sqoop.SqoopHook
+    connection-type: sqoop

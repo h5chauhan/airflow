@@ -15,29 +15,21 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
 import re
 import unittest
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from airflow import PY39
 from airflow.providers.apache.hive.transfers.hive_to_mysql import HiveToMySqlOperator
 from airflow.utils import timezone
 from airflow.utils.operator_helpers import context_to_airflow_vars
-from tests.providers.apache.hive import TestHiveEnvironment
-from tests.test_utils.mock_hooks import MockHiveServer2Hook, MockMySqlHook
+from tests.providers.apache.hive import MockHiveServer2Hook, MockMySqlHook, TestHiveEnvironment
 
 DEFAULT_DATE = timezone.datetime(2015, 1, 1)
 
 
-@pytest.mark.skipif(
-    PY39,
-    reason="Hive does not run on Python 3.9 because it brings SASL via thrift-sasl."
-    " This could be removed when https://github.com/dropbox/PyHive/issues/380"
-    " is solved",
-)
 class TestHiveToMySqlTransfer(TestHiveEnvironment):
     def setUp(self):
         self.kwargs = dict(
@@ -55,7 +47,7 @@ class TestHiveToMySqlTransfer(TestHiveEnvironment):
         HiveToMySqlOperator(**self.kwargs).execute(context={})
 
         mock_hive_hook.assert_called_once_with(hiveserver2_conn_id=self.kwargs['hiveserver2_conn_id'])
-        mock_hive_hook.return_value.get_records.assert_called_once_with('sql', hive_conf={})
+        mock_hive_hook.return_value.get_records.assert_called_once_with('sql', parameters={})
         mock_mysql_hook.assert_called_once_with(mysql_conn_id=self.kwargs['mysql_conn_id'])
         mock_mysql_hook.return_value.insert_rows.assert_called_once_with(
             table=self.kwargs['mysql_table'], rows=mock_hive_hook.return_value.get_records.return_value
@@ -122,7 +114,7 @@ class TestHiveToMySqlTransfer(TestHiveEnvironment):
             hive_conf = context_to_airflow_vars(context)
             hive_conf.update(self.kwargs['hive_conf'])
 
-        mock_hive_hook.get_records.assert_called_once_with(self.kwargs['sql'], hive_conf=hive_conf)
+        mock_hive_hook.get_records.assert_called_once_with(self.kwargs['sql'], parameters=hive_conf)
 
     @unittest.skipIf(
         'AIRFLOW_RUNALL_TESTS' not in os.environ, "Skipped because AIRFLOW_RUNALL_TESTS is not set"

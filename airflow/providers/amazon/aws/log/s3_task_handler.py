@@ -15,14 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
+import pathlib
 
-try:
-    from functools import cached_property
-except ImportError:
-    from cached_property import cached_property
-
+from airflow.compat.functools import cached_property
 from airflow.configuration import conf
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.log.file_task_handler import FileTaskHandler
 from airflow.utils.log.logging_mixin import LoggingMixin
 
@@ -34,7 +34,7 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
     uploads to and reads from S3 remote storage.
     """
 
-    def __init__(self, base_log_folder: str, s3_log_folder: str, filename_template: str):
+    def __init__(self, base_log_folder: str, s3_log_folder: str, filename_template: str | None = None):
         super().__init__(base_log_folder, filename_template)
         self.remote_base = s3_log_folder
         self.log_relative_path = ''
@@ -45,20 +45,9 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
     @cached_property
     def hook(self):
         """Returns S3Hook."""
-        remote_conn_id = conf.get('logging', 'REMOTE_LOG_CONN_ID')
-        try:
-            from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-
-            return S3Hook(remote_conn_id, transfer_config_args={"use_threads": False})
-        except Exception as e:
-            self.log.exception(
-                'Could not create an S3Hook with connection id "%s". '
-                'Please make sure that apache-airflow[aws] is installed and '
-                'the S3 connection exists. Exception : "%s"',
-                remote_conn_id,
-                e,
-            )
-            return None
+        return S3Hook(
+            aws_conn_id=conf.get('logging', 'REMOTE_LOG_CONN_ID'), transfer_config_args={"use_threads": False}
+        )
 
     def set_context(self, ti):
         super().set_context(ti)
@@ -91,8 +80,7 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
         remote_loc = os.path.join(self.remote_base, self.log_relative_path)
         if os.path.exists(local_loc):
             # read log and remove old logs to get just the latest additions
-            with open(local_loc) as logfile:
-                log = logfile.read()
+            log = pathlib.Path(local_loc).read_text()
             self.s3_write(log, remote_loc)
 
         # Mark closed so we don't double write if close is called twice
@@ -132,7 +120,7 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
             return log, {'end_of_log': True}
         else:
             log += '*** Falling back to local log\n'
-            local_log, metadata = super()._read(ti, try_number)
+            local_log, metadata = super()._read(ti, try_number, metadata)
             return log + local_log, metadata
 
     def s3_log_exists(self, remote_log_location: str) -> bool:
@@ -140,7 +128,6 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
         Check if remote_log_location exists in remote storage
 
         :param remote_log_location: log's location in remote storage
-        :type remote_log_location: str
         :return: True if location exists else False
         """
         return self.hook.check_for_key(remote_log_location)
@@ -151,10 +138,8 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
         logs are found or there is an error.
 
         :param remote_log_location: the log's location in remote storage
-        :type remote_log_location: str (path)
         :param return_error: if True, returns a string error message if an
             error occurs. Otherwise returns '' when an error occurs.
-        :type return_error: bool
         :return: the log found at the remote_log_location
         """
         try:
@@ -167,18 +152,16 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
                 return msg
         return ''
 
-    def s3_write(self, log: str, remote_log_location: str, append: bool = True):
+    def s3_write(self, log: str, remote_log_location: str, append: bool = True, max_retry: int = 1):
         """
         Writes the log to the remote_log_location. Fails silently if no hook
         was created.
 
         :param log: the log to write to the remote_log_location
-        :type log: str
         :param remote_log_location: the log's location in remote storage
-        :type remote_log_location: str (path)
         :param append: if False, any existing log file is overwritten. If True,
             the new log is appended to any existing logs.
-        :type append: bool
+        :param max_retry: Maximum number of times to retry on upload failure
         """
         try:
             if append and self.s3_log_exists(remote_log_location):
@@ -187,12 +170,20 @@ class S3TaskHandler(FileTaskHandler, LoggingMixin):
         except Exception:
             self.log.exception('Could not verify previous log to append')
 
-        try:
-            self.hook.load_string(
-                log,
-                key=remote_log_location,
-                replace=True,
-                encrypt=conf.getboolean('logging', 'ENCRYPT_S3_LOGS'),
-            )
-        except Exception:
-            self.log.exception('Could not write logs to %s', remote_log_location)
+        # Default to a single retry attempt because s3 upload failures are
+        # rare but occasionally occur.  Multiple retry attempts are unlikely
+        # to help as they usually indicate non-empheral errors.
+        for try_num in range(1 + max_retry):
+            try:
+                self.hook.load_string(
+                    log,
+                    key=remote_log_location,
+                    replace=True,
+                    encrypt=conf.getboolean('logging', 'ENCRYPT_S3_LOGS'),
+                )
+                break
+            except Exception:
+                if try_num < max_retry:
+                    self.log.warning('Failed attempt to write logs to %s, will retry', remote_log_location)
+                else:
+                    self.log.exception('Could not write logs to %s', remote_log_location)

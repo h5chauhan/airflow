@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 from datetime import datetime
 from unittest import TestCase, mock
@@ -24,7 +25,7 @@ from freezegun import freeze_time
 from parameterized import parameterized
 
 from airflow.models.dag import DAG, AirflowException
-from airflow.providers.amazon.aws.sensors.s3_keys_unchanged import S3KeysUnchangedSensor
+from airflow.providers.amazon.aws.sensors.s3 import S3KeysUnchangedSensor
 
 TEST_DAG_ID = 'unit_tests_aws_sensor'
 DEFAULT_DATE = datetime(2015, 1, 1)
@@ -32,13 +33,7 @@ DEFAULT_DATE = datetime(2015, 1, 1)
 
 class TestS3KeysUnchangedSensor(TestCase):
     def setUp(self):
-        args = {
-            'owner': 'airflow',
-            'start_date': DEFAULT_DATE,
-        }
-        dag = DAG(TEST_DAG_ID + 'test_schedule_dag_once', default_args=args)
-        dag.schedule_interval = '@once'
-        self.dag = dag
+        self.dag = DAG(f'{TEST_DAG_ID}test_schedule_dag_once', start_date=DEFAULT_DATE, schedule="@once")
 
         self.sensor = S3KeysUnchangedSensor(
             task_id='sensor_1',
@@ -103,7 +98,7 @@ class TestS3KeysUnchangedSensor(TestCase):
         assert self.sensor.inactivity_seconds == inactivity_periods[2]
 
     @freeze_time(DEFAULT_DATE, auto_tick_seconds=10)
-    @mock.patch('airflow.providers.amazon.aws.sensors.s3_keys_unchanged.S3Hook')
+    @mock.patch('airflow.providers.amazon.aws.sensors.s3.S3Hook')
     def test_poke_succeeds_on_upload_complete(self, mock_hook):
         mock_hook.return_value.list_keys.return_value = {'a'}
         assert not self.sensor.poke(dict())

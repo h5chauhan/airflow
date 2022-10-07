@@ -16,17 +16,15 @@
 # specific language governing permissions and limitations
 # under the License.
 """Celery command"""
+from __future__ import annotations
 
 from multiprocessing import Process
-from typing import Optional
 
 import daemon
 import psutil
 import sqlalchemy.exc
-from celery import maybe_patch_concurrency
-from celery.bin import worker as worker_bin
+from celery import maybe_patch_concurrency  # type: ignore[attr-defined]
 from daemon.pidfile import TimeoutPIDLockFile
-from flower.command import FlowerCommand
 from lockfile.pidlockfile import read_pid_from_pidfile, remove_existing_pidfile
 
 from airflow import settings
@@ -39,10 +37,11 @@ from airflow.utils.serve_logs import serve_logs
 WORKER_PROCESS_NAME = "worker"
 
 
-@cli_utils.action_logging
+@cli_utils.action_cli
 def flower(args):
     """Starts Flower, Celery monitoring tool"""
     options = [
+        "flower",
         conf.get('celery', 'BROKER_URL'),
         f"--address={args.hostname}",
         f"--port={args.port}",
@@ -60,8 +59,6 @@ def flower(args):
     if args.flower_conf:
         options.append(f"--conf={args.flower_conf}")
 
-    flower_cmd = FlowerCommand()
-
     if args.daemon:
         pidfile, stdout, stderr, _ = setup_locations(
             process="flower",
@@ -70,19 +67,23 @@ def flower(args):
             stderr=args.stderr,
             log=args.log_file,
         )
-        with open(stdout, "w+") as stdout, open(stderr, "w+") as stderr:
+        with open(stdout, "a") as stdout, open(stderr, "a") as stderr:
+            stdout.truncate(0)
+            stderr.truncate(0)
+
             ctx = daemon.DaemonContext(
                 pidfile=TimeoutPIDLockFile(pidfile, -1),
                 stdout=stdout,
                 stderr=stderr,
+                umask=int(settings.DAEMON_UMASK, 8),
             )
             with ctx:
-                flower_cmd.execute_from_commandline(argv=options)
+                celery_app.start(options)
     else:
-        flower_cmd.execute_from_commandline(argv=options)
+        celery_app.start(options)
 
 
-def _serve_logs(skip_serve_logs: bool = False) -> Optional[Process]:
+def _serve_logs(skip_serve_logs: bool = False) -> Process | None:
     """Starts serve_logs sub-process"""
     if skip_serve_logs is False:
         sub_proc = Process(target=serve_logs)
@@ -91,9 +92,20 @@ def _serve_logs(skip_serve_logs: bool = False) -> Optional[Process]:
     return None
 
 
-@cli_utils.action_logging
+def _run_worker(options, skip_serve_logs):
+    sub_proc = _serve_logs(skip_serve_logs)
+    try:
+        celery_app.worker_main(options)
+    finally:
+        if sub_proc:
+            sub_proc.terminate()
+
+
+@cli_utils.action_cli
 def worker(args):
     """Starts Airflow Celery worker"""
+    # Disable connection pool so that celery worker does not hold an unnecessary db connection
+    settings.reconfigure_orm(disable_connection_pool=True)
     if not settings.validate_session():
         raise SystemExit("Worker exiting, database connection precheck failed.")
 
@@ -128,24 +140,36 @@ def worker(args):
             # it, we raced to create the tables and lost.
             pass
 
+    # backwards-compatible: https://github.com/apache/airflow/pull/21506#pullrequestreview-879893763
+    celery_log_level = conf.get('logging', 'CELERY_LOGGING_LEVEL')
+    if not celery_log_level:
+        celery_log_level = conf.get('logging', 'LOGGING_LEVEL')
     # Setup Celery worker
-    worker_instance = worker_bin.worker(app=celery_app)
-    options = {
-        'optimization': 'fair',
-        'O': 'fair',
-        'queues': args.queues,
-        'concurrency': args.concurrency,
-        'autoscale': autoscale,
-        'hostname': args.celery_hostname,
-        'loglevel': conf.get('logging', 'LOGGING_LEVEL'),
-        'pidfile': pid_file_path,
-        'without_mingle': args.without_mingle,
-        'without_gossip': args.without_gossip,
-    }
+    options = [
+        'worker',
+        '-O',
+        'fair',
+        '--queues',
+        args.queues,
+        '--concurrency',
+        args.concurrency,
+        '--hostname',
+        args.celery_hostname,
+        '--loglevel',
+        celery_log_level,
+        '--pidfile',
+        pid_file_path,
+    ]
+    if autoscale:
+        options.extend(['--autoscale', autoscale])
+    if args.without_mingle:
+        options.append('--without-mingle')
+    if args.without_gossip:
+        options.append('--without-gossip')
 
     if conf.has_option("celery", "pool"):
         pool = conf.get("celery", "pool")
-        options["pool"] = pool
+        options.extend(["--pool", pool])
         # Celery pools of type eventlet and gevent use greenlets, which
         # requires monkey patching the app:
         # https://eventlet.net/doc/patching.html#monkey-patch
@@ -157,9 +181,14 @@ def worker(args):
         # Run Celery worker as daemon
         handle = setup_logging(log_file)
 
-        with open(stdout, 'w+') as stdout_handle, open(stderr, 'w+') as stderr_handle:
+        with open(stdout, 'a') as stdout_handle, open(stderr, 'a') as stderr_handle:
             if args.umask:
                 umask = args.umask
+            else:
+                umask = conf.get('celery', 'worker_umask', fallback=settings.DAEMON_UMASK)
+
+            stdout_handle.truncate(0)
+            stderr_handle.truncate(0)
 
             ctx = daemon.DaemonContext(
                 files_preserve=[handle],
@@ -168,18 +197,13 @@ def worker(args):
                 stderr=stderr_handle,
             )
             with ctx:
-                sub_proc = _serve_logs(skip_serve_logs)
-                worker_instance.run(**options)
+                _run_worker(options=options, skip_serve_logs=skip_serve_logs)
     else:
         # Run Celery worker in the same process
-        sub_proc = _serve_logs(skip_serve_logs)
-        worker_instance.run(**options)
-
-    if sub_proc:
-        sub_proc.terminate()
+        _run_worker(options=options, skip_serve_logs=skip_serve_logs)
 
 
-@cli_utils.action_logging
+@cli_utils.action_cli
 def stop_worker(args):
     """Sends SIGTERM to Celery worker"""
     # Read PID from file

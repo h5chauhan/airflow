@@ -15,19 +15,20 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
+import contextlib
 import os
-import unittest
 from unittest import mock
-from unittest.mock import ANY
 
 import pytest
 from botocore.exceptions import ClientError
 
-from airflow.models import DAG, TaskInstance
-from airflow.operators.dummy import DummyOperator
+from airflow.models import DAG, DagRun, TaskInstance
+from airflow.operators.empty import EmptyOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.log.s3_task_handler import S3TaskHandler
+from airflow.utils.session import create_session
 from airflow.utils.state import State
 from airflow.utils.timezone import datetime
 from tests.test_utils.config import conf_vars
@@ -40,64 +41,60 @@ except ImportError:
     mock_s3 = None
 
 
-@unittest.skipIf(mock_s3 is None, "Skipping test because moto.mock_s3 is not available")
-@mock_s3
-class TestS3TaskHandler(unittest.TestCase):
+@pytest.fixture(autouse=True, scope="module")
+def s3mock():
+    with mock_s3():
+        yield
+
+
+@pytest.mark.skipif(mock_s3 is None, reason="Skipping test because moto.mock_s3 is not available")
+class TestS3TaskHandler:
     @conf_vars({('logging', 'remote_log_conn_id'): 'aws_default'})
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def setup(self, create_log_template, tmp_path_factory):
         self.remote_log_base = 's3://bucket/remote/log/location'
         self.remote_log_location = 's3://bucket/remote/log/location/1.log'
         self.remote_log_key = 'remote/log/location/1.log'
-        self.local_log_location = 'local/log/location'
-        self.filename_template = '{try_number}.log'
-        self.s3_task_handler = S3TaskHandler(
-            self.local_log_location, self.remote_log_base, self.filename_template
-        )
+        self.local_log_location = str(tmp_path_factory.mktemp("local-s3-log-location"))
+        create_log_template('{try_number}.log')
+        self.s3_task_handler = S3TaskHandler(self.local_log_location, self.remote_log_base)
         # Vivfy the hook now with the config override
         assert self.s3_task_handler.hook is not None
 
         date = datetime(2016, 1, 1)
-        self.dag = DAG('dag_for_testing_file_task_handler', start_date=date)
-        task = DummyOperator(task_id='task_for_testing_file_log_handler', dag=self.dag)
-        self.ti = TaskInstance(task=task, execution_date=date)
+        self.dag = DAG('dag_for_testing_s3_task_handler', start_date=date)
+        task = EmptyOperator(task_id='task_for_testing_s3_log_handler', dag=self.dag)
+        dag_run = DagRun(dag_id=self.dag.dag_id, execution_date=date, run_id="test", run_type="manual")
+        with create_session() as session:
+            session.add(dag_run)
+            session.commit()
+            session.refresh(dag_run)
+
+        self.ti = TaskInstance(task=task, run_id=dag_run.run_id)
+        self.ti.dag_run = dag_run
         self.ti.try_number = 1
         self.ti.state = State.RUNNING
-        self.addCleanup(self.dag.clear)
 
         self.conn = boto3.client('s3')
         # We need to create the bucket since this is all in Moto's 'virtual'
         # AWS account
-        moto.core.moto_api_backend.reset()
+        moto.moto_api._internal.models.moto_api_backend.reset()
         self.conn.create_bucket(Bucket="bucket")
 
-    def tearDown(self):
+        yield
+
+        self.dag.clear()
+
+        with create_session() as session:
+            session.query(DagRun).delete()
+
         if self.s3_task_handler.handler:
-            try:
+            with contextlib.suppress(Exception):
                 os.remove(self.s3_task_handler.handler.baseFilename)
-            except Exception:
-                pass
 
     def test_hook(self):
         assert isinstance(self.s3_task_handler.hook, S3Hook)
         assert self.s3_task_handler.hook.transfer_config.use_threads is False
-
-    @conf_vars({('logging', 'remote_log_conn_id'): 'aws_default'})
-    def test_hook_raises(self):
-        handler = S3TaskHandler(self.local_log_location, self.remote_log_base, self.filename_template)
-        with mock.patch.object(handler.log, 'error') as mock_error:
-            with mock.patch("airflow.providers.amazon.aws.hooks.s3.S3Hook") as mock_hook:
-                mock_hook.side_effect = Exception('Failed to connect')
-                # Initialize the hook
-                handler.hook
-
-            mock_error.assert_called_once_with(
-                'Could not create an S3Hook with connection id "%s". Please make '
-                'sure that apache-airflow[aws] is installed and the S3 connection exists. Exception : "%s"',
-                'aws_default',
-                ANY,
-                exc_info=True,
-            )
 
     def test_log_exists(self):
         self.conn.put_object(Bucket='bucket', Key=self.remote_log_key, Body=b'')
@@ -130,7 +127,7 @@ class TestS3TaskHandler(unittest.TestCase):
             self.s3_task_handler.set_context(self.ti)
 
         assert self.s3_task_handler.upload_on_close
-        mock_open.assert_called_once_with(os.path.abspath('local/log/location/1.log'), 'w')
+        mock_open.assert_called_once_with(os.path.join(self.local_log_location, '1.log'), 'w')
         mock_open().write.assert_not_called()
 
     def test_read(self):

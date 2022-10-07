@@ -15,10 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Dict, Iterable, Mapping, Optional, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
 
 from airflow.models import BaseOperator
 from airflow.providers.neo4j.hooks.neo4j import Neo4jHook
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class Neo4jOperator(BaseOperator):
@@ -31,30 +36,25 @@ class Neo4jOperator(BaseOperator):
 
     :param sql: the sql code to be executed. Can receive a str representing a
         sql statement
-    :type sql: str
     :param neo4j_conn_id: Reference to :ref:`Neo4j connection id <howto/connection:neo4j>`.
-    :type neo4j_conn_id: str
     """
+
+    template_fields: Sequence[str] = ('sql',)
 
     def __init__(
         self,
         *,
         sql: str,
         neo4j_conn_id: str = 'neo4j_default',
-        parameters: Optional[Union[Mapping, Iterable]] = None,
+        parameters: Iterable | Mapping | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.neo4j_conn_id = neo4j_conn_id
         self.sql = sql
         self.parameters = parameters
-        self.hook = None
 
-    def get_hook(self):
-        """Function to retrieve the Neo4j Hook."""
-        return Neo4jHook(conn_id=self.neo4j_conn_id)
-
-    def execute(self, context: Dict) -> None:
+    def execute(self, context: Context) -> None:
         self.log.info('Executing: %s', self.sql)
-        self.hook = self.get_hook()
-        self.hook.run(self.sql)
+        hook = Neo4jHook(conn_id=self.neo4j_conn_id)
+        hook.run(self.sql)

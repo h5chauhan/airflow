@@ -16,16 +16,21 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Apache Beam Hook."""
+from __future__ import annotations
+
 import json
+import os
 import select
 import shlex
+import shutil
 import subprocess
 import textwrap
 from tempfile import TemporaryDirectory
-from typing import Callable, List, Optional
+from typing import Callable
 
-from airflow.exceptions import AirflowException
+from airflow.exceptions import AirflowConfigException, AirflowException
 from airflow.hooks.base import BaseHook
+from airflow.providers.google.go_module_utils import init_module, install_dependencies
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.python_virtualenv import prepare_virtualenv
 
@@ -47,7 +52,7 @@ class BeamRunnerType:
     Twister2Runner = "Twister2Runner"
 
 
-def beam_options_to_args(options: dict) -> List[str]:
+def beam_options_to_args(options: dict) -> list[str]:
     """
     Returns a formatted pipeline options from a dictionary of arguments
 
@@ -56,14 +61,13 @@ def beam_options_to_args(options: dict) -> List[str]:
     apache_beam/options/pipeline_options.py#L230-L251
 
     :param options: Dictionary with options
-    :type options: dict
     :return: List of arguments
     :rtype: List[str]
     """
     if not options:
         return []
 
-    args: List[str] = []
+    args: list[str] = []
     for attr, value in options.items():
         if value is None or (isinstance(value, bool) and value):
             args.append(f"--{attr}")
@@ -79,24 +83,25 @@ class BeamCommandRunner(LoggingMixin):
     Class responsible for running pipeline command in subprocess
 
     :param cmd: Parts of the command to be run in subprocess
-    :type cmd: List[str]
     :param process_line_callback: Optional callback which can be used to process
         stdout and stderr to detect job id
-    :type process_line_callback: Optional[Callable[[str], None]]
+    :param working_directory: Working directory
     """
 
     def __init__(
         self,
-        cmd: List[str],
-        process_line_callback: Optional[Callable[[str], None]] = None,
+        cmd: list[str],
+        process_line_callback: Callable[[str], None] | None = None,
+        working_directory: str | None = None,
     ) -> None:
         super().__init__()
         self.log.info("Running command: %s", " ".join(shlex.quote(c) for c in cmd))
         self.process_line_callback = process_line_callback
-        self.job_id: Optional[str] = None
+        self.job_id: str | None = None
 
         self._proc = subprocess.Popen(
             cmd,
+            cwd=working_directory,
             shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -158,7 +163,6 @@ class BeamHook(BaseHook):
     keyword arguments rather than positional.
 
     :param runner: Runner type
-    :type runner: str
     """
 
     def __init__(
@@ -171,8 +175,9 @@ class BeamHook(BaseHook):
     def _start_pipeline(
         self,
         variables: dict,
-        command_prefix: List[str],
-        process_line_callback: Optional[Callable[[str], None]] = None,
+        command_prefix: list[str],
+        process_line_callback: Callable[[str], None] | None = None,
+        working_directory: str | None = None,
     ) -> None:
         cmd = command_prefix + [
             f"--runner={self.runner}",
@@ -182,6 +187,7 @@ class BeamHook(BaseHook):
         cmd_runner = BeamCommandRunner(
             cmd=cmd,
             process_line_callback=process_line_callback,
+            working_directory=working_directory,
         )
         cmd_runner.wait_for_done()
 
@@ -189,38 +195,34 @@ class BeamHook(BaseHook):
         self,
         variables: dict,
         py_file: str,
-        py_options: List[str],
+        py_options: list[str],
         py_interpreter: str = "python3",
-        py_requirements: Optional[List[str]] = None,
+        py_requirements: list[str] | None = None,
         py_system_site_packages: bool = False,
-        process_line_callback: Optional[Callable[[str], None]] = None,
+        process_line_callback: Callable[[str], None] | None = None,
     ):
         """
         Starts Apache Beam python pipeline.
 
         :param variables: Variables passed to the pipeline.
-        :type variables: Dict
+        :param py_file: Path to the python file to execute.
         :param py_options: Additional options.
-        :type py_options: List[str]
         :param py_interpreter: Python version of the Apache Beam pipeline.
             If None, this defaults to the python3.
             To track python versions supported by beam and related
             issues check: https://issues.apache.org/jira/browse/BEAM-1251
-        :type py_interpreter: str
         :param py_requirements: Additional python package(s) to install.
             If a value is passed to this parameter, a new virtual environment has been created with
             additional packages installed.
 
             You could also install the apache-beam package if it is not installed on your system or you want
             to use a different version.
-        :type py_requirements: List[str]
         :param py_system_site_packages: Whether to include system_site_packages in your virtualenv.
             See virtualenv documentation for more information.
 
             This option is only relevant if the ``py_requirements`` parameter is not None.
-        :type py_system_site_packages: bool
-        :param on_new_job_id_callback: Callback called when the job ID is known.
-        :type on_new_job_id_callback: callable
+        :param process_line_callback: (optional) Callback that can be used to process each line of
+            the stdout and stderr file descriptors.
         """
         if "labels" in variables:
             variables["labels"] = [f"{key}={value}" for key, value in variables["labels"].items()]
@@ -266,18 +268,17 @@ class BeamHook(BaseHook):
         self,
         variables: dict,
         jar: str,
-        job_class: Optional[str] = None,
-        process_line_callback: Optional[Callable[[str], None]] = None,
+        job_class: str | None = None,
+        process_line_callback: Callable[[str], None] | None = None,
     ) -> None:
         """
         Starts Apache Beam Java pipeline.
 
         :param variables: Variables passed to the job.
-        :type variables: dict
         :param jar: Name of the jar for the pipeline
-        :type job_class: str
         :param job_class: Name of the java class for the pipeline.
-        :type job_class: str
+        :param process_line_callback: (optional) Callback that can be used to process each line of
+            the stdout and stderr file descriptors.
         """
         if "labels" in variables:
             variables["labels"] = json.dumps(variables["labels"], separators=(",", ":"))
@@ -287,4 +288,49 @@ class BeamHook(BaseHook):
             variables=variables,
             command_prefix=command_prefix,
             process_line_callback=process_line_callback,
+        )
+
+    def start_go_pipeline(
+        self,
+        variables: dict,
+        go_file: str,
+        process_line_callback: Callable[[str], None] | None = None,
+        should_init_module: bool = False,
+    ) -> None:
+        """
+        Starts Apache Beam Go pipeline.
+
+        :param variables: Variables passed to the job.
+        :param go_file: Path to the Go file with your beam pipeline.
+        :param go_file:
+        :param process_line_callback: (optional) Callback that can be used to process each line of
+            the stdout and stderr file descriptors.
+        :param should_init_module: If False (default), will just execute a `go run` command. If True, will
+            init a module and dependencies with a ``go mod init`` and ``go mod tidy``, useful when pulling
+            source with GCSHook.
+        :return:
+        """
+        if shutil.which("go") is None:
+            raise AirflowConfigException(
+                "You need to have Go installed to run beam go pipeline. See https://go.dev/doc/install "
+                "installation guide. If you are running airflow in Docker see more info at "
+                "'https://airflow.apache.org/docs/docker-stack/recipes.html'."
+            )
+
+        if "labels" in variables:
+            variables["labels"] = json.dumps(variables["labels"], separators=(",", ":"))
+
+        working_directory = os.path.dirname(go_file)
+        basename = os.path.basename(go_file)
+
+        if should_init_module:
+            init_module("main", working_directory)
+            install_dependencies(working_directory)
+
+        command_prefix = ["go", "run", basename]
+        self._start_pipeline(
+            variables=variables,
+            command_prefix=command_prefix,
+            process_line_callback=process_line_callback,
+            working_directory=working_directory,
         )

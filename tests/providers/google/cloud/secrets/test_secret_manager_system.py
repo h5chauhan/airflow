@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import random
 import string
@@ -31,6 +32,7 @@ BACKEND_IMPORT_PATH = "airflow.providers.google.cloud.secrets.secret_manager.Clo
 @pytest.mark.credential_file(GCP_SECRET_MANAGER_KEY)
 class CloudSecretManagerBackendVariableSystemTest(GoogleSystemTest):
     def setUp(self) -> None:
+        super().setUp()
         self.unique_suffix = "".join(random.choices(string.ascii_lowercase, k=10))
         self.name = f"airflow-system-test-{self.unique_suffix}"
         self.secret_name = f"airflow-variables-{self.name}"
@@ -47,11 +49,13 @@ class CloudSecretManagerBackendVariableSystemTest(GoogleSystemTest):
     @provide_gcp_context(GCP_SECRET_MANAGER_KEY, project_id=GoogleSystemTest._project_id())
     def tearDown(self) -> None:
         subprocess.run(["gcloud", "secrets", "delete", self.secret_name, "--quiet"], check=False)
+        super().tearDown()
 
 
 @pytest.mark.credential_file(GCP_SECRET_MANAGER_KEY)
 class CloudSecretManagerBackendConnectionSystemTest(GoogleSystemTest):
     def setUp(self) -> None:
+        super().setUp()
         self.unique_suffix = "".join(random.choices(string.ascii_lowercase, k=10))
         self.name = f"airflow-system-test-{self.unique_suffix}"
         self.secret_name = f"airflow-connections-{self.name}"
@@ -69,3 +73,4 @@ class CloudSecretManagerBackendConnectionSystemTest(GoogleSystemTest):
     @provide_gcp_context(GCP_SECRET_MANAGER_KEY, project_id=GoogleSystemTest._project_id())
     def tearDown(self) -> None:
         subprocess.run(["gcloud", "secrets", "delete", self.secret_name, "--quiet"], check=False)
+        super().tearDown()

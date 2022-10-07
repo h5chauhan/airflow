@@ -14,33 +14,35 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import logging
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Iterator
+
+from sqlalchemy.orm.session import Session
 
 from airflow.compat.functools import cached_property
 from airflow.configuration import conf
-from airflow.models import TaskInstance
+from airflow.models.taskinstance import TaskInstance
 from airflow.utils.helpers import render_log_filename
 from airflow.utils.log.logging_mixin import ExternalLoggingMixin
+from airflow.utils.session import NEW_SESSION, provide_session
+from airflow.utils.state import State
 
 
 class TaskLogReader:
     """Task log reader"""
 
     def read_log_chunks(
-        self, ti: TaskInstance, try_number: Optional[int], metadata
-    ) -> Tuple[List[Tuple[Tuple[str, str]]], Dict[str, str]]:
+        self, ti: TaskInstance, try_number: int | None, metadata
+    ) -> tuple[list[tuple[tuple[str, str]]], dict[str, str]]:
         """
         Reads chunks of Task Instance logs.
 
         :param ti: The taskInstance
-        :type ti: TaskInstance
         :param try_number: If provided, logs for the given try will be returned.
             Otherwise, logs from all attempts are returned.
-        :type try_number: Optional[int]
         :param metadata: A dictionary containing information about how to read the task log
-        :type metadata: dict
         :rtype: Tuple[List[Tuple[Tuple[str, str]]], Dict[str, str]]
 
         The following is an example of how to use this method to read log:
@@ -58,16 +60,13 @@ class TaskLogReader:
         metadata = metadatas[0]
         return logs, metadata
 
-    def read_log_stream(self, ti: TaskInstance, try_number: Optional[int], metadata: dict) -> Iterator[str]:
+    def read_log_stream(self, ti: TaskInstance, try_number: int | None, metadata: dict) -> Iterator[str]:
         """
         Used to continuously read log to the end
 
         :param ti: The Task Instance
-        :type ti: TaskInstance
         :param try_number: the task try number
-        :type try_number: Optional[int]
         :param metadata: A dictionary containing information about how to read the task log
-        :type metadata: dict
         :rtype: Iterator[str]
         """
         if try_number is None:
@@ -79,10 +78,13 @@ class TaskLogReader:
             metadata.pop('end_of_log', None)
             metadata.pop('max_offset', None)
             metadata.pop('offset', None)
-            while 'end_of_log' not in metadata or not metadata['end_of_log']:
+            metadata.pop('log_pos', None)
+            while 'end_of_log' not in metadata or (
+                not metadata['end_of_log'] and ti.state not in State.running
+            ):
                 logs, metadata = self.read_log_chunks(ti, current_try_number, metadata)
                 for host, log in logs[0]:
-                    yield "\n".join([host, log]) + "\n"
+                    yield "\n".join([host or '', log]) + "\n"
 
     @cached_property
     def log_handler(self):
@@ -105,18 +107,25 @@ class TaskLogReader:
 
         return self.log_handler.supports_external_link
 
-    def render_log_filename(self, ti: TaskInstance, try_number: Optional[int] = None):
+    @provide_session
+    def render_log_filename(
+        self,
+        ti: TaskInstance,
+        try_number: int | None = None,
+        *,
+        session: Session = NEW_SESSION,
+    ):
         """
         Renders the log attachment filename
 
         :param ti: The task instance
-        :type ti: TaskInstance
         :param try_number: The task try number
-        :type try_number: Optional[int]
         :rtype: str
         """
-        filename_template = conf.get('logging', 'LOG_FILENAME_TEMPLATE')
+        dagrun = ti.get_dagrun(session=session)
         attachment_filename = render_log_filename(
-            ti=ti, try_number="all" if try_number is None else try_number, filename_template=filename_template
+            ti=ti,
+            try_number="all" if try_number is None else try_number,
+            filename_template=dagrun.get_log_template(session=session).filename,
         )
         return attachment_filename

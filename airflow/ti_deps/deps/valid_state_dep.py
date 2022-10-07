@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 from airflow.exceptions import AirflowException
 from airflow.ti_deps.deps.base_ti_dep import BaseTIDep
@@ -27,7 +28,6 @@ class ValidStateDep(BaseTIDep):
 
     :param valid_states: A list of valid states that a task instance can have to meet
         this dependency.
-    :type valid_states: set(str)
     :return: whether or not the task instance's state is valid
     """
 
@@ -57,7 +57,4 @@ class ValidStateDep(BaseTIDep):
             yield self._passing_status(reason=f"Task state {ti.state} was valid.")
             return
 
-        yield self._failing_status(
-            reason="Task is in the '{}' state which is not a valid state for "
-            "execution. The task must be cleared in order to be run.".format(ti.state)
-        )
+        yield self._failing_status(reason=f"Task is in the '{ti.state}' state.")

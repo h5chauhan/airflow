@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import pytest
 
@@ -44,4 +45,8 @@ class TestSession:
 
     def test_session_not_created_on_api_request(self):
         self.client.get("api/v1/dags", environ_overrides={'REMOTE_USER': "test"})
+        assert all(cookie.name != "session" for cookie in self.client.cookie_jar)
+
+    def test_session_not_created_on_health_endpoint_request(self):
+        self.client.get("health")
         assert all(cookie.name != "session" for cookie in self.client.cookie_jar)

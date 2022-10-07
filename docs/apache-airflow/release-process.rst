@@ -15,9 +15,9 @@
     specific language governing permissions and limitations
     under the License.
 
-=========================
-Airflow's release process
-=========================
+============================================
+Airflow's release process and version policy
+============================================
 
 Since Airflow 2.0.0 and provider packages 1.0.0 we aim to follow SemVer, meaning the release numbering works as follows:
 
@@ -25,7 +25,7 @@ Since Airflow 2.0.0 and provider packages 1.0.0 we aim to follow SemVer, meaning
 - X is the major version number.
 - Y is the minor version number, also called the *feature release* version number.
 - Z is the patch number, which is incremented for bugfix and security releases.
-  Before every new release, we’ll make a release candidate available, and often alpha or beta release too.
+  Before every new release, we'll make a release candidate available, and often alpha or beta release too.
   These are of the form X.Y.Z alpha/beta/rc N, which means the Nth alpha/beta/release candidate of version X.Y.Z
 
 In git, each minor version will have its own branch, called ``vX-Y-stable`` where bugfix/security releases will be issued from.
@@ -61,7 +61,7 @@ That is all SemVer is -- it's a statement of our intent as package authors, and 
       These releases will be 100% compatible with the associated feature release.
       So the answer to "should I upgrade to the latest patch release?" will always be "yes."
 
-      The only exception to the above with respect to 100% backwards compatibility is when a security or data loss issue can’t be fixed without breaking backwards-compatibility.
+      The only exception to the above with respect to 100% backwards compatibility is when a security or data loss issue can't be fixed without breaking backwards-compatibility.
       If this happens, the release notes will provide detailed upgrade instructions.
       **No new features will be added in patch releases**
 
@@ -81,3 +81,14 @@ So, for example, if we decided to start the deprecation of a function in Airflow
 * Airflow 3.0 (the major version that follows 2.2) will remove the feature outright
 
 The exception to this deprecation policy is any feature which is marked as "experimental", which *may* suffer breaking changes or complete removal in a Feature release.
+
+.. _experimental:
+
+Experimental features
+=====================
+
+From time-to-time a new feature will be added to Airflow that will be marked as experimental.
+
+Experimental features do not have any guarantees about deprecation, and *can* be changed in a breaking way between feature releases, or even removed entirely.
+
+We always aim to maintain compatibility even for experimental features, but make no promises. By having this "get out" it lets us build new features more quickly and get them in the hand of users without having to worry about making a feature perfect.

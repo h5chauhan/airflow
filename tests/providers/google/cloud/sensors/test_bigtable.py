@@ -15,15 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-import unittest
 from unittest import mock
 
 import google.api_core.exceptions
 import pytest
 from google.cloud.bigtable.instance import Instance
 from google.cloud.bigtable.table import ClusterState
-from parameterized import parameterized
 
 from airflow.exceptions import AirflowException
 from airflow.providers.google.cloud.sensors.bigtable import BigtableTableReplicationCompletedSensor
@@ -35,13 +34,13 @@ TABLE_ID = 'test-table-id'
 IMPERSONATION_CHAIN = ["ACCOUNT_1", "ACCOUNT_2", "ACCOUNT_3"]
 
 
-class BigtableWaitForTableReplicationTest(unittest.TestCase):
-    @parameterized.expand(
+class BigtableWaitForTableReplicationTest:
+    @pytest.mark.parametrize(
+        "missing_attribute, project_id, instance_id, table_id",
         [
             ('instance_id', PROJECT_ID, '', TABLE_ID),
             ('table_id', PROJECT_ID, INSTANCE_ID, ''),
         ],
-        testcase_func_name=lambda f, n, p: 'test_empty_attribute.empty_' + p.args[0],
     )
     @mock.patch('airflow.providers.google.cloud.sensors.bigtable.BigtableHook')
     def test_empty_attribute(self, missing_attribute, project_id, instance_id, table_id, mock_hook):

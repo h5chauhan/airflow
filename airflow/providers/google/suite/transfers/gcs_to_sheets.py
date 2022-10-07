@@ -14,10 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import csv
 from tempfile import NamedTemporaryFile
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Sequence
 
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
@@ -33,19 +34,13 @@ class GCSToGoogleSheetsOperator(BaseOperator):
         :ref:`howto/operator:GCSToGoogleSheets`
 
     :param spreadsheet_id: The Google Sheet ID to interact with.
-    :type spreadsheet_id: str
     :param bucket_name: Name of GCS bucket.:
-    :type bucket_name: str
     :param object_name: Path to the .csv file on the GCS bucket.
-    :type object_name: str
     :param spreadsheet_range: The A1 notation of the values to retrieve.
-    :type spreadsheet_range: str
     :param gcp_conn_id: The connection ID to use when fetching connection info.
-    :type gcp_conn_id: str
     :param delegate_to: The account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
-    :type delegate_to: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -54,16 +49,15 @@ class GCSToGoogleSheetsOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
-    template_fields = [
+    template_fields: Sequence[str] = (
         "spreadsheet_id",
         "bucket_name",
         "object_name",
         "spreadsheet_range",
         "impersonation_chain",
-    ]
+    )
 
     def __init__(
         self,
@@ -73,8 +67,8 @@ class GCSToGoogleSheetsOperator(BaseOperator):
         object_name: str,
         spreadsheet_range: str = "Sheet1",
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)

@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -46,8 +47,8 @@ class TestBigQueryToBigQueryOperator(unittest.TestCase):
             encryption_configuration=encryption_configuration,
         )
 
-        operator.execute(None)
-        mock_hook.return_value.get_conn.return_value.cursor.return_value.run_copy.assert_called_once_with(
+        operator.execute(context=mock.MagicMock())
+        mock_hook.return_value.run_copy.assert_called_once_with(
             source_project_dataset_tables=source_project_dataset_tables,
             destination_project_dataset_table=destination_project_dataset_table,
             write_disposition=write_disposition,

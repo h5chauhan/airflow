@@ -15,43 +15,47 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import httpx
+import pendulum
 
 from airflow.decorators import dag, task
 from airflow.models.baseoperator import BaseOperator
 from airflow.operators.email import EmailOperator
-from airflow.utils.dates import days_ago
-
-DEFAULT_ARGS = {"owner": "airflow"}
+from airflow.utils.context import Context
 
 
 class GetRequestOperator(BaseOperator):
-    """Custom operator to sand GET request to provided url"""
+    """Custom operator to send GET request to provided url"""
 
     def __init__(self, *, url: str, **kwargs):
         super().__init__(**kwargs)
         self.url = url
 
-    def execute(self, context):
+    def execute(self, context: Context):
         return httpx.get(self.url).json()
 
 
 # [START dag_decorator_usage]
-@dag(default_args=DEFAULT_ARGS, schedule_interval=None, start_date=days_ago(2), tags=['example'])
+@dag(
+    schedule=None,
+    start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
+    catchup=False,
+    tags=['example'],
+)
 def example_dag_decorator(email: str = 'example@example.com'):
     """
     DAG to send server IP to email.
 
     :param email: Email to send IP to. Defaults to example@example.com.
-    :type email: str
     """
     get_ip = GetRequestOperator(task_id='get_ip', url="http://httpbin.org/get")
 
     @task(multiple_outputs=True)
-    def prepare_email(raw_json: Dict[str, Any]) -> Dict[str, str]:
+    def prepare_email(raw_json: dict[str, Any]) -> dict[str, str]:
         external_ip = raw_json['origin']
         return {
             'subject': f'Server connected from {external_ip}',
@@ -65,5 +69,5 @@ def example_dag_decorator(email: str = 'example@example.com'):
     )
 
 
-dag = example_dag_decorator()
+example_dag = example_dag_decorator()
 # [END dag_decorator_usage]

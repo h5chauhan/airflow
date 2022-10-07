@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
 import unittest
@@ -191,9 +192,9 @@ class TestDingdingHook(unittest.TestCase):
                     "picURL": "https://airflow.apache.org/_images/dags.png",
                 },
                 {
-                    "title": "Airflow tree feed card",
+                    "title": "Airflow grid feed card",
                     "messageURL": "https://airflow.apache.org/docs/apache-airflow/stable/ui.html",
-                    "picURL": "https://airflow.apache.org/_images/tree.png",
+                    "picURL": "https://airflow.apache.org/_images/grid.png",
                 },
                 {
                     "title": "Airflow graph feed card",

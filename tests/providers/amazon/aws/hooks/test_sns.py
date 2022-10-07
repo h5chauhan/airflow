@@ -15,11 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import unittest
 
-from airflow.providers.amazon.aws.hooks.sns import AwsSnsHook
+from airflow.providers.amazon.aws.hooks.sns import SnsHook
 
 try:
     from moto import mock_sns
@@ -28,15 +28,15 @@ except ImportError:
 
 
 @unittest.skipIf(mock_sns is None, 'moto package not present')
-class TestAwsSnsHook(unittest.TestCase):
+class TestSnsHook(unittest.TestCase):
     @mock_sns
     def test_get_conn_returns_a_boto3_connection(self):
-        hook = AwsSnsHook(aws_conn_id='aws_default')
+        hook = SnsHook(aws_conn_id='aws_default')
         assert hook.get_conn() is not None
 
     @mock_sns
     def test_publish_to_target_with_subject(self):
-        hook = AwsSnsHook(aws_conn_id='aws_default')
+        hook = SnsHook(aws_conn_id='aws_default')
 
         message = "Hello world"
         topic_name = "test-topic"
@@ -49,7 +49,7 @@ class TestAwsSnsHook(unittest.TestCase):
 
     @mock_sns
     def test_publish_to_target_with_attributes(self):
-        hook = AwsSnsHook(aws_conn_id='aws_default')
+        hook = SnsHook(aws_conn_id='aws_default')
 
         message = "Hello world"
         topic_name = "test-topic"
@@ -70,7 +70,7 @@ class TestAwsSnsHook(unittest.TestCase):
 
     @mock_sns
     def test_publish_to_target_plain(self):
-        hook = AwsSnsHook(aws_conn_id='aws_default')
+        hook = SnsHook(aws_conn_id='aws_default')
 
         message = "Hello world"
         topic_name = "test-topic"
@@ -79,3 +79,26 @@ class TestAwsSnsHook(unittest.TestCase):
         response = hook.publish_to_target(target, message)
 
         assert 'MessageId' in response
+
+    @mock_sns
+    def test_publish_to_target_error(self):
+        hook = SnsHook(aws_conn_id='aws_default')
+
+        message = "Hello world"
+        topic_name = "test-topic"
+        target = hook.get_conn().create_topic(Name=topic_name).get('TopicArn')
+
+        with self.assertRaises(TypeError) as ctx:
+            hook.publish_to_target(
+                target,
+                message,
+                message_attributes={
+                    'test-non-iterable': object(),
+                },
+            )
+
+        self.assertEqual(
+            "Values in MessageAttributes must be one of bytes, str, int, float, "
+            "or iterable; got <class 'object'>",
+            str(ctx.exception),
+        )

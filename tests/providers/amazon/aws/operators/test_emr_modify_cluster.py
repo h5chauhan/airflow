@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest.mock import MagicMock, patch
@@ -23,7 +24,7 @@ import pytest
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG
-from airflow.providers.amazon.aws.operators.emr_modify_cluster import EmrModifyClusterOperator
+from airflow.providers.amazon.aws.operators.emr import EmrModifyClusterOperator
 from airflow.utils import timezone
 
 DEFAULT_DATE = timezone.datetime(2017, 1, 1)

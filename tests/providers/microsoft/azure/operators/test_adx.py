@@ -15,14 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import unittest
 from unittest import mock
 
 from azure.kusto.data._models import KustoResultTable
 
-from airflow.models import DAG, TaskInstance
+from airflow.models import DAG
 from airflow.providers.microsoft.azure.hooks.adx import AzureDataExplorerHook
 from airflow.providers.microsoft.azure.operators.adx import AzureDataExplorerQueryOperator
 from airflow.utils import timezone
@@ -64,7 +64,7 @@ class TestAzureDataExplorerQueryOperator(unittest.TestCase):
     def setUp(self):
         args = {'owner': 'airflow', 'start_date': DEFAULT_DATE, 'provide_context': True}
 
-        self.dag = DAG(TEST_DAG_ID + 'test_schedule_dag_once', default_args=args, schedule_interval='@once')
+        self.dag = DAG(TEST_DAG_ID + 'test_schedule_dag_once', default_args=args, schedule='@once')
         self.operator = AzureDataExplorerQueryOperator(dag=self.dag, **MOCK_DATA)
 
     def test_init(self):
@@ -81,10 +81,20 @@ class TestAzureDataExplorerQueryOperator(unittest.TestCase):
             MOCK_DATA['query'], MOCK_DATA['database'], MOCK_DATA['options']
         )
 
-    @mock.patch.object(AzureDataExplorerHook, 'run_query', return_value=MockResponse())
-    @mock.patch.object(AzureDataExplorerHook, 'get_conn')
-    def test_xcom_push_and_pull(self, mock_conn, mock_run_query):
-        ti = TaskInstance(task=self.operator, execution_date=timezone.utcnow())
-        ti.run()
 
-        assert ti.xcom_pull(task_ids=MOCK_DATA['task_id']) == str(MOCK_RESULT)
+@mock.patch.object(AzureDataExplorerHook, 'run_query', return_value=MockResponse())
+@mock.patch.object(AzureDataExplorerHook, 'get_conn')
+def test_azure_data_explorer_query_operator_xcom_push_and_pull(
+    mock_conn,
+    mock_run_query,
+    create_task_instance_of_operator,
+):
+    ti = create_task_instance_of_operator(
+        AzureDataExplorerQueryOperator,
+        dag_id="test_azure_data_explorer_query_operator_xcom_push_and_pull",
+        execution_date=timezone.utcnow(),
+        **MOCK_DATA,
+    )
+    ti.run()
+
+    assert ti.xcom_pull(task_ids=MOCK_DATA["task_id"]) == str(MOCK_RESULT)

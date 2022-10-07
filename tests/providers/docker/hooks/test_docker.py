@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -69,10 +70,14 @@ class TestDockerHook(unittest.TestCase):
             base_url='https://index.docker.io/v1/',
             version='1.23',
             tls='someconfig',
+            timeout=100,
         )
         hook.get_conn()
         docker_client_mock.assert_called_once_with(
-            base_url='https://index.docker.io/v1/', version='1.23', tls='someconfig'
+            base_url='https://index.docker.io/v1/',
+            version='1.23',
+            tls='someconfig',
+            timeout=100,
         )
 
     def test_get_conn_with_standard_config(self, _):

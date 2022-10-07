@@ -15,17 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
 import shutil
-from typing import Dict, Optional, Tuple
+from typing import Any
 
 from azure.common import AzureHttpError
 
-try:
-    from functools import cached_property
-except ImportError:
-    from cached_property import cached_property
-
+from airflow.compat.functools import cached_property
 from airflow.configuration import conf
 from airflow.utils.log.file_task_handler import FileTaskHandler
 from airflow.utils.log.logging_mixin import LoggingMixin
@@ -43,8 +41,9 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         base_log_folder: str,
         wasb_log_folder: str,
         wasb_container: str,
-        filename_template: str,
         delete_local_copy: str,
+        *,
+        filename_template: str | None = None,
     ) -> None:
         super().__init__(base_log_folder, filename_template)
         self.wasb_container = wasb_container
@@ -106,7 +105,9 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         # Mark closed so we don't double write if close is called twice
         self.closed = True
 
-    def _read(self, ti, try_number: str, metadata: Optional[str] = None) -> Tuple[str, Dict[str, bool]]:
+    def _read(
+        self, ti, try_number: int, metadata: dict[str, Any] | None = None
+    ) -> tuple[str, dict[str, bool]]:
         """
         Read logs of given task instance and try_number from Wasb remote storage.
         If failed, read the log from task instance host machine.
@@ -130,7 +131,7 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
             log = f'*** Reading remote log from {remote_loc}.\n{remote_log}\n'
             return log, {'end_of_log': True}
         else:
-            return super()._read(ti, try_number)
+            return super()._read(ti, try_number, metadata)
 
     def wasb_log_exists(self, remote_log_location: str) -> bool:
         """
@@ -152,10 +153,8 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         logs are found or there is an error.
 
         :param remote_log_location: the log's location in remote storage
-        :type remote_log_location: str (path)
         :param return_error: if True, returns a string error message if an
             error occurs. Otherwise returns '' when an error occurs.
-        :type return_error: bool
         """
         try:
             return self.hook.read_file(self.wasb_container, remote_log_location)
@@ -173,12 +172,9 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         was created.
 
         :param log: the log to write to the remote_log_location
-        :type log: str
         :param remote_log_location: the log's location in remote storage
-        :type remote_log_location: str (path)
         :param append: if False, any existing log file is overwritten. If True,
             the new log is appended to any existing logs.
-        :type append: bool
         """
         if append and self.wasb_log_exists(remote_log_location):
             old_log = self.wasb_read(remote_log_location)

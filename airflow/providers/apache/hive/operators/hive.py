@@ -15,15 +15,20 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
 import re
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Sequence
 
 from airflow.configuration import conf
 from airflow.models import BaseOperator
 from airflow.providers.apache.hive.hooks.hive import HiveCliHook
 from airflow.utils import operator_helpers
 from airflow.utils.operator_helpers import context_to_airflow_vars
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class HiveOperator(BaseOperator):
@@ -33,36 +38,27 @@ class HiveOperator(BaseOperator):
     :param hql: the hql to be executed. Note that you may also use
         a relative path from the dag file of a (template) hive
         script. (templated)
-    :type hql: str
     :param hive_cli_conn_id: Reference to the
         :ref:`Hive CLI connection id <howto/connection:hive_cli>`. (templated)
-    :type hive_cli_conn_id: str
     :param hiveconfs: if defined, these key value pairs will be passed
         to hive as ``-hiveconf "key"="value"``
-    :type hiveconfs: dict
     :param hiveconf_jinja_translate: when True, hiveconf-type templating
         ${var} gets translated into jinja-type templating {{ var }} and
         ${hiveconf:var} gets translated into jinja-type templating {{ var }}.
         Note that you may want to use this along with the
         ``DAG(user_defined_macros=myargs)`` parameter. View the DAG
         object documentation for more details.
-    :type hiveconf_jinja_translate: bool
     :param script_begin_tag: If defined, the operator will get rid of the
         part of the script before the first occurrence of `script_begin_tag`
-    :type script_begin_tag: str
     :param run_as_owner: Run HQL code as a DAG's owner.
-    :type run_as_owner: bool
     :param mapred_queue: queue used by the Hadoop CapacityScheduler. (templated)
-    :type  mapred_queue: str
     :param mapred_queue_priority: priority within CapacityScheduler queue.
         Possible settings include: VERY_HIGH, HIGH, NORMAL, LOW, VERY_LOW
-    :type  mapred_queue_priority: str
     :param mapred_job_name: This name will appear in the jobtracker.
         This can make monitoring easier.
-    :type  mapred_job_name: str
     """
 
-    template_fields = (
+    template_fields: Sequence[str] = (
         'hql',
         'schema',
         'hive_cli_conn_id',
@@ -71,10 +67,11 @@ class HiveOperator(BaseOperator):
         'mapred_job_name',
         'mapred_queue_priority',
     )
-    template_ext = (
+    template_ext: Sequence[str] = (
         '.hql',
         '.sql',
     )
+    template_fields_renderers = {'hql': 'hql'}
     ui_color = '#f0e4ec'
 
     def __init__(
@@ -83,13 +80,13 @@ class HiveOperator(BaseOperator):
         hql: str,
         hive_cli_conn_id: str = 'hive_cli_default',
         schema: str = 'default',
-        hiveconfs: Optional[Dict[Any, Any]] = None,
+        hiveconfs: dict[Any, Any] | None = None,
         hiveconf_jinja_translate: bool = False,
-        script_begin_tag: Optional[str] = None,
+        script_begin_tag: str | None = None,
         run_as_owner: bool = False,
-        mapred_queue: Optional[str] = None,
-        mapred_queue_priority: Optional[str] = None,
-        mapred_job_name: Optional[str] = None,
+        mapred_queue: str | None = None,
+        mapred_queue_priority: str | None = None,
+        mapred_job_name: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -105,17 +102,21 @@ class HiveOperator(BaseOperator):
         self.mapred_queue = mapred_queue
         self.mapred_queue_priority = mapred_queue_priority
         self.mapred_job_name = mapred_job_name
-        self.mapred_job_name_template = conf.get(
+
+        job_name_template = conf.get(
             'hive',
             'mapred_job_name_template',
             fallback="Airflow HiveOperator task for {hostname}.{dag_id}.{task_id}.{execution_date}",
         )
+        if job_name_template is None:
+            raise ValueError("Job name template should be set !")
+        self.mapred_job_name_template: str = job_name_template
 
         # assigned lazily - just for consistency we can create the attribute with a
         # `None` initial value, later it will be populated by the execute method.
         # This also makes `on_kill` implementation consistent since it assumes `self.hook`
         # is defined.
-        self.hook: Optional[HiveCliHook] = None
+        self.hook: HiveCliHook | None = None
 
     def get_hook(self) -> HiveCliHook:
         """Get Hive cli hook"""
@@ -133,7 +134,7 @@ class HiveOperator(BaseOperator):
         if self.script_begin_tag and self.script_begin_tag in self.hql:
             self.hql = "\n".join(self.hql.split(self.script_begin_tag)[1:])
 
-    def execute(self, context: Dict[str, Any]) -> None:
+    def execute(self, context: Context) -> None:
         self.log.info('Executing: %s', self.hql)
         self.hook = self.get_hook()
 

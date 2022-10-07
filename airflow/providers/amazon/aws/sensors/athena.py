@@ -15,15 +15,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Optional
+from __future__ import annotations
 
-try:
-    from functools import cached_property
-except ImportError:
-    from cached_property import cached_property
+from typing import TYPE_CHECKING, Any, Sequence
 
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
+from airflow.compat.functools import cached_property
 from airflow.exceptions import AirflowException
-from airflow.providers.amazon.aws.hooks.athena import AWSAthenaHook
+from airflow.providers.amazon.aws.hooks.athena import AthenaHook
 from airflow.sensors.base import BaseSensorOperator
 
 
@@ -32,16 +33,17 @@ class AthenaSensor(BaseSensorOperator):
     Asks for the state of the Query until it reaches a failure state or success state.
     If the query fails, the task will fail.
 
+    .. seealso::
+        For more information on how to use this sensor, take a look at the guide:
+        :ref:`howto/sensor:AthenaSensor`
+
+
     :param query_execution_id: query_execution_id to check the state of
-    :type query_execution_id: str
     :param max_retries: Number of times to poll for query state before
         returning the current state, defaults to None
-    :type max_retries: int
     :param aws_conn_id: aws connection to use, defaults to 'aws_default'
-    :type aws_conn_id: str
     :param sleep_time: Time in seconds to wait between two consecutive call to
         check query status on athena, defaults to 10
-    :type sleep_time: int
     """
 
     INTERMEDIATE_STATES = (
@@ -54,15 +56,15 @@ class AthenaSensor(BaseSensorOperator):
     )
     SUCCESS_STATES = ('SUCCEEDED',)
 
-    template_fields = ['query_execution_id']
-    template_ext = ()
+    template_fields: Sequence[str] = ('query_execution_id',)
+    template_ext: Sequence[str] = ()
     ui_color = '#66c3ff'
 
     def __init__(
         self,
         *,
         query_execution_id: str,
-        max_retries: Optional[int] = None,
+        max_retries: int | None = None,
         aws_conn_id: str = 'aws_default',
         sleep_time: int = 10,
         **kwargs: Any,
@@ -73,7 +75,7 @@ class AthenaSensor(BaseSensorOperator):
         self.sleep_time = sleep_time
         self.max_retries = max_retries
 
-    def poke(self, context: dict) -> bool:
+    def poke(self, context: Context) -> bool:
         state = self.hook.poll_query_status(self.query_execution_id, self.max_retries)
 
         if state in self.FAILURE_STATES:
@@ -84,6 +86,6 @@ class AthenaSensor(BaseSensorOperator):
         return True
 
     @cached_property
-    def hook(self) -> AWSAthenaHook:
-        """Create and return an AWSAthenaHook"""
-        return AWSAthenaHook(self.aws_conn_id, sleep_time=self.sleep_time)
+    def hook(self) -> AthenaHook:
+        """Create and return an AthenaHook"""
+        return AthenaHook(self.aws_conn_id, sleep_time=self.sleep_time)

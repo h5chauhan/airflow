@@ -27,10 +27,6 @@ so you can build responsive apps that work regardless of network latency or Inte
 Firestore also offers seamless integration with other Firebase and Google Cloud products, including
 Cloud Functions.
 
-.. contents::
-  :depth: 1
-  :local:
-
 Prerequisite Tasks
 ^^^^^^^^^^^^^^^^^^
 
@@ -45,7 +41,7 @@ Export database
 Exports a copy of all or a subset of documents from Google Cloud Firestore to Google Cloud Storage is performed with the
 :class:`~airflow.providers.google.firebase.operators.firestore.CloudFirestoreExportDatabaseOperator` operator.
 
-.. exampleinclude:: /../../airflow/providers/google/firebase/example_dags/example_firestore.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/gcs/example_firestore.py
     :language: python
     :dedent: 4
     :start-after: [START howto_operator_export_database_to_gcs]

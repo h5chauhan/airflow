@@ -14,14 +14,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import List, NamedTuple
+from __future__ import annotations
 
-from flask_appbuilder.security.sqla.models import User
+from typing import NamedTuple
+
 from marshmallow import Schema, fields
 from marshmallow_sqlalchemy import SQLAlchemySchema, auto_field
 
 from airflow.api_connexion.parameters import validate_istimezone
 from airflow.api_connexion.schemas.role_and_permission_schema import RoleSchema
+from airflow.www.fab_security.sqla.models import User
 
 
 class UserCollectionItemSchema(SQLAlchemySchema):
@@ -55,7 +57,7 @@ class UserSchema(UserCollectionItemSchema):
 class UserCollection(NamedTuple):
     """User collection"""
 
-    users: List[User]
+    users: list[User]
     total_entries: int
 
 

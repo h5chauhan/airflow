@@ -46,24 +46,54 @@ For example:
 ------------
 
 
-Tree View
-.........
-A tree representation of the DAG that spans across time. If a pipeline is
-late, you can quickly see where the different steps are and identify
-the blocking ones.
+.. _ui:datasets-view:
 
-There is also visual difference between scheduled and manually triggered
-DAGs/tasks:
+Datasets View
+.............
+A combined listing of the current datasets and a graph illustrating how they are produced and consumed by DAGs.
 
-.. image:: img/task_manual_vs_scheduled.png
-
-The DAGs/tasks with a black border are scheduled runs, whereas the non-bordered
-DAGs/tasks are manually triggered, i.e. by ``airflow dags trigger``.
-
+Clicking on any dataset in either the list or the graph will highlight it and its relationships, and filter the list to show the recent history of task instances that have updated that dataset and whether it has triggered further DAG runs.
 
 ------------
 
-.. image:: img/tree.png
+.. image:: img/datasets.png
+
+------------
+
+
+Grid View
+.........
+A bar chart and grid representation of the DAG that spans across time.
+The top row is a chart of DAG Runs by duration,
+and below, task instances. If a pipeline is late,
+you can quickly see where the different steps are and identify
+the blocking ones.
+
+------------
+
+.. image:: img/grid.png
+
+------------
+
+The details panel will update when selecting a DAG Run by clicking on a duration bar:
+
+.. image:: img/grid_run_details.png
+
+Or selecting a Task Instance by clicking on a status box:
+
+.. image:: img/grid_instance_details.png
+
+Manual runs are indicated by a play icon (just like the Trigger DAG button):
+
+.. image:: img/task_manual_vs_scheduled.png
+
+Task groups are indicated by a caret and can be opened or closed:
+
+.. image:: img/grid_task_group.png
+
+Mapped Tasks are indicated by square brackets and will show a table of each mapped task instance in the details panel:
+
+.. image:: img/grid_mapped_task.png
 
 ------------
 
@@ -97,7 +127,7 @@ Variable View
 The variable view allows you to list, create, edit or delete the key-value pair
 of a variable used during jobs. Value of a variable will be hidden if the key contains
 any words in ('password', 'secret', 'passwd', 'authorization', 'api_key', 'apikey', 'access_token')
-by default, but can be configured to show in clear-text. See :ref:`security:mask-sensitive-values`.
+by default, but can be configured to show in cleartext. See :ref:`security:mask-sensitive-values`.
 
 ------------
 
@@ -144,7 +174,7 @@ provide yet more context.
 
 Task Instance Context Menu
 ..........................
-From the pages seen above (tree view, graph view, gantt, ...), it is always
+From the pages seen above (grid view, graph view, gantt, ...), it is always
 possible to click on a task instance, and get to this rich context menu
 that can take you to more detailed metadata, and perform some actions.
 

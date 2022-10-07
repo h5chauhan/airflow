@@ -16,11 +16,13 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Google Cloud Vision operator."""
+from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Sequence, Tuple
 
 from google.api_core.exceptions import AlreadyExists
+from google.api_core.gapic_v1.method import DEFAULT, _MethodDefault
 from google.api_core.retry import Retry
 from google.cloud.vision_v1.types import (
     AnnotateImageRequest,
@@ -33,6 +35,10 @@ from google.cloud.vision_v1.types import (
 
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.vision import CloudVisionHook
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
 
 MetaData = Sequence[Tuple[str, str]]
 
@@ -47,29 +53,21 @@ class CloudVisionCreateProductSetOperator(BaseOperator):
 
     :param product_set: (Required) The ProductSet to create. If a dict is provided, it must be of the same
         form as the protobuf message `ProductSet`.
-    :type product_set: dict or google.cloud.vision_v1.types.ProductSet
     :param location: (Required) The region where the ProductSet should be created. Valid regions
         (as of 2019-02-05) are: us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param project_id: (Optional) The project in which the ProductSet should be created. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param product_set_id: (Optional) A user-supplied resource id for this ProductSet.
         If set, the server will attempt to use this value as the resource id. If it is
         already in use, an error is returned with code ALREADY_EXISTS. Must be at most
         128 characters long. It cannot contain the character /.
-    :type product_set_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -78,11 +76,10 @@ class CloudVisionCreateProductSetOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_productset_create_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "location",
         "project_id",
         "product_set_id",
@@ -94,15 +91,15 @@ class CloudVisionCreateProductSetOperator(BaseOperator):
     def __init__(
         self,
         *,
-        product_set: Union[dict, ProductSet],
+        product_set: dict | ProductSet,
         location: str,
-        project_id: Optional[str] = None,
-        product_set_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        product_set_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -116,7 +113,7 @@ class CloudVisionCreateProductSetOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -149,23 +146,16 @@ class CloudVisionGetProductSetOperator(BaseOperator):
 
     :param location: (Required) The region where the ProductSet is located. Valid regions (as of 2019-02-05)
         are: us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param product_set_id: (Required) The resource id of this ProductSet.
-    :type product_set_id: str
     :param project_id: (Optional) The project in which the ProductSet is located. If set
         to None or missing, the default `project_id` from the Google Cloud connection is used.
-    :type project_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -174,11 +164,10 @@ class CloudVisionGetProductSetOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_productset_get_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'location',
         'project_id',
         'product_set_id',
@@ -192,12 +181,12 @@ class CloudVisionGetProductSetOperator(BaseOperator):
         *,
         location: str,
         product_set_id: str,
-        project_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -210,7 +199,7 @@ class CloudVisionGetProductSetOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -247,30 +236,21 @@ class CloudVisionUpdateProductSetOperator(BaseOperator):
     :param product_set: (Required) The ProductSet resource which replaces the one on the
         server. If a dict is provided, it must be of the same form as the protobuf
         message `ProductSet`.
-    :type product_set: dict or google.cloud.vision_v1.types.ProductSet
     :param location: (Optional) The region where the ProductSet is located. Valid regions (as of 2019-02-05)
         are: us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param product_set_id: (Optional) The resource id of this ProductSet.
-    :type product_set_id: str
     :param project_id: (Optional) The project in which the ProductSet should be created. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param update_mask: (Optional) The `FieldMask` that specifies which fields to update. If update_mask
-        isn’t specified, all mutable fields are to be updated. Valid mask path is display_name. If a dict is
+        isn't specified, all mutable fields are to be updated. Valid mask path is display_name. If a dict is
         provided, it must be of the same form as the protobuf message `FieldMask`.
-    :type update_mask: dict or google.cloud.vision_v1.types.FieldMask
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -279,11 +259,10 @@ class CloudVisionUpdateProductSetOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_productset_update_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'location',
         'project_id',
         'product_set_id',
@@ -295,16 +274,16 @@ class CloudVisionUpdateProductSetOperator(BaseOperator):
     def __init__(
         self,
         *,
-        product_set: Union[Dict, ProductSet],
-        location: Optional[str] = None,
-        product_set_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        update_mask: Union[Dict, FieldMask] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        product_set: dict | ProductSet,
+        location: str | None = None,
+        product_set_id: str | None = None,
+        project_id: str | None = None,
+        update_mask: dict | FieldMask = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -319,7 +298,7 @@ class CloudVisionUpdateProductSetOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -348,23 +327,16 @@ class CloudVisionDeleteProductSetOperator(BaseOperator):
 
     :param location: (Required) The region where the ProductSet is located. Valid regions (as of 2019-02-05)
         are: us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param product_set_id: (Required) The resource id of this ProductSet.
-    :type product_set_id: str
     :param project_id: (Optional) The project in which the ProductSet should be created.
         If set to None or missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -373,11 +345,10 @@ class CloudVisionDeleteProductSetOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_productset_delete_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'location',
         'project_id',
         'product_set_id',
@@ -391,12 +362,12 @@ class CloudVisionDeleteProductSetOperator(BaseOperator):
         *,
         location: str,
         product_set_id: str,
-        project_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -409,7 +380,7 @@ class CloudVisionDeleteProductSetOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -440,29 +411,21 @@ class CloudVisionCreateProductOperator(BaseOperator):
 
     :param location: (Required) The region where the Product should be created. Valid regions
         (as of 2019-02-05) are: us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param product: (Required) The product to create. If a dict is provided, it must be of the same form as
         the protobuf message `Product`.
-    :type product: dict or google.cloud.vision_v1.types.Product
     :param project_id: (Optional) The project in which the Product should be created. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param product_id: (Optional) A user-supplied resource id for this Product.
         If set, the server will attempt to use this value as the resource id. If it is
         already in use, an error is returned with code ALREADY_EXISTS. Must be at most
         128 characters long. It cannot contain the character /.
-    :type product_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -471,11 +434,10 @@ class CloudVisionCreateProductOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_product_create_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'location',
         'project_id',
         'product_id',
@@ -489,13 +451,13 @@ class CloudVisionCreateProductOperator(BaseOperator):
         *,
         location: str,
         product: str,
-        project_id: Optional[str] = None,
-        product_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        product_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -509,7 +471,7 @@ class CloudVisionCreateProductOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -545,23 +507,16 @@ class CloudVisionGetProductOperator(BaseOperator):
 
     :param location: (Required) The region where the Product is located. Valid regions (as of 2019-02-05) are:
         us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param product_id: (Required) The resource id of this Product.
-    :type product_id: str
     :param project_id: (Optional) The project in which the Product is located. If set to
         None or missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -570,11 +525,10 @@ class CloudVisionGetProductOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_product_get_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'location',
         'project_id',
         'product_id',
@@ -588,12 +542,12 @@ class CloudVisionGetProductOperator(BaseOperator):
         *,
         location: str,
         product_id: str,
-        project_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -606,7 +560,7 @@ class CloudVisionGetProductOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -653,31 +607,22 @@ class CloudVisionUpdateProductOperator(BaseOperator):
 
     :param product: (Required) The Product resource which replaces the one on the server. product.name is
         immutable. If a dict is provided, it must be of the same form as the protobuf message `Product`.
-    :type product: dict or google.cloud.vision_v1.types.ProductSet
     :param location: (Optional) The region where the Product is located. Valid regions (as of 2019-02-05) are:
         us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param product_id: (Optional) The resource id of this Product.
-    :type product_id: str
     :param project_id: (Optional) The project in which the Product is located. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param update_mask: (Optional) The `FieldMask` that specifies which fields to update. If update_mask
-        isn’t specified, all mutable fields are to be updated. Valid mask paths include product_labels,
+        isn't specified, all mutable fields are to be updated. Valid mask paths include product_labels,
         display_name, and description. If a dict is provided, it must be of the same form as the protobuf
         message `FieldMask`.
-    :type update_mask: dict or google.cloud.vision_v1.types.FieldMask
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -686,11 +631,10 @@ class CloudVisionUpdateProductOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_product_update_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'location',
         'project_id',
         'product_id',
@@ -702,16 +646,16 @@ class CloudVisionUpdateProductOperator(BaseOperator):
     def __init__(
         self,
         *,
-        product: Union[Dict, Product],
-        location: Optional[str] = None,
-        product_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        update_mask: Union[Dict, FieldMask] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        product: dict | Product,
+        location: str | None = None,
+        product_id: str | None = None,
+        project_id: str | None = None,
+        update_mask: dict | FieldMask = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -726,7 +670,7 @@ class CloudVisionUpdateProductOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -760,23 +704,16 @@ class CloudVisionDeleteProductOperator(BaseOperator):
 
     :param location: (Required) The region where the Product is located. Valid regions (as of 2019-02-05) are:
         us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param product_id: (Required) The resource id of this Product.
-    :type product_id: str
     :param project_id: (Optional) The project in which the Product is located. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -785,11 +722,10 @@ class CloudVisionDeleteProductOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_product_delete_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'location',
         'project_id',
         'product_id',
@@ -803,12 +739,12 @@ class CloudVisionDeleteProductOperator(BaseOperator):
         *,
         location: str,
         product_id: str,
-        project_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -821,7 +757,7 @@ class CloudVisionDeleteProductOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -847,17 +783,12 @@ class CloudVisionImageAnnotateOperator(BaseOperator):
     :param request: (Required) Annotation request for image or a batch.
         If a dict is provided, it must be of the same form as the protobuf
         message class:`google.cloud.vision_v1.types.AnnotateImageRequest`
-    :type request: list[dict or google.cloud.vision_v1.types.AnnotateImageRequest] for batch or
-        dict or google.cloud.vision_v1.types.AnnotateImageRequest for single image.
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -866,11 +797,10 @@ class CloudVisionImageAnnotateOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_annotate_image_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         'request',
         'gcp_conn_id',
         'impersonation_chain',
@@ -880,11 +810,11 @@ class CloudVisionImageAnnotateOperator(BaseOperator):
     def __init__(
         self,
         *,
-        request: Union[Dict, AnnotateImageRequest],
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
+        request: dict | AnnotateImageRequest,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -894,7 +824,7 @@ class CloudVisionImageAnnotateOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -920,33 +850,24 @@ class CloudVisionCreateReferenceImageOperator(BaseOperator):
 
     :param location: (Required) The region where the Product is located. Valid regions (as of 2019-02-05) are:
         us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param reference_image: (Required) The reference image to create. If an image ID is specified, it is
         ignored.
         If a dict is provided, it must be of the same form as the protobuf message
         :class:`google.cloud.vision_v1.types.ReferenceImage`
-    :type reference_image: dict or google.cloud.vision_v1.types.ReferenceImage
     :param reference_image_id: (Optional) A user-supplied resource id for the ReferenceImage to be added.
         If set, the server will attempt to use this value as the resource id. If it is already in use, an
         error is returned with code ALREADY_EXISTS. Must be at most 128 characters long. It cannot contain
         the character `/`.
-    :type reference_image_id: str
     :param product_id: (Optional) The resource id of this Product.
-    :type product_id: str
     :param project_id: (Optional) The project in which the Product is located. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -955,11 +876,10 @@ class CloudVisionCreateReferenceImageOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_reference_image_create_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "location",
         "reference_image",
         "product_id",
@@ -974,15 +894,15 @@ class CloudVisionCreateReferenceImageOperator(BaseOperator):
         self,
         *,
         location: str,
-        reference_image: Union[Dict, ReferenceImage],
+        reference_image: dict | ReferenceImage,
         product_id: str,
-        reference_image_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        reference_image_id: str | None = None,
+        project_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -997,7 +917,7 @@ class CloudVisionCreateReferenceImageOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         try:
             hook = CloudVisionHook(
                 gcp_conn_id=self.gcp_conn_id,
@@ -1031,28 +951,20 @@ class CloudVisionDeleteReferenceImageOperator(BaseOperator):
 
     :param location: (Required) The region where the Product is located. Valid regions (as of 2019-02-05) are:
         us-east1, us-west1, europe-west1, asia-east1
-    :type location: str
     :param reference_image_id: (Optional) A user-supplied resource id for the ReferenceImage to be added.
         If set, the server will attempt to use this value as the resource id. If it is already in use, an
         error is returned with code ALREADY_EXISTS. Must be at most 128 characters long. It cannot contain
         the character `/`.
-    :type reference_image_id: str
     :param product_id: (Optional) The resource id of this Product.
-    :type product_id: str
     :param project_id: (Optional) The project in which the Product is located. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -1061,11 +973,10 @@ class CloudVisionDeleteReferenceImageOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_reference_image_create_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "location",
         "product_id",
         "reference_image_id",
@@ -1081,12 +992,12 @@ class CloudVisionDeleteReferenceImageOperator(BaseOperator):
         location: str,
         product_id: str,
         reference_image_id: str,
-        project_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = 'google_cloud_default',
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -1100,7 +1011,7 @@ class CloudVisionDeleteReferenceImageOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -1124,33 +1035,25 @@ class CloudVisionAddProductToProductSetOperator(BaseOperator):
 
     Possible errors:
 
-    - Returns `NOT_FOUND` if the Product or the ProductSet doesn’t exist.
+    - Returns `NOT_FOUND` if the Product or the ProductSet doesn't exist.
 
     .. seealso::
         For more information on how to use this operator, take a look at the guide:
         :ref:`howto/operator:CloudVisionAddProductToProductSetOperator`
 
     :param product_set_id: (Required) The resource id for the ProductSet to modify.
-    :type product_set_id: str
     :param product_id: (Required) The resource id of this Product.
-    :type product_id: str
     :param location: (Required) The region where the ProductSet is located. Valid regions (as of 2019-02-05)
         are: us-east1, us-west1, europe-west1, asia-east1
-    :type: str
     :param project_id: (Optional) The project in which the Product is located. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -1159,11 +1062,10 @@ class CloudVisionAddProductToProductSetOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_add_product_to_product_set_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "location",
         "product_set_id",
         "product_id",
@@ -1179,12 +1081,12 @@ class CloudVisionAddProductToProductSetOperator(BaseOperator):
         product_set_id: str,
         product_id: str,
         location: str,
-        project_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -1198,7 +1100,7 @@ class CloudVisionAddProductToProductSetOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -1223,26 +1125,18 @@ class CloudVisionRemoveProductFromProductSetOperator(BaseOperator):
         :ref:`howto/operator:CloudVisionRemoveProductFromProductSetOperator`
 
     :param product_set_id: (Required) The resource id for the ProductSet to modify.
-    :type product_set_id: str
     :param product_id: (Required) The resource id of this Product.
-    :type product_id: str
     :param location: (Required) The region where the ProductSet is located. Valid regions (as of 2019-02-05)
         are: us-east1, us-west1, europe-west1, asia-east1
-    :type: str
     :param project_id: (Optional) The project in which the Product is located. If set to None or
         missing, the default project_id from the Google Cloud connection is used.
-    :type project_id: str
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to
         complete. Note that if retry is specified, the timeout applies to each individual
         attempt.
-    :type timeout: float
     :param metadata: (Optional) Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -1251,11 +1145,10 @@ class CloudVisionRemoveProductFromProductSetOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_remove_product_from_product_set_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "location",
         "product_set_id",
         "product_id",
@@ -1271,12 +1164,12 @@ class CloudVisionRemoveProductFromProductSetOperator(BaseOperator):
         product_set_id: str,
         product_id: str,
         location: str,
-        project_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        project_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -1290,7 +1183,7 @@ class CloudVisionRemoveProductFromProductSetOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -1316,25 +1209,17 @@ class CloudVisionDetectTextOperator(BaseOperator):
 
     :param image: (Required) The image to analyze. See more:
         https://googleapis.github.io/google-cloud-python/latest/vision/gapic/v1/types.html#google.cloud.vision_v1.types.Image
-    :type image: dict or google.cloud.vision_v1.types.Image
     :param max_results: (Optional) Number of results to return.
-    :type max_results: int
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: Number of seconds before timing out.
-    :type timeout: float
     :param language_hints: List of languages to use for TEXT_DETECTION.
         In most cases, an empty value yields the best results since it enables automatic language detection.
         For languages based on the Latin alphabet, setting language_hints is not needed.
-    :type language_hints: str or list[str]
     :param web_detection_params: Parameters for web detection.
-    :type web_detection_params: dict
     :param additional_properties: Additional properties to be set on the AnnotateImageRequest. See more:
         :class:`google.cloud.vision_v1.types.AnnotateImageRequest`
-    :type additional_properties: dict
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -1343,11 +1228,10 @@ class CloudVisionDetectTextOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_detect_text_set_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "image",
         "max_results",
         "timeout",
@@ -1358,15 +1242,15 @@ class CloudVisionDetectTextOperator(BaseOperator):
 
     def __init__(
         self,
-        image: Union[Dict, Image],
-        max_results: Optional[int] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        language_hints: Optional[Union[str, List[str]]] = None,
-        web_detection_params: Optional[Dict] = None,
-        additional_properties: Optional[Dict] = None,
+        image: dict | Image,
+        max_results: int | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        language_hints: str | list[str] | None = None,
+        web_detection_params: dict | None = None,
+        additional_properties: dict | None = None,
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -1383,7 +1267,7 @@ class CloudVisionDetectTextOperator(BaseOperator):
         )
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -1407,25 +1291,17 @@ class CloudVisionTextDetectOperator(BaseOperator):
 
     :param image: (Required) The image to analyze. See more:
         https://googleapis.github.io/google-cloud-python/latest/vision/gapic/v1/types.html#google.cloud.vision_v1.types.Image
-    :type image: dict or google.cloud.vision_v1.types.Image
     :param max_results: Number of results to return.
-    :type max_results: int
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: Number of seconds before timing out.
-    :type timeout: float
     :param language_hints: List of languages to use for TEXT_DETECTION.
         In most cases, an empty value yields the best results since it enables automatic language detection.
         For languages based on the Latin alphabet, setting language_hints is not needed.
-    :type language_hints: str or list[str]
     :param web_detection_params: Parameters for web detection.
-    :type web_detection_params: dict
     :param additional_properties: Additional properties to be set on the AnnotateImageRequest. See more:
         https://googleapis.github.io/google-cloud-python/latest/vision/gapic/v1/types.html#google.cloud.vision_v1.types.AnnotateImageRequest
-    :type additional_properties: dict
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -1434,11 +1310,10 @@ class CloudVisionTextDetectOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_document_detect_text_set_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "image",
         "max_results",
         "timeout",
@@ -1449,15 +1324,15 @@ class CloudVisionTextDetectOperator(BaseOperator):
 
     def __init__(
         self,
-        image: Union[Dict, Image],
-        max_results: Optional[int] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        language_hints: Optional[Union[str, List[str]]] = None,
-        web_detection_params: Optional[Dict] = None,
-        additional_properties: Optional[Dict] = None,
+        image: dict | Image,
+        max_results: int | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        language_hints: str | list[str] | None = None,
+        web_detection_params: dict | None = None,
+        additional_properties: dict | None = None,
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -1473,7 +1348,7 @@ class CloudVisionTextDetectOperator(BaseOperator):
         )
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -1497,19 +1372,13 @@ class CloudVisionDetectImageLabelsOperator(BaseOperator):
 
     :param image: (Required) The image to analyze. See more:
         https://googleapis.github.io/google-cloud-python/latest/vision/gapic/v1/types.html#google.cloud.vision_v1.types.Image
-    :type image: dict or google.cloud.vision_v1.types.Image
     :param max_results: Number of results to return.
-    :type max_results: int
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: Number of seconds before timing out.
-    :type timeout: float
     :param additional_properties: Additional properties to be set on the AnnotateImageRequest. See more:
         https://googleapis.github.io/google-cloud-python/latest/vision/gapic/v1/types.html#google.cloud.vision_v1.types.AnnotateImageRequest
-    :type additional_properties: dict
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -1518,11 +1387,10 @@ class CloudVisionDetectImageLabelsOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_detect_labels_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "image",
         "max_results",
         "timeout",
@@ -1533,13 +1401,13 @@ class CloudVisionDetectImageLabelsOperator(BaseOperator):
 
     def __init__(
         self,
-        image: Union[Dict, Image],
-        max_results: Optional[int] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        additional_properties: Optional[Dict] = None,
+        image: dict | Image,
+        max_results: int | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        additional_properties: dict | None = None,
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -1551,7 +1419,7 @@ class CloudVisionDetectImageLabelsOperator(BaseOperator):
         self.additional_properties = additional_properties
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -1575,19 +1443,13 @@ class CloudVisionDetectImageSafeSearchOperator(BaseOperator):
 
     :param image: (Required) The image to analyze. See more:
         https://googleapis.github.io/google-cloud-python/latest/vision/gapic/v1/types.html#google.cloud.vision_v1.types.Image
-    :type image: dict or google.cloud.vision_v1.types.Image
     :param max_results: Number of results to return.
-    :type max_results: int
     :param retry: (Optional) A retry object used to retry requests. If `None` is
         specified, requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: Number of seconds before timing out.
-    :type timeout: float
     :param additional_properties: Additional properties to be set on the AnnotateImageRequest. See more:
         https://googleapis.github.io/google-cloud-python/latest/vision/gapic/v1/types.html#google.cloud.vision_v1.types.AnnotateImageRequest
-    :type additional_properties: dict
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -1596,11 +1458,10 @@ class CloudVisionDetectImageSafeSearchOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START vision_detect_safe_search_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "image",
         "max_results",
         "timeout",
@@ -1611,13 +1472,13 @@ class CloudVisionDetectImageSafeSearchOperator(BaseOperator):
 
     def __init__(
         self,
-        image: Union[Dict, Image],
-        max_results: Optional[int] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        additional_properties: Optional[Dict] = None,
+        image: dict | Image,
+        max_results: int | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        additional_properties: dict | None = None,
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -1629,7 +1490,7 @@ class CloudVisionDetectImageSafeSearchOperator(BaseOperator):
         self.additional_properties = additional_properties
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudVisionHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -1644,8 +1505,8 @@ class CloudVisionDetectImageSafeSearchOperator(BaseOperator):
 
 
 def prepare_additional_parameters(
-    additional_properties: Optional[Dict], language_hints: Any, web_detection_params: Any
-) -> Optional[Dict]:
+    additional_properties: dict | None, language_hints: Any, web_detection_params: Any
+) -> dict | None:
     """
     Creates additional_properties parameter based on language_hints, web_detection_params and
     additional_properties parameters specified by the user

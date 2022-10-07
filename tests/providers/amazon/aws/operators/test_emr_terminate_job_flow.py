@@ -15,11 +15,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest.mock import MagicMock, patch
 
-from airflow.providers.amazon.aws.operators.emr_terminate_job_flow import EmrTerminateJobFlowOperator
+from airflow.providers.amazon.aws.operators.emr import EmrTerminateJobFlowOperator
 
 TERMINATE_SUCCESS_RETURN = {'ResponseMetadata': {'HTTPStatusCode': 200}}
 
@@ -42,4 +43,4 @@ class TestEmrTerminateJobFlowOperator(unittest.TestCase):
                 task_id='test_task', job_flow_id='j-8989898989', aws_conn_id='aws_default'
             )
 
-            operator.execute(None)
+            operator.execute(MagicMock())

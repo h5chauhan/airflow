@@ -17,15 +17,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+from __future__ import annotations
 
 """Nice formatted include for examples"""
+import traceback
 from os import path
 
 from docutils import nodes
-from docutils.parsers.rst import directives
-from sphinx import addnodes
+
+# No stub exists for docutils.parsers.rst.directives. See https://github.com/python/typeshed/issues/5755.
+from docutils.parsers.rst import directives  # type: ignore[attr-defined]
 from sphinx.directives.code import LiteralIncludeReader
+from sphinx.ext.viewcode import viewcode_anchor
 from sphinx.locale import _
 from sphinx.pycode import ModuleAnalyzer
 from sphinx.util import logging, parselinenos
@@ -33,7 +36,7 @@ from sphinx.util.docutils import SphinxDirective
 from sphinx.util.nodes import set_source_info
 
 try:
-    import sphinx_airflow_theme
+    import sphinx_airflow_theme  # noqa: autoflake
 
     airflow_theme_is_available = True
 except ImportError:
@@ -118,7 +121,7 @@ class ExampleInclude(SphinxDirective):
                 extra_args["hl_lines"] = [x + 1 for x in hl_lines if x < lines]
             extra_args["linenostart"] = reader.lineno_start
 
-            container_node = nodes.container("", literal_block=True, classes=["example-block-wrapper"])
+            container_node = nodes.compound(classes=["example-block-wrapper"])
             container_node += ExampleHeader(filename=filename)
             container_node += retnode
             retnode = container_node
@@ -150,6 +153,11 @@ def register_source(app, env, modname):
             logger.info(
                 "Module \"%s\" could not be loaded. Full source will not be available. \"%s\"", modname, ex
             )
+            # We cannot use regular warnings or exception methods because those warnings are interpreted
+            # by running python process and converted into "real" warnings, so we need to print the
+            # traceback here at info level
+            tb = traceback.format_exc()
+            logger.info("%s", tb)
             env._viewcode_modules[modname] = False
             return False
 
@@ -188,11 +196,7 @@ def create_node(env, relative_path, show_button):
     paragraph = nodes.paragraph(relative_path, classes=header_classes)
     paragraph += nodes.inline("", relative_path, classes=["example-title"])
     if show_button:
-        pending_ref = addnodes.pending_xref(
-            "",
-            reftype="viewcode",
-            refdomain="std",
-            refexplicit=False,
+        pending_ref = viewcode_anchor(
             reftarget=pagename,
             refid="",
             refdoc=env.docname,

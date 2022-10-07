@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -23,7 +24,7 @@ import pytest
 
 from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.hooks.sagemaker import SageMakerHook
-from airflow.providers.amazon.aws.sensors.sagemaker_transform import SageMakerTransformSensor
+from airflow.providers.amazon.aws.sensors.sagemaker import SageMakerTransformSensor
 
 DESCRIBE_TRANSFORM_INPROGRESS_RESPONSE = {
     'TransformJobStatus': 'InProgress',

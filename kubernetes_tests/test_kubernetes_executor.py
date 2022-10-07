@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import time
 
@@ -24,8 +25,9 @@ from kubernetes_tests.test_base import EXECUTOR, TestBase
 
 @pytest.mark.skipif(EXECUTOR != 'KubernetesExecutor', reason="Only runs on KubernetesExecutor")
 class TestKubernetesExecutor(TestBase):
+    @pytest.mark.execution_timeout(300)
     def test_integration_run_dag(self):
-        dag_id = 'example_kubernetes_executor_config'
+        dag_id = 'example_kubernetes_executor'
         dag_run_id, execution_date = self.start_job_in_kubernetes(dag_id, self.host)
         print(f"Found the job with execution_date {execution_date}")
 
@@ -47,8 +49,9 @@ class TestKubernetesExecutor(TestBase):
             timeout=300,
         )
 
+    @pytest.mark.execution_timeout(300)
     def test_integration_run_dag_with_scheduler_failure(self):
-        dag_id = 'example_kubernetes_executor_config'
+        dag_id = 'example_kubernetes_executor'
 
         dag_run_id, execution_date = self.start_job_in_kubernetes(dag_id, self.host)
 

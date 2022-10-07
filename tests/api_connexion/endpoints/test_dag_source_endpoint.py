@@ -14,16 +14,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import ast
 import os
-from unittest import mock
 
 import pytest
-from itsdangerous import URLSafeSerializer
-from parameterized import parameterized
 
 from airflow import DAG
-from airflow.configuration import conf
 from airflow.models import DagBag
 from airflow.security import permissions
 from tests.test_utils.api_connexion_utils import assert_401, create_user, delete_user
@@ -67,104 +65,84 @@ class TestGetSource:
         clear_db_dag_code()
 
     @staticmethod
-    def _get_dag_file_docstring(fileloc: str) -> str:
+    def _get_dag_file_docstring(fileloc: str) -> str | None:
         with open(fileloc) as f:
             file_contents = f.read()
         module = ast.parse(file_contents)
         docstring = ast.get_docstring(module)
         return docstring
 
-    @parameterized.expand([(True,), (False,)])
-    def test_should_respond_200_text(self, store_dag_code):
-        serializer = URLSafeSerializer(conf.get('webserver', 'SECRET_KEY'))
-        with mock.patch("airflow.models.dag.settings.STORE_DAG_CODE", store_dag_code), mock.patch(
-            "airflow.models.dagcode.STORE_DAG_CODE", store_dag_code
-        ):
-            dagbag = DagBag(dag_folder=EXAMPLE_DAG_FILE)
-            dagbag.sync_to_db()
-            first_dag: DAG = next(iter(dagbag.dags.values()))
-            dag_docstring = self._get_dag_file_docstring(first_dag.fileloc)
+    def test_should_respond_200_text(self, url_safe_serializer):
 
-            url = f"/api/v1/dagSources/{serializer.dumps(first_dag.fileloc)}"
-            response = self.client.get(
-                url, headers={"Accept": "text/plain"}, environ_overrides={'REMOTE_USER': "test"}
-            )
+        dagbag = DagBag(dag_folder=EXAMPLE_DAG_FILE)
+        dagbag.sync_to_db()
+        first_dag: DAG = next(iter(dagbag.dags.values()))
+        dag_docstring = self._get_dag_file_docstring(first_dag.fileloc)
 
-            assert 200 == response.status_code
-            assert dag_docstring in response.data.decode()
-            assert 'text/plain' == response.headers['Content-Type']
+        url = f"/api/v1/dagSources/{url_safe_serializer.dumps(first_dag.fileloc)}"
+        response = self.client.get(
+            url, headers={"Accept": "text/plain"}, environ_overrides={'REMOTE_USER': "test"}
+        )
 
-    @parameterized.expand([(True,), (False,)])
-    def test_should_respond_200_json(self, store_dag_code):
-        serializer = URLSafeSerializer(conf.get('webserver', 'SECRET_KEY'))
-        with mock.patch("airflow.models.dag.settings.STORE_DAG_CODE", store_dag_code), mock.patch(
-            "airflow.models.dagcode.STORE_DAG_CODE", store_dag_code
-        ):
-            dagbag = DagBag(dag_folder=EXAMPLE_DAG_FILE)
-            dagbag.sync_to_db()
-            first_dag: DAG = next(iter(dagbag.dags.values()))
-            dag_docstring = self._get_dag_file_docstring(first_dag.fileloc)
+        assert 200 == response.status_code
+        assert dag_docstring in response.data.decode()
+        assert 'text/plain' == response.headers['Content-Type']
 
-            url = f"/api/v1/dagSources/{serializer.dumps(first_dag.fileloc)}"
-            response = self.client.get(
-                url, headers={"Accept": 'application/json'}, environ_overrides={'REMOTE_USER': "test"}
-            )
+    def test_should_respond_200_json(self, url_safe_serializer):
+        dagbag = DagBag(dag_folder=EXAMPLE_DAG_FILE)
+        dagbag.sync_to_db()
+        first_dag: DAG = next(iter(dagbag.dags.values()))
+        dag_docstring = self._get_dag_file_docstring(first_dag.fileloc)
 
-            assert 200 == response.status_code
-            assert dag_docstring in response.json['content']
-            assert 'application/json' == response.headers['Content-Type']
+        url = f"/api/v1/dagSources/{url_safe_serializer.dumps(first_dag.fileloc)}"
+        response = self.client.get(
+            url, headers={"Accept": 'application/json'}, environ_overrides={'REMOTE_USER': "test"}
+        )
 
-    @parameterized.expand([(True,), (False,)])
-    def test_should_respond_406(self, store_dag_code):
-        serializer = URLSafeSerializer(conf.get('webserver', 'SECRET_KEY'))
-        with mock.patch("airflow.models.dag.settings.STORE_DAG_CODE", store_dag_code), mock.patch(
-            "airflow.models.dagcode.STORE_DAG_CODE", store_dag_code
-        ):
-            dagbag = DagBag(dag_folder=EXAMPLE_DAG_FILE)
-            dagbag.sync_to_db()
-            first_dag: DAG = next(iter(dagbag.dags.values()))
+        assert 200 == response.status_code
+        assert dag_docstring in response.json['content']
+        assert 'application/json' == response.headers['Content-Type']
 
-            url = f"/api/v1/dagSources/{serializer.dumps(first_dag.fileloc)}"
-            response = self.client.get(
-                url, headers={"Accept": 'image/webp'}, environ_overrides={'REMOTE_USER': "test"}
-            )
+    def test_should_respond_406(self, url_safe_serializer):
+        dagbag = DagBag(dag_folder=EXAMPLE_DAG_FILE)
+        dagbag.sync_to_db()
+        first_dag: DAG = next(iter(dagbag.dags.values()))
 
-            assert 406 == response.status_code
+        url = f"/api/v1/dagSources/{url_safe_serializer.dumps(first_dag.fileloc)}"
+        response = self.client.get(
+            url, headers={"Accept": 'image/webp'}, environ_overrides={'REMOTE_USER': "test"}
+        )
 
-    @parameterized.expand([(True,), (False,)])
-    def test_should_respond_404(self, store_dag_code):
-        with mock.patch("airflow.models.dag.settings.STORE_DAG_CODE", store_dag_code), mock.patch(
-            "airflow.models.dagcode.STORE_DAG_CODE", store_dag_code
-        ):
-            wrong_fileloc = "abcd1234"
-            url = f"/api/v1/dagSources/{wrong_fileloc}"
-            response = self.client.get(
-                url, headers={"Accept": 'application/json'}, environ_overrides={'REMOTE_USER': "test"}
-            )
+        assert 406 == response.status_code
 
-            assert 404 == response.status_code
+    def test_should_respond_404(self):
+        wrong_fileloc = "abcd1234"
+        url = f"/api/v1/dagSources/{wrong_fileloc}"
+        response = self.client.get(
+            url, headers={"Accept": 'application/json'}, environ_overrides={'REMOTE_USER': "test"}
+        )
 
-    def test_should_raises_401_unauthenticated(self):
-        serializer = URLSafeSerializer(conf.get('webserver', 'SECRET_KEY'))
+        assert 404 == response.status_code
+
+    def test_should_raises_401_unauthenticated(self, url_safe_serializer):
         dagbag = DagBag(dag_folder=EXAMPLE_DAG_FILE)
         dagbag.sync_to_db()
         first_dag: DAG = next(iter(dagbag.dags.values()))
 
         response = self.client.get(
-            f"/api/v1/dagSources/{serializer.dumps(first_dag.fileloc)}",
+            f"/api/v1/dagSources/{url_safe_serializer.dumps(first_dag.fileloc)}",
             headers={"Accept": "text/plain"},
         )
 
         assert_401(response)
 
-    def test_should_raise_403_forbidden(self):
-        serializer = URLSafeSerializer(conf.get('webserver', 'SECRET_KEY'))
+    def test_should_raise_403_forbidden(self, url_safe_serializer):
         dagbag = DagBag(dag_folder=EXAMPLE_DAG_FILE)
         dagbag.sync_to_db()
         first_dag: DAG = next(iter(dagbag.dags.values()))
 
         response = self.client.get(
-            f"/api/v1/dagSources/{serializer.dumps(first_dag.fileloc)}",
+            f"/api/v1/dagSources/{url_safe_serializer.dumps(first_dag.fileloc)}",
             headers={"Accept": "text/plain"},
             environ_overrides={'REMOTE_USER': "test_no_permissions"},
         )

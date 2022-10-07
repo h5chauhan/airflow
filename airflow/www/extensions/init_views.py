@@ -14,19 +14,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import logging
 import warnings
 from os import path
 
+from connexion import App, ProblemException
 from flask import Flask, request
 
-from airflow._vendor import connexion
-from airflow._vendor.connexion import ProblemException
 from airflow.api_connexion.exceptions import common_error_handler
 from airflow.configuration import conf
+from airflow.exceptions import RemovedInAirflow3Warning
 from airflow.security import permissions
-from airflow.www.views import lazy_add_provider_discovered_options_to_connection_form
 
 log = logging.getLogger(__name__)
 
@@ -43,13 +43,18 @@ def init_flash_views(app):
 
 def init_appbuilder_views(app):
     """Initialize Web UI views"""
-    appbuilder = app.appbuilder
+    from airflow.models import import_all_models
+
+    import_all_models()
+
     from airflow.www import views
+
+    appbuilder = app.appbuilder
 
     # Remove the session from scoped_session registry to avoid
     # reusing a session with a disconnected connection
     appbuilder.session.remove()
-    appbuilder.add_view_no_menu(views.DagModelView())
+    appbuilder.add_view_no_menu(views.AutocompleteView())
     appbuilder.add_view_no_menu(views.Airflow())
     appbuilder.add_view(
         views.DagRunModelView,
@@ -77,6 +82,11 @@ def init_appbuilder_views(app):
         category=permissions.RESOURCE_BROWSE_MENU,
     )
     appbuilder.add_view(
+        views.TriggerModelView,
+        permissions.RESOURCE_TRIGGER,
+        category=permissions.RESOURCE_BROWSE_MENU,
+    )
+    appbuilder.add_view(
         views.ConfigurationView,
         permissions.RESOURCE_CONFIG,
         category=permissions.RESOURCE_ADMIN_MENU,
@@ -90,6 +100,9 @@ def init_appbuilder_views(app):
     )
     appbuilder.add_view(
         views.PluginView, permissions.RESOURCE_PLUGIN, category=permissions.RESOURCE_ADMIN_MENU
+    )
+    appbuilder.add_view(
+        views.ProviderView, permissions.RESOURCE_PROVIDER, category=permissions.RESOURCE_ADMIN_MENU
     )
     appbuilder.add_view(
         views.PoolModelView, permissions.RESOURCE_POOL, category=permissions.RESOURCE_ADMIN_MENU
@@ -136,6 +149,8 @@ def init_plugins(app):
 
 def init_connection_form():
     """Initializes connection form"""
+    from airflow.www.views import lazy_add_provider_discovered_options_to_connection_form
+
     lazy_add_provider_discovered_options_to_connection_form()
 
 
@@ -151,13 +166,18 @@ def set_cors_headers_on_response(response):
     """Add response headers"""
     allow_headers = conf.get('api', 'access_control_allow_headers')
     allow_methods = conf.get('api', 'access_control_allow_methods')
-    allow_origin = conf.get('api', 'access_control_allow_origin')
-    if allow_headers is not None:
+    allow_origins = conf.get('api', 'access_control_allow_origins')
+    if allow_headers:
         response.headers['Access-Control-Allow-Headers'] = allow_headers
-    if allow_methods is not None:
+    if allow_methods:
         response.headers['Access-Control-Allow-Methods'] = allow_methods
-    if allow_origin is not None:
-        response.headers['Access-Control-Allow-Origin'] = allow_origin
+    if allow_origins == '*':
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    elif allow_origins:
+        allowed_origins = allow_origins.split(' ')
+        origin = request.environ.get('HTTP_ORIGIN', allowed_origins[0])
+        if origin in allowed_origins:
+            response.headers['Access-Control-Allow-Origin'] = origin
     return response
 
 
@@ -180,7 +200,7 @@ def init_api_connexion(app: Flask) -> None:
             return views.not_found(ex)
 
     spec_dir = path.join(ROOT_APP_DIR, 'api_connexion', 'openapi')
-    connexion_app = connexion.App(__name__, specification_dir=spec_dir, skip_error_handlers=True)
+    connexion_app = App(__name__, specification_dir=spec_dir, skip_error_handlers=True)
     connexion_app.app = app
     api_bp = connexion_app.add_api(
         specification='v1.yaml', base_path=base_path, validate_responses=True, strict_validation=True
@@ -202,7 +222,7 @@ def init_api_experimental(app):
         "The experimental REST API is deprecated. Please migrate to the stable REST API. "
         "Please note that the experimental API do not have access control. "
         "The authenticated user has full access.",
-        DeprecationWarning,
+        RemovedInAirflow3Warning,
     )
     app.register_blueprint(endpoints.api_experimental, url_prefix='/api/experimental')
     app.extensions['csrf'].exempt(endpoints.api_experimental)

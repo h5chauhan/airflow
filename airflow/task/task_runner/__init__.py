@@ -15,7 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+from __future__ import annotations
 
 import logging
 
@@ -43,7 +43,6 @@ def get_task_runner(local_task_job):
 
     :param local_task_job: The LocalTaskJob associated with the TaskInstance
         that needs to be executed.
-    :type local_task_job: airflow.jobs.local_task_job.LocalTaskJob
     :return: The task runner to use to run the task.
     :rtype: airflow.task.task_runner.base_task_runner.BaseTaskRunner
     """

@@ -33,8 +33,9 @@ Content
     :caption: Resources
 
     PyPI Repository <https://pypi.org/project/apache-airflow-providers-openfaas/>
+    Installing from sources <installing-providers-from-sources>
 
-.. THE REMINDER OF THE FILE IS AUTOMATICALLY GENERATED. IT WILL BE OVERWRITTEN AT RELEASE TIME!
+.. THE REMAINDER OF THE FILE IS AUTOMATICALLY GENERATED. IT WILL BE OVERWRITTEN AT RELEASE TIME!
 
 
 .. toctree::
@@ -50,7 +51,7 @@ Package apache-airflow-providers-openfaas
 `OpenFaaS <https://www.openfaas.com/>`__
 
 
-Release: 2.0.0
+Release: 3.0.0
 
 Provider package
 ----------------
@@ -61,7 +62,8 @@ are in ``airflow.providers.openfaas`` python package.
 Installation
 ------------
 
-You can install this package on top of an existing airflow 2.1+ installation via
+You can install this package on top of an existing Airflow 2 installation (see ``Requirements`` below)
+for the minimum Airflow version supported) via
 ``pip install apache-airflow-providers-openfaas``
 
 .. include:: ../../airflow/providers/openfaas/CHANGELOG.rst

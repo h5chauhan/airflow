@@ -16,11 +16,13 @@
 # specific language governing permissions and limitations
 # under the License.
 """Sync permission command"""
+from __future__ import annotations
+
 from airflow.utils import cli as cli_utils
 from airflow.www.app import cached_app
 
 
-@cli_utils.action_logging
+@cli_utils.action_cli
 def sync_perm(args):
     """Updates permissions for existing roles and DAGs"""
     appbuilder = cached_app().appbuilder

@@ -16,8 +16,237 @@
     under the License.
 
 
+.. NOTE TO CONTRIBUTORS:
+   Please, only add notes to the Changelog just below the "Changelog" header when there are some breaking changes
+   and you want to add an explanation to the users on how they are supposed to deal with them.
+   The changelog is updated and maintained semi-automatically by release manager.
+
 Changelog
 ---------
+
+3.2.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add logging options to docker operator (#26653)``
+* ``Add pre-commit hook for custom_operator_name (#25786)``
+* ``Implement ExternalPythonOperator (#25780)``
+
+Bug Fixes
+~~~~~~~~~
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Apply PEP-563 (Postponed Evaluation of Annotations) to non-core airflow (#26289)``
+
+3.1.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Force-remove container after DockerOperator execution (#23160)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``'DockerOperator' fix cli.logs giving character array instead of string (#24726)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Move provider dependencies to inside provider folders (#24672)``
+   * ``Remove 'hook-class-names' from provider.yaml (#24702)``
+   * ``Clean up task decorator type hints and docstrings (#24667)``
+
+3.0.0
+.....
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+* This release of provider is only available for Airflow 2.2+ as explained in the Apache Airflow
+  providers support policy https://github.com/apache/airflow/blob/main/README.md#support-for-providers
+
+Misc
+~~~~
+
+* ``Remove 'xcom_push' from 'DockerOperator' (#23981)``
+* ``docker new system test (#23167)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Add explanatory note for contributors about updating Changelog (#24229)``
+   * ``Prepare docs for May 2022 provider's release (#24231)``
+   * ``Update package description to remove double min-airflow specification (#24292)``
+
+2.7.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add 'device_requests' parameter to 'DockerOperator' (#23554)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix new MyPy errors in main (#22884)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Use new Breese for building, pulling and verifying the images. (#23104)``
+
+2.6.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add timeout parameter to 'DockerOperator' (#22502)``
+
+2.5.2
+.....
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix mistakenly added install_requires for all providers (#22382)``
+
+Misc
+~~~~
+
+* ``Correct 'multiple_outputs' param descriptions mentioning lists/tuples (#22371)``
+
+2.5.1
+.....
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Avoid trying to kill container when it did not succeed for Docker (#22145)``
+
+Misc
+~~~~~
+
+* ``Add Trove classifiers in PyPI (Framework :: Apache Airflow :: Provider)``
+
+2.5.0
+.....
+
+Features
+~~~~~~~~
+
+* ``added docker network_mode options (#21986)``
+
+Misc
+~~~~
+
+* ``Support for Python 3.10``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Change default python executable to python3 for docker decorator (#21973)``
+   * ``Switch to Debian 11 (bullseye) as base for our dockerfiles (#21378) (#21875)``
+   * ``Revert "Switch to Debian 11 (bullseye) as base for our dockerfiles (#21378)" (#21874)``
+   * ``Switch to Debian 11 (bullseye) as base for our dockerfiles (#21378)``
+
+2.4.1
+.....
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fixes Docker xcom functionality (#21175)``
+* ``Fix docker behaviour with byte lines returned (#21429)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Add optional features in providers. (#21074)``
+   * ``Remove ':type' lines now sphinx-autoapi supports typehints (#20951)``
+   * ``Rewrite the task decorator as a composition (#20868)``
+   * ``Add documentation for January 2021 providers release (#21257)``
+
+2.4.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Allow DockerOperator's image to be templated (#19997)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Fix mypy docker provider (#20235)``
+   * ``Update documentation for November 2021 provider's release (#19882)``
+   * ``Remove remaining 'pylint: disable' comments (#19541)``
+   * ``Fix MyPy errors for Airflow decorators (#20034)``
+   * ``Use typed Context EVERYWHERE (#20565)``
+   * ``Fix template_fields type to have MyPy friendly Sequence type (#20571)``
+   * ``Even more typing in operators (template_fields/ext) (#20608)``
+   * ``Update documentation for provider December 2021 release (#20523)``
+
+2.3.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add support of placement in the DockerSwarmOperator (#18990)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fixup string concatenations (#19099)``
+* ``Remove the docker timeout workaround (#18872)``
+
+
+Other
+~~~~~
+
+   * ``Move docker decorator example dag to docker provider (#18739)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+
+2.2.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add a Docker Taskflow decorator (#15330)``
+
+This version of Docker Provider has a new feature - TaskFlow decorator that only works in Airflow 2.2.
+If you try to use the decorator in pre-Airflow 2.2 version you will get an error:
+
+.. code-block:: text
+
+    AttributeError: '_TaskDecorator' object has no attribute 'docker'
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Static start_date and default arg cleanup for misc. provider example DAGs (#18597)``
+   * ``Cope with '@task.docker' decorated function not returning anything (#18463)``
+
+2.1.1
+.....
+
+Features
+~~~~~~~~
+
+* ``Add support for configs, secrets, networks and replicas for DockerSwarmOperator (#17474)``
+
+Misc
+~~~~
+
+* ``Optimise connection importing for Airflow 2.2.0``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Update description about the new ''connection-types'' provider meta-data (#17767)``
+   * ``Import Hooks lazily individually in providers manager (#17682)``
 
 2.1.0
 .....
@@ -44,7 +273,7 @@ using the new parameter to disable mounting the folder.
    appropriate section above if needed. Do not delete the lines(!):
    * ``Removes pylint from our toolchain (#16682)``
    * ``Prepare documentation for July release of providers. (#17015)``
-   * ``Fixed wrongly escaped characters in amazon&#39;s changelog (#17020)``
+   * ``Fixed wrongly escaped characters in amazon's changelog (#17020)``
    * ``Prepares documentation for RC2 release of Docker Provider (#17066)``
    * ``Updating Docker example DAGs to use XComArgs (#16871)``
 

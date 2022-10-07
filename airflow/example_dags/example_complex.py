@@ -15,24 +15,24 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """
 Example Airflow DAG that shows the complex DAG structure.
 """
+from __future__ import annotations
+
+import pendulum
 
 from airflow import models
 from airflow.models.baseoperator import chain
 from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
 
 with models.DAG(
     dag_id="example_complex",
-    schedule_interval=None,
-    start_date=days_ago(1),
+    schedule=None,
+    start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
+    catchup=False,
     tags=['example', 'example2', 'example3'],
 ) as dag:
-
     # Create
     create_entry_group = BashOperator(task_id="create_entry_group", bash_command="echo create_entry_group")
 
@@ -131,7 +131,7 @@ with models.DAG(
     )
 
     # Search
-    search_catalog = PythonOperator(task_id="search_catalog", python_callable=lambda: print("search_catalog"))
+    search_catalog = BashOperator(task_id="search_catalog", bash_command="echo search_catalog")
 
     search_catalog_result = BashOperator(
         task_id="search_catalog_result", bash_command="echo search_catalog_result"

@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 from flask_appbuilder.fieldwidgets import BS3TextAreaFieldWidget, BS3TextFieldWidget
 from flask_appbuilder.widgets import RenderTemplateWidget
 from markupsafe import Markup
@@ -42,10 +44,12 @@ class AirflowDateTimePickerWidget:
         kwargs.setdefault("id", field.id)
         kwargs.setdefault("name", field.name)
         if not field.data:
-            field.data = ""
+            field.data = ''
         template = self.data_template
 
-        return Markup(template % {"text": html_params(type="text", value=field.data, **kwargs)})
+        return Markup(
+            template % {"text": html_params(type="text", value=field.data, required=True, **kwargs)}
+        )
 
 
 class AirflowDateTimePickerROWidget(AirflowDateTimePickerWidget):
@@ -70,3 +74,9 @@ class BS3TextAreaROWidget(BS3TextAreaFieldWidget):
     def __call__(self, field, **kwargs):
         kwargs['readonly'] = 'true'
         return super().__call__(field, **kwargs)
+
+
+class AirflowVariableShowWidget(RenderTemplateWidget):
+    """Airflow variable show widget"""
+
+    template = 'airflow/variable_show_widget.html'

@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
 import unittest
@@ -82,7 +83,7 @@ TEST_NOTIFICATION_CHANNEL_2 = {
 
 class TestStackdriverHookMethods(unittest.TestCase):
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_policy_client')
@@ -96,12 +97,12 @@ class TestStackdriverHookMethods(unittest.TestCase):
         method.assert_called_once_with(
             request=dict(name=f'projects/{PROJECT_ID}', filter=TEST_FILTER, order_by=None, page_size=None),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_policy_client')
@@ -121,7 +122,7 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_policy_client.return_value.list_alert_policies.assert_called_once_with(
             request=dict(name=f'projects/{PROJECT_ID}', filter=TEST_FILTER, order_by=None, page_size=None),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
         mask = FieldMask(paths=["enabled"])
@@ -129,12 +130,12 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_policy_client.return_value.update_alert_policy.assert_called_once_with(
             request=dict(alert_policy=alert_policy_disabled, update_mask=mask),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_policy_client')
@@ -154,7 +155,7 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_policy_client.return_value.list_alert_policies.assert_called_once_with(
             request=dict(name=f'projects/{PROJECT_ID}', filter=TEST_FILTER, order_by=None, page_size=None),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
         mask = FieldMask(paths=["enabled"])
@@ -162,12 +163,12 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_policy_client.return_value.update_alert_policy.assert_called_once_with(
             request=dict(alert_policy=alert_policy_enabled, update_mask=mask),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_policy_client')
@@ -194,13 +195,13 @@ class TestStackdriverHookMethods(unittest.TestCase):
                 page_size=None,
             ),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
         mock_policy_client.return_value.list_alert_policies.assert_called_once_with(
             request=dict(name=f'projects/{PROJECT_ID}', filter=None, order_by=None, page_size=None),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
         alert_policy_to_create.name = None
@@ -214,17 +215,17 @@ class TestStackdriverHookMethods(unittest.TestCase):
                 alert_policy=alert_policy_to_create,
             ),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
         existing_alert_policy.creation_record = None
         existing_alert_policy.mutation_record = None
         mock_policy_client.return_value.update_alert_policy.assert_called_once_with(
-            request=dict(alert_policy=existing_alert_policy), retry=DEFAULT, timeout=DEFAULT, metadata=()
+            request=dict(alert_policy=existing_alert_policy), retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_policy_client')
@@ -246,23 +247,23 @@ class TestStackdriverHookMethods(unittest.TestCase):
             request=dict(name=f'projects/{PROJECT_ID}', filter=None, order_by=None, page_size=None),
             metadata=(),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
         )
         mock_policy_client.return_value.list_alert_policies.assert_called_once_with(
             request=dict(name=f'projects/{PROJECT_ID}', filter=None, order_by=None, page_size=None),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
         existing_alert_policy.creation_record = None
         existing_alert_policy.mutation_record = None
         mock_policy_client.return_value.update_alert_policy.assert_called_once_with(
-            request=dict(alert_policy=existing_alert_policy), retry=DEFAULT, timeout=DEFAULT, metadata=()
+            request=dict(alert_policy=existing_alert_policy), retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_policy_client')
@@ -274,12 +275,12 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_policy_client.return_value.delete_alert_policy.assert_called_once_with(
             request=dict(name='test-alert'),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_channel_client')
@@ -292,12 +293,12 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_channel_client.return_value.list_notification_channels.assert_called_once_with(
             request=dict(name=f'projects/{PROJECT_ID}', filter=TEST_FILTER, order_by=None, page_size=None),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_channel_client')
@@ -323,12 +324,12 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_channel_client.return_value.update_notification_channel.assert_called_once_with(
             request=dict(notification_channel=notification_channel_disabled, update_mask=mask),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_channel_client')
@@ -353,12 +354,12 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_channel_client.return_value.update_notification_channel.assert_called_once_with(
             request=dict(notification_channel=notification_channel_enabled, update_mask=mask),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_channel_client')
@@ -377,13 +378,13 @@ class TestStackdriverHookMethods(unittest.TestCase):
         mock_channel_client.return_value.list_notification_channels.assert_called_once_with(
             request=dict(name=f'projects/{PROJECT_ID}', filter=None, order_by=None, page_size=None),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
         mock_channel_client.return_value.update_notification_channel.assert_called_once_with(
             request=dict(notification_channel=existing_notification_channel),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
         notification_channel_to_be_created.name = None
@@ -392,12 +393,12 @@ class TestStackdriverHookMethods(unittest.TestCase):
                 name=f'projects/{PROJECT_ID}', notification_channel=notification_channel_to_be_created
             ),
             retry=DEFAULT,
-            timeout=DEFAULT,
+            timeout=None,
             metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id',
+        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id',
         return_value=(CREDENTIALS, PROJECT_ID),
     )
     @mock.patch('airflow.providers.google.cloud.hooks.stackdriver.StackdriverHook._get_channel_client')
@@ -409,5 +410,5 @@ class TestStackdriverHookMethods(unittest.TestCase):
             name='test-channel',
         )
         mock_channel_client.return_value.delete_notification_channel.assert_called_once_with(
-            request=dict(name='test-channel'), retry=DEFAULT, timeout=DEFAULT, metadata=()
+            request=dict(name='test-channel'), retry=DEFAULT, timeout=None, metadata=()
         )

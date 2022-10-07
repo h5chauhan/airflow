@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -23,7 +24,7 @@ import pytest
 
 from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.hooks.sagemaker import SageMakerHook
-from airflow.providers.amazon.aws.sensors.sagemaker_endpoint import SageMakerEndpointSensor
+from airflow.providers.amazon.aws.sensors.sagemaker import SageMakerEndpointSensor
 
 DESCRIBE_ENDPOINT_CREATING_RESPONSE = {
     'EndpointStatus': 'Creating',

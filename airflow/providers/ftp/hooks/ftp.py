@@ -15,12 +15,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import datetime
 import ftplib
 import os.path
-from typing import Any, List, Optional
+from typing import Any, Callable
 
 from airflow.hooks.base import BaseHook
 
@@ -35,7 +35,6 @@ class FTPHook(BaseHook):
 
     :param ftp_conn_id: The :ref:`ftp connection id <howto/connection:ftp>`
         reference.
-    :type ftp_conn_id: str
     """
 
     conn_name_attr = 'ftp_conn_id'
@@ -46,7 +45,7 @@ class FTPHook(BaseHook):
     def __init__(self, ftp_conn_id: str = default_conn_name) -> None:
         super().__init__()
         self.ftp_conn_id = ftp_conn_id
-        self.conn: Optional[ftplib.FTP] = None
+        self.conn: ftplib.FTP | None = None
 
     def __enter__(self):
         return self
@@ -80,19 +79,17 @@ class FTPHook(BaseHook):
         on the remote system (where the MLSD command is supported).
 
         :param path: full path to the remote directory
-        :type path: str
         """
         conn = self.get_conn()
         conn.cwd(path)
         files = dict(conn.mlsd())
         return files
 
-    def list_directory(self, path: str) -> List[str]:
+    def list_directory(self, path: str) -> list[str]:
         """
         Returns a list of files on the remote system.
 
         :param path: full path to the remote directory to list
-        :type path: str
         """
         conn = self.get_conn()
         conn.cwd(path)
@@ -105,7 +102,6 @@ class FTPHook(BaseHook):
         Creates a directory on the remote system.
 
         :param path: full path to the remote directory to create
-        :type path: str
         """
         conn = self.get_conn()
         conn.mkd(path)
@@ -115,12 +111,17 @@ class FTPHook(BaseHook):
         Deletes a directory on the remote system.
 
         :param path: full path to the remote directory to delete
-        :type path: str
         """
         conn = self.get_conn()
         conn.rmd(path)
 
-    def retrieve_file(self, remote_full_path, local_full_path_or_buffer, callback=None):
+    def retrieve_file(
+        self,
+        remote_full_path: str,
+        local_full_path_or_buffer: Any,
+        callback: Callable | None = None,
+        block_size: int = 8192,
+    ) -> None:
         """
         Transfers the remote file to a local location.
 
@@ -129,17 +130,16 @@ class FTPHook(BaseHook):
         be written to the buffer but not closed.
 
         :param remote_full_path: full path to the remote file
-        :type remote_full_path: str
         :param local_full_path_or_buffer: full path to the local file or a
             file-like buffer
-        :type local_full_path_or_buffer: str or file-like buffer
         :param callback: callback which is called each time a block of data
             is read. if you do not use a callback, these blocks will be written
             to the file or buffer passed in. if you do pass in a callback, note
             that writing to a file or buffer will need to be handled inside the
             callback.
             [default: output_handle.write()]
-        :type callback: callable
+        :param block_size: file is transferred in chunks of default size 8192
+            or as set by user
 
         .. code-block:: python
 
@@ -172,31 +172,30 @@ class FTPHook(BaseHook):
 
         """
         conn = self.get_conn()
-
         is_path = isinstance(local_full_path_or_buffer, str)
 
         # without a callback, default to writing to a user-provided file or
         # file-like buffer
         if not callback:
             if is_path:
-
                 output_handle = open(local_full_path_or_buffer, 'wb')
             else:
                 output_handle = local_full_path_or_buffer
+
             callback = output_handle.write
-        else:
-            output_handle = None
 
         remote_path, remote_file_name = os.path.split(remote_full_path)
         conn.cwd(remote_path)
         self.log.info('Retrieving file from FTP: %s', remote_full_path)
-        conn.retrbinary(f'RETR {remote_file_name}', callback)
+        conn.retrbinary(f'RETR {remote_file_name}', callback, block_size)
         self.log.info('Finished retrieving file from FTP: %s', remote_full_path)
 
         if is_path and output_handle:
             output_handle.close()
 
-    def store_file(self, remote_full_path: str, local_full_path_or_buffer: Any) -> None:
+    def store_file(
+        self, remote_full_path: str, local_full_path_or_buffer: Any, block_size: int = 8192
+    ) -> None:
         """
         Transfers a local file to the remote location.
 
@@ -205,23 +204,21 @@ class FTPHook(BaseHook):
         be read from the buffer but not closed.
 
         :param remote_full_path: full path to the remote file
-        :type remote_full_path: str
         :param local_full_path_or_buffer: full path to the local file or a
             file-like buffer
-        :type local_full_path_or_buffer: str or file-like buffer
+        :param block_size: file is transferred in chunks of default size 8192
+            or as set by user
         """
         conn = self.get_conn()
-
         is_path = isinstance(local_full_path_or_buffer, str)
 
         if is_path:
-
             input_handle = open(local_full_path_or_buffer, 'rb')
         else:
             input_handle = local_full_path_or_buffer
         remote_path, remote_file_name = os.path.split(remote_full_path)
         conn.cwd(remote_path)
-        conn.storbinary(f'STOR {remote_file_name}', input_handle)
+        conn.storbinary(f'STOR {remote_file_name}', input_handle, block_size)
 
         if is_path:
             input_handle.close()
@@ -231,7 +228,6 @@ class FTPHook(BaseHook):
         Removes a file on the FTP Server.
 
         :param path: full path to the remote file
-        :type path: str
         """
         conn = self.get_conn()
         conn.delete(path)
@@ -251,7 +247,6 @@ class FTPHook(BaseHook):
         Returns a datetime object representing the last time the file was modified
 
         :param path: remote file path
-        :type path: str
         """
         conn = self.get_conn()
         ftp_mdtm = conn.sendcmd('MDTM ' + path)
@@ -262,16 +257,24 @@ class FTPHook(BaseHook):
         except ValueError:
             return datetime.datetime.strptime(time_val, '%Y%m%d%H%M%S')
 
-    def get_size(self, path: str) -> Optional[int]:
+    def get_size(self, path: str) -> int | None:
         """
         Returns the size of a file (in bytes)
 
         :param path: remote file path
-        :type path: str
         """
         conn = self.get_conn()
         size = conn.size(path)
         return int(size) if size else None
+
+    def test_connection(self) -> tuple[bool, str]:
+        """Test the FTP connection by calling path with directory"""
+        try:
+            conn = self.get_conn()
+            conn.pwd
+            return True, "Connection successfully tested"
+        except Exception as e:
+            return False, str(e)
 
 
 class FTPSHook(FTPHook):

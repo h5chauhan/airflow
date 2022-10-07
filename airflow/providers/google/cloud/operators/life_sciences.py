@@ -16,12 +16,17 @@
 # specific language governing permissions and limitations
 # under the License.
 """Operators that interact with Google Cloud Life Sciences service."""
+from __future__ import annotations
 
-from typing import Optional, Sequence, Union
+from typing import TYPE_CHECKING, Sequence
 
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.life_sciences import LifeSciencesHook
+from airflow.providers.google.cloud.links.life_sciences import LifeSciencesLink
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class LifeSciencesRunPipelineOperator(BaseOperator):
@@ -33,16 +38,11 @@ class LifeSciencesRunPipelineOperator(BaseOperator):
         :ref:`howto/operator:LifeSciencesRunPipelineOperator`
 
     :param body: The request body
-    :type body: dict
     :param location: The location of the project
-    :type location: str
     :param project_id: ID of the Google Cloud project if None then
         default project_id is used.
-    :type project_id: str
     :param gcp_conn_id: The connection ID to use to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param api_version: API version used (for example v2beta).
-    :type api_version: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -51,25 +51,25 @@ class LifeSciencesRunPipelineOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
-    template_fields = (
+    template_fields: Sequence[str] = (
         "body",
         "gcp_conn_id",
         "api_version",
         "impersonation_chain",
     )
+    operator_extra_links = (LifeSciencesLink(),)
 
     def __init__(
         self,
         *,
         body: dict,
         location: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         gcp_conn_id: str = "google_cloud_default",
         api_version: str = "v2beta",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -87,11 +87,17 @@ class LifeSciencesRunPipelineOperator(BaseOperator):
         if not self.location:
             raise AirflowException("The required parameter 'location' is missing")
 
-    def execute(self, context) -> dict:
+    def execute(self, context: Context) -> dict:
         hook = LifeSciencesHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
             impersonation_chain=self.impersonation_chain,
         )
-
+        project_id = self.project_id or hook.project_id
+        if project_id:
+            LifeSciencesLink.persist(
+                context=context,
+                task_instance=self,
+                project_id=project_id,
+            )
         return hook.run_pipeline(body=self.body, location=self.location, project_id=self.project_id)

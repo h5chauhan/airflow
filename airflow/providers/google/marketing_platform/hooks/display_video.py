@@ -16,8 +16,9 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains Google DisplayVideo hook."""
+from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Sequence
 
 from googleapiclient.discovery import Resource, build
 
@@ -27,14 +28,14 @@ from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 class GoogleDisplayVideo360Hook(GoogleBaseHook):
     """Hook for Google Display & Video 360."""
 
-    _conn = None  # type: Optional[Any]
+    _conn: Resource | None = None
 
     def __init__(
         self,
         api_version: str = "v1",
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -68,7 +69,7 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
         return self._conn
 
     @staticmethod
-    def erf_uri(partner_id, entity_type) -> List[str]:
+    def erf_uri(partner_id, entity_type) -> list[str]:
         """
         Return URI for all Entity Read Files in bucket.
 
@@ -81,19 +82,16 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
         https://developers.google.com/bid-manager/guides/entity-read/overview
 
         :param partner_id The numeric ID of your Partner.
-        :type partner_id: int
         :param entity_type: The type of file Partner, Advertiser, InsertionOrder,
         LineItem, Creative, Pixel, InventorySource, UserList, UniversalChannel, and summary.
-        :type entity_type: str
         """
         return [f"gdbm-{partner_id}/entity/{{{{ ds_nodash }}}}.*.{entity_type}.json"]
 
-    def create_query(self, query: Dict[str, Any]) -> dict:
+    def create_query(self, query: dict[str, Any]) -> dict:
         """
         Creates a query.
 
         :param query: Query object to be passed to request body.
-        :type query: Dict[str, Any]
         """
         response = self.get_conn().queries().createquery(body=query).execute(num_retries=self.num_retries)
         return response
@@ -103,7 +101,6 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
         Deletes a stored query as well as the associated stored reports.
 
         :param query_id: Query ID to delete.
-        :type query_id: str
         """
         (self.get_conn().queries().deletequery(queryId=query_id).execute(num_retries=self.num_retries))
 
@@ -112,26 +109,23 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
         Retrieves a stored query.
 
         :param query_id: Query ID to retrieve.
-        :type query_id: str
         """
         response = self.get_conn().queries().getquery(queryId=query_id).execute(num_retries=self.num_retries)
         return response
 
     def list_queries(
         self,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Retrieves stored queries."""
         response = self.get_conn().queries().listqueries().execute(num_retries=self.num_retries)
         return response.get('queries', [])
 
-    def run_query(self, query_id: str, params: Dict[str, Any]) -> None:
+    def run_query(self, query_id: str, params: dict[str, Any] | None) -> None:
         """
         Runs a stored query to generate a report.
 
         :param query_id: Query ID to run.
-        :type query_id: str
         :param params: Parameters for the report.
-        :type params: Dict[str, Any]
         """
         (
             self.get_conn()
@@ -140,12 +134,11 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
             .execute(num_retries=self.num_retries)
         )
 
-    def upload_line_items(self, line_items: Any) -> List[Dict[str, Any]]:
+    def upload_line_items(self, line_items: Any) -> list[dict[str, Any]]:
         """
         Uploads line items in CSV format.
 
         :param line_items: downloaded data from GCS and passed to the body request
-        :type line_items: Any
         :return: response body.
         :rtype: List[Dict[str, Any]]
         """
@@ -163,14 +156,13 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
         )
         return response
 
-    def download_line_items(self, request_body: Dict[str, Any]) -> List[Any]:
+    def download_line_items(self, request_body: dict[str, Any]) -> list[Any]:
         """
         Retrieves line items in CSV format.
 
         :param request_body: dictionary with parameters that should be passed into.
             More information about it can be found here:
             https://developers.google.com/bid-manager/v1.1/lineitems/downloadlineitems
-        :type request_body: Dict[str, Any]
         """
         response = (
             self.get_conn()
@@ -180,12 +172,11 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
         )
         return response["lineItems"]
 
-    def create_sdf_download_operation(self, body_request: Dict[str, Any]) -> Dict[str, Any]:
+    def create_sdf_download_operation(self, body_request: dict[str, Any]) -> dict[str, Any]:
         """
         Creates an SDF Download Task and Returns an Operation.
 
         :param body_request: Body request.
-        :type body_request: Dict[str, Any]
 
         More information about body request n be found here:
         https://developers.google.com/display-video/api/reference/rest/v1/sdfdownloadtasks/create
@@ -203,7 +194,6 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
         Gets the latest state of an asynchronous SDF download task operation.
 
         :param operation_name: The name of the operation resource.
-        :type operation_name: str
         """
         result = (
             self.get_conn_to_display_video()
@@ -219,7 +209,6 @@ class GoogleDisplayVideo360Hook(GoogleBaseHook):
         Downloads media.
 
         :param resource_name: of the media that is being downloaded.
-        :type resource_name: str
         """
-        request = self.get_conn_to_display_video().media().download_media(resource_name=resource_name)
+        request = self.get_conn_to_display_video().media().download_media(resourceName=resource_name)
         return request

@@ -14,10 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -33,7 +34,6 @@ class PlexusJobOperator(BaseOperator):
     Submits a Plexus job.
 
     :param job_params: parameters required to launch a job.
-    :type job_params: dict
 
     Required job parameters are the following
         - "name": job name created by user.
@@ -44,7 +44,7 @@ class PlexusJobOperator(BaseOperator):
 
     """
 
-    def __init__(self, job_params: Dict, **kwargs) -> None:
+    def __init__(self, job_params: dict, **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.job_params = job_params
@@ -87,8 +87,8 @@ class PlexusJobOperator(BaseOperator):
                 get_job = requests.get(jid_endpoint, headers=headers, timeout=5)
                 if not get_job.ok:
                     raise AirflowException(
-                        "Could not retrieve job status. Status Code: [{}]. "
-                        "Reason: {} - {}".format(get_job.status_code, get_job.reason, get_job.text)
+                        "Could not retrieve job status. "
+                        f"Status Code: [{get_job.status_code}]. Reason: {get_job.reason} - {get_job.text}"
                     )
                 new_state = get_job.json()["last_state"]
                 if new_state in ("Cancelled", "Failed"):
@@ -98,8 +98,8 @@ class PlexusJobOperator(BaseOperator):
                 state = new_state
         else:
             raise AirflowException(
-                "Could not start job. Status Code: [{}]. "
-                "Reason: {} - {}".format(create_job.status_code, create_job.reason, create_job.text)
+                "Could not start job. "
+                f"Status Code: [{create_job.status_code}]. Reason: {create_job.reason} - {create_job.text}"
             )
 
     def _api_lookup(self, param: str, hook):
@@ -129,7 +129,7 @@ class PlexusJobOperator(BaseOperator):
 
         return v
 
-    def construct_job_params(self, hook: Any) -> Dict[Any, Optional[Any]]:
+    def construct_job_params(self, hook: Any) -> dict[Any, Any | None]:
         """
         Creates job_params dict for api call to
         launch a Plexus job.
@@ -143,7 +143,6 @@ class PlexusJobOperator(BaseOperator):
         user-provided value.
 
         :param hook: plexus hook object
-        :type hook: airflow hook
         """
         missing_params = self.required_params - set(self.job_params)
         if len(missing_params) > 0:

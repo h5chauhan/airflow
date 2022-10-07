@@ -15,15 +15,30 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
+
 # Note: Any AirflowException raised is expected to cause the TaskInstance
 #       to be marked in an ERROR state
 
 
-class ECSOperatorError(Exception):
+class EcsTaskFailToStart(Exception):
+    """Raise when ECS tasks fail to start AFTER processing the request."""
+
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
+
+    def __reduce__(self):
+        return EcsTaskFailToStart, (self.message)
+
+
+class EcsOperatorError(Exception):
     """Raise when ECS cannot handle the request."""
 
     def __init__(self, failures: list, message: str):
         self.failures = failures
         self.message = message
         super().__init__(message)
+
+    def __reduce__(self):
+        return EcsOperatorError, (self.failures, self.message)

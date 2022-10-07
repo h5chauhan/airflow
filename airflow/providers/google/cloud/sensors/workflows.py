@@ -14,9 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import Optional, Sequence, Set, Tuple, Union
+from typing import TYPE_CHECKING, Sequence
 
+from google.api_core.gapic_v1.method import DEFAULT, _MethodDefault
 from google.api_core.retry import Retry
 from google.cloud.workflows.executions_v1beta import Execution
 
@@ -24,36 +26,30 @@ from airflow.exceptions import AirflowException
 from airflow.providers.google.cloud.hooks.workflows import WorkflowsHook
 from airflow.sensors.base import BaseSensorOperator
 
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
 
 class WorkflowExecutionSensor(BaseSensorOperator):
     """
     Checks state of an execution for the given ``workflow_id`` and ``execution_id``.
 
     :param workflow_id: Required. The ID of the workflow.
-    :type workflow_id: str
     :param execution_id: Required. The ID of the execution.
-    :type execution_id: str
     :param project_id: Required. The ID of the Google Cloud project the cluster belongs to.
-    :type project_id: str
     :param location: Required. The Cloud Dataproc region in which to handle the request.
-    :type location: str
     :param success_states: Execution states to be considered as successful, by default
         it's only ``SUCCEEDED`` state
-    :type success_states: List[Execution.State]
     :param failure_states: Execution states to be considered as failures, by default
         they are ``FAILED`` and ``CANCELLED`` states.
-    :type failure_states: List[Execution.State]
     :param retry: A retry object used to retry requests. If ``None`` is specified, requests will not be
         retried.
-    :type retry: google.api_core.retry.Retry
     :param request_timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
         ``retry`` is specified, the timeout applies to each individual attempt.
-    :type request_timeout: float
     :param metadata: Additional metadata that is provided to the method.
-    :type metadata: Sequence[Tuple[str, str]]
     """
 
-    template_fields = ("location", "workflow_id", "execution_id")
+    template_fields: Sequence[str] = ("location", "workflow_id", "execution_id")
 
     def __init__(
         self,
@@ -61,20 +57,23 @@ class WorkflowExecutionSensor(BaseSensorOperator):
         workflow_id: str,
         execution_id: str,
         location: str,
-        project_id: str,
-        success_states: Optional[Set[Execution.State]] = None,
-        failure_states: Optional[Set[Execution.State]] = None,
-        retry: Optional[Retry] = None,
-        request_timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        project_id: str | None = None,
+        success_states: set[Execution.State] | None = None,
+        failure_states: set[Execution.State] | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        request_timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.success_states = success_states or {Execution.State.SUCCEEDED}
-        self.failure_states = failure_states or {Execution.State.FAILED, Execution.State.CANCELLED}
+        self.success_states = success_states or {Execution.State(Execution.State.SUCCEEDED)}
+        self.failure_states = failure_states or {
+            Execution.State(Execution.State.FAILED),
+            Execution.State(Execution.State.CANCELLED),
+        }
         self.workflow_id = workflow_id
         self.execution_id = execution_id
         self.location = location
@@ -85,7 +84,7 @@ class WorkflowExecutionSensor(BaseSensorOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def poke(self, context):
+    def poke(self, context: Context):
         hook = WorkflowsHook(gcp_conn_id=self.gcp_conn_id, impersonation_chain=self.impersonation_chain)
         self.log.info("Checking state of execution %s for workflow %s", self.execution_id, self.workflow_id)
         execution: Execution = hook.get_execution(

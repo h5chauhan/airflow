@@ -19,8 +19,10 @@
 Operators and Hooks Reference
 =============================
 
+Here is a list of operators and hooks that are released independently of the Airflow core. A list of core operators is available in the documentation for ``apache-airflow``: :doc:`Core Operators and Hooks Reference <apache-airflow:operators-and-hooks-ref>`.
+
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 3
     :glob:
 
     *

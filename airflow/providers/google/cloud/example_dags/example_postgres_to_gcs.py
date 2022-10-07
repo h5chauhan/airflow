@@ -18,11 +18,13 @@
 """
 Example DAG using PostgresToGoogleCloudStorageOperator.
 """
+from __future__ import annotations
+
 import os
+from datetime import datetime
 
 from airflow import models
 from airflow.providers.google.cloud.transfers.postgres_to_gcs import PostgresToGCSOperator
-from airflow.utils.dates import days_ago
 
 PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "example-project")
 GCS_BUCKET = os.environ.get("GCP_GCS_BUCKET_NAME", "INVALID BUCKET NAME")
@@ -31,8 +33,8 @@ SQL_QUERY = "select * from test_table;"
 
 with models.DAG(
     dag_id='example_postgres_to_gcs',
-    schedule_interval=None,  # Override to match your needs
-    start_date=days_ago(1),
+    start_date=datetime(2021, 1, 1),
+    catchup=False,
     tags=['example'],
 ) as dag:
     upload_data = PostgresToGCSOperator(

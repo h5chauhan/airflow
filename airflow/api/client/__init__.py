@@ -16,6 +16,8 @@
 # specific language governing permissions and limitations
 # under the License.
 """API Client that allows interacting with Airflow API"""
+from __future__ import annotations
+
 from importlib import import_module
 from typing import Any
 
@@ -26,15 +28,16 @@ from airflow.configuration import conf
 
 def get_current_api_client() -> Client:
     """Return current API Client based on current Airflow configuration"""
-    api_module = import_module(conf.get('cli', 'api_client'))  # type: Any
-    auth_backend = api.load_auth()
+    api_module = import_module(conf.get_mandatory_value('cli', 'api_client'))  # type: Any
+    auth_backends = api.load_auth()
     session = None
-    session_factory = getattr(auth_backend, 'create_client_session', None)
-    if session_factory:
-        session = session_factory()
-    api_client = api_module.Client(
-        api_base_url=conf.get('cli', 'endpoint_url'),
-        auth=getattr(auth_backend, 'CLIENT_AUTH', None),
-        session=session,
-    )
+    for backend in auth_backends:
+        session_factory = getattr(backend, 'create_client_session', None)
+        if session_factory:
+            session = session_factory()
+        api_client = api_module.Client(
+            api_base_url=conf.get('cli', 'endpoint_url'),
+            auth=getattr(backend, 'CLIENT_AUTH', None),
+            session=session,
+        )
     return api_client

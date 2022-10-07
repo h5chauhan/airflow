@@ -101,7 +101,12 @@ To test outside of the dag:
             "--temp_location=gs://...",
         ]
     )
+
+.. spelling::
+
+    pcoll
 """
+from __future__ import annotations
 
 import argparse
 import base64

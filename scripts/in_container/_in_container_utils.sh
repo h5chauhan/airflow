@@ -54,24 +54,8 @@ function assert_in_container() {
 }
 
 function in_container_script_start() {
-    if [[ ${VERBOSE_COMMANDS:="false"} == "true" ]]; then
+    if [[ ${VERBOSE_COMMANDS:="false"} == "true" || ${VERBOSE_COMMANDS} == "True" ]]; then
         set -x
-    fi
-}
-
-function in_container_script_end() {
-    #shellcheck disable=2181
-    EXIT_CODE=$?
-    if [[ ${EXIT_CODE} != 0 ]]; then
-        if [[ "${PRINT_INFO_FROM_SCRIPTS="true"}" == "true" ]]; then
-            echo "########################################################################################################################"
-            echo "${COLOR_BLUE} [IN CONTAINER]   EXITING ${0} WITH EXIT CODE ${EXIT_CODE}  ${COLOR_RESET}"
-            echo "########################################################################################################################"
-        fi
-    fi
-
-    if [[ ${VERBOSE_COMMANDS} == "true" ]]; then
-        set +x
     fi
 }
 
@@ -80,14 +64,18 @@ function in_container_script_end() {
 #
 function in_container_cleanup_pyc() {
     set +o pipefail
+    if [[ ${CLEANED_PYC=} == "true" ]]; then
+        return
+    fi
     sudo find . \
         -path "./airflow/www/node_modules" -prune -o \
-        -path "./airflow/ui/node_modules" -prune -o \
+        -path "./provider_packages/airflow/www/node_modules" -prune -o \
         -path "./.eggs" -prune -o \
         -path "./docs/_build" -prune -o \
         -path "./build" -prune -o \
         -name "*.pyc" | grep ".pyc$" | sudo xargs rm -f
     set -o pipefail
+    export CLEANED_PYC="true"
 }
 
 #
@@ -95,14 +83,18 @@ function in_container_cleanup_pyc() {
 #
 function in_container_cleanup_pycache() {
     set +o pipefail
+    if [[ ${CLEANED_PYCACHE=} == "true" ]]; then
+        return
+    fi
     find . \
         -path "./airflow/www/node_modules" -prune -o \
-        -path "./airflow/ui/node_modules" -prune -o \
+        -path "./provider_packages/airflow/www/node_modules" -prune -o \
         -path "./.eggs" -prune -o \
         -path "./docs/_build" -prune -o \
         -path "./build" -prune -o \
         -name "__pycache__" | grep "__pycache__" | sudo xargs rm -rf
     set -o pipefail
+    export CLEANED_PYCACHE="true"
 }
 
 #
@@ -111,23 +103,31 @@ function in_container_cleanup_pycache() {
 # changed to the Host user via osxfs filesystem
 #
 function in_container_fix_ownership() {
-    if [[ ${HOST_OS:=} == "Linux" ]]; then
+    if [[ ${HOST_OS:=} == "linux" ]]; then
         DIRECTORIES_TO_FIX=(
+            "/dist"
             "/files"
-            "/root/.aws"
-            "/root/.azure"
-            "/root/.config/gcloud"
-            "/root/.docker"
-            "/opt/airflow/logs"
-            "/opt/airflow/docs"
+            "${AIRFLOW_SOURCES}/logs"
+            "${AIRFLOW_SOURCES}/docs"
+            "${AIRFLOW_SOURCES}/dags"
+            "${AIRFLOW_SOURCES}/airflow/"
+            "${AIRFLOW_SOURCES}/images/"
         )
-        find "${DIRECTORIES_TO_FIX[@]}" -print0 -user root 2>/dev/null |
-            xargs --null chown "${HOST_USER_ID}.${HOST_GROUP_ID}" --no-dereference || true >/dev/null 2>&1
+        count_matching=$(find "${DIRECTORIES_TO_FIX[@]}" -mindepth 1 -user root -printf . 2>/dev/null | wc -m || true)
+        if [[ ${count_matching=} != "0" && ${count_matching=} != "" ]]; then
+            echo
+            echo "${COLOR_BLUE}Fixing ownership of ${count_matching} root owned files on ${HOST_OS}${COLOR_RESET}"
+            echo
+            find "${DIRECTORIES_TO_FIX[@]}" -mindepth 1 -user root -print0 2> /dev/null |
+                xargs --null chown "${HOST_USER_ID}.${HOST_GROUP_ID}" --no-dereference || true >/dev/null 2>&1
+            echo "${COLOR_BLUE}Fixed ownership of generated files${COLOR_RESET}."
+            echo
+        fi
+     else
+        echo
+        echo "${COLOR_YELLOW}Skip fixing ownership of generated files as Host OS is ${HOST_OS}${COLOR_RESET}"
+        echo
     fi
-}
-
-function in_container_clear_tmp() {
-    rm -rf /tmp/*
 }
 
 function in_container_go_to_airflow_sources() {
@@ -179,11 +179,19 @@ function dump_airflow_logs() {
 
 function install_airflow_from_wheel() {
     local extras
-    extras="${1}"
+    extras="${1:-}"
+    if [[ ${extras} != "" ]]; then
+        extras="[${extras}]"
+    fi
+    local constraints_reference
+    constraints_reference="${2:-}"
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
+    ls -w 1 /dist
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
     local airflow_package
     airflow_package=$(find /dist/ -maxdepth 1 -type f -name 'apache_airflow-[0-9]*.whl')
     echo
-    echo "Found package: ${airflow_package}. Installing."
+    echo "Found package: ${airflow_package}. Installing with extras: ${extras}, constraints reference: ${constraints_reference}."
     echo
     if [[ -z "${airflow_package}" ]]; then
         >&2 echo
@@ -191,16 +199,38 @@ function install_airflow_from_wheel() {
         >&2 echo
         exit 4
     fi
-    pip install "${airflow_package}${extras}"
+    if [[ ${constraints_reference} == "none" ]]; then
+        pip install "${airflow_package}${extras}"
+    else
+        set +e
+        pip install "${airflow_package}${extras}" --constraint \
+            "https://raw.githubusercontent.com/apache/airflow/${constraints_reference}/constraints-${PYTHON_MAJOR_MINOR_VERSION}.txt"
+        res=$?
+        set -e
+        if [[ ${res} != "0" ]]; then
+            >&2 echo
+            >&2 echo "WARNING! Could not install provider packages with constraints, falling back to no-constraints mode"
+            >&2 echo
+            pip install "${airflow_package}${extras}"
+        fi
+    fi
 }
 
 function install_airflow_from_sdist() {
     local extras
-    extras="${1}"
+    extras="${1:-}"
+    if [[ ${extras} != "" ]]; then
+        extras="[${extras}]"
+    fi
+    local constraints_reference
+    constraints_reference="${2:-}"
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
+    ls -w 1 /dist
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
     local airflow_package
     airflow_package=$(find /dist/ -maxdepth 1 -type f -name 'apache-airflow-[0-9]*.tar.gz')
     echo
-    echo "Found package: ${airflow_package}. Installing."
+    echo "Found package: ${airflow_package}. Installing with extras: ${extras}, constraints reference: ${constraints_reference}."
     echo
     if [[ -z "${airflow_package}" ]]; then
         >&2 echo
@@ -208,7 +238,21 @@ function install_airflow_from_sdist() {
         >&2 echo
         exit 4
     fi
-    pip install "${airflow_package}${extras}"
+    if [[ ${constraints_reference} == "none" ]]; then
+        pip install "${airflow_package}${extras}"
+    else
+        set +e
+        pip install "${airflow_package}${extras}" --constraint \
+            "https://raw.githubusercontent.com/apache/airflow/${constraints_reference}/constraints-${PYTHON_MAJOR_MINOR_VERSION}.txt"
+        res=$?
+        set -e
+        if [[ ${res} != "0" ]]; then
+            >&2 echo
+            >&2 echo "WARNING! Could not install provider packages with constraints, falling back to no-constraints mode"
+            >&2 echo
+            pip install "${airflow_package}${extras}"
+        fi
+    fi
 }
 
 function uninstall_airflow() {
@@ -235,12 +279,20 @@ function uninstall_airflow_and_providers() {
 
 function install_released_airflow_version() {
     local version="${1}"
-    echo
-    echo "Installing released ${version} version of airflow without extras"
-    echo
-
+    local constraints_reference
+    constraints_reference="${2:-}"
     rm -rf "${AIRFLOW_SOURCES}"/*.egg-info
-    pip install --upgrade "apache-airflow==${version}"
+    if [[ ${AIRFLOW_EXTRAS} != "" ]]; then
+        BRACKETED_AIRFLOW_EXTRAS="[${AIRFLOW_EXTRAS}]"
+    else
+        BRACKETED_AIRFLOW_EXTRAS=""
+    fi
+    if [[ ${constraints_reference} == "none" ]]; then
+        pip install "${airflow_package}${extras}"
+    else
+        pip install "apache-airflow${BRACKETED_AIRFLOW_EXTRAS}==${version}" \
+            --constraint "https://raw.githubusercontent.com/${CONSTRAINTS_GITHUB_REPOSITORY}/constraints-${version}/constraints-${PYTHON_MAJOR_MINOR_VERSION}.txt"
+    fi
 }
 
 function install_local_airflow_with_eager_upgrade() {
@@ -255,7 +307,7 @@ function install_local_airflow_with_eager_upgrade() {
 
 
 function install_all_providers_from_pypi_with_eager_upgrade() {
-    NO_PROVIDERS_EXTRAS=$(python -c 'import setup; print(",".join(setup.CORE_EXTRAS_REQUIREMENTS))')
+    NO_PROVIDERS_EXTRAS=$(python -c 'import setup; print(",".join(setup.CORE_EXTRAS_DEPENDENCIES))')
     ALL_PROVIDERS_PACKAGES=$(python -c 'import setup; print(setup.get_all_provider_packages())')
     local packages_to_install=()
     local provider_package
@@ -288,7 +340,10 @@ function install_all_provider_packages_from_wheels() {
     echo "Installing all provider packages from wheels"
     echo
     uninstall_providers
-    pip install /dist/apache_airflow*providers_*.whl
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
+    ls -w 1 /dist
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
+    pip install /dist/apache_airflow_providers_*.whl
 }
 
 function install_all_provider_packages_from_sdist() {
@@ -296,7 +351,27 @@ function install_all_provider_packages_from_sdist() {
     echo "Installing all provider packages from .tar.gz"
     echo
     uninstall_providers
-    pip install /dist/apache-airflow-*providers-*.tar.gz
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
+    ls -w 1 /dist
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
+    pip install /dist/apache-airflow-providers-*.tar.gz
+}
+
+function twine_check_provider_packages_from_wheels() {
+    echo
+    echo "Twine check of all provider packages from wheels"
+    echo
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
+    ls -w 1 /dist
+    echo "${COLOR_BLUE}===================================================================================${COLOR_RESET}"
+    twine check /dist/apache_airflow_providers_*.whl
+}
+
+function twine_check_provider_packages_from_sdist() {
+    echo
+    echo "Twine check all provider packages from sdist"
+    echo
+    twine check /dist/apache-airflow-providers-*.tar.gz
 }
 
 function setup_provider_packages() {
@@ -304,8 +379,11 @@ function setup_provider_packages() {
     export PACKAGE_PREFIX_UPPERCASE=""
     export PACKAGE_PREFIX_LOWERCASE=""
     export PACKAGE_PREFIX_HYPHEN=""
-    if [[ ${VERBOSE} == "true" ]]; then
+    if [[ ${VERBOSE:="false"} == "true" ||  ${VERBOSE} == "True" ]]; then
         OPTIONAL_VERBOSE_FLAG+=("--verbose")
+    fi
+    if [[ ${ANSWER:=""} != "" ]]; then
+        OPTIONAL_ANSWER_FLAG+=("--answer" "${ANSWER}")
     fi
     readonly PACKAGE_TYPE
     readonly PACKAGE_PREFIX_UPPERCASE
@@ -315,9 +393,7 @@ function setup_provider_packages() {
 
 
 function install_supported_pip_version() {
-    group_start "Install supported PIP version ${AIRFLOW_PIP_VERSION}"
-    pip install --upgrade "pip==${AIRFLOW_PIP_VERSION}"
-    group_end
+    pip install --disable-pip-version-check "pip==${AIRFLOW_PIP_VERSION}"
 }
 
 function filename_to_python_module() {
@@ -329,36 +405,6 @@ function filename_to_python_module() {
     echo "${no_init//\//.}"
 }
 
-function import_all_provider_classes() {
-    group_start "Import all Airflow classes"
-    # We have to move to a directory where "airflow" is
-    unset PYTHONPATH
-    # We need to make sure we are not in the airflow checkout, otherwise it will automatically be added to the
-    # import path
-    cd /
-
-    declare -a IMPORT_CLASS_PARAMETERS
-
-    PROVIDER_PATHS=$(
-        python3 <<EOF 2>/dev/null
-import airflow.providers;
-path=airflow.providers.__path__
-for p in path._path:
-    print(p)
-EOF
-    )
-    export PROVIDER_PATHS
-
-    echo "Searching for providers packages in:"
-    echo "${PROVIDER_PATHS}"
-
-    while read -r provider_path; do
-        IMPORT_CLASS_PARAMETERS+=("--path" "${provider_path}")
-    done < <(echo "${PROVIDER_PATHS}")
-
-    python3 /opt/airflow/dev/import_all_classes.py "${IMPORT_CLASS_PARAMETERS[@]}"
-    group_end
-}
 
 function in_container_set_colors() {
     COLOR_BLUE=$'\e[34m'
@@ -441,7 +487,7 @@ function get_providers_to_act_on() {
 
 # Starts group for GitHub Actions - makes logs much more readable
 function group_start {
-    if [[ ${GITHUB_ACTIONS=} == "true" ]]; then
+    if [[ ${GITHUB_ACTIONS:="false"} == "true" ||  ${GITHUB_ACTIONS} == "True" ]]; then
         echo "::group::${1}"
     else
         echo
@@ -452,7 +498,7 @@ function group_start {
 
 # Ends group for GitHub Actions
 function group_end {
-    if [[ ${GITHUB_ACTIONS=} == "true" ]]; then
+    if [[ ${GITHUB_ACTIONS:="false"} == "true" ||  ${GITHUB_ACTIONS} == "True" ]]; then
         echo -e "\033[0m"  # Disable any colors set in the group
         echo "::endgroup::"
     fi

@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 
@@ -56,8 +57,8 @@ class TestDrillOperator(unittest.TestCase):
 
     def test_drill_operator_multi(self):
         sql = [
-            "create table dfs.tmp.test_airflow as" "select * from cp.`employee.json` limit 10",
-            "select sum(employee_id), any_value(full_name)" "from dfs.tmp.test_airflow",
+            "create table dfs.tmp.test_airflow as select * from cp.`employee.json` limit 10",
+            "select sum(employee_id), any_value(full_name) from dfs.tmp.test_airflow",
         ]
         op = DrillOperator(task_id='drill_operator_test_multi', sql=sql, dag=self.dag)
         op.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, ignore_ti_state=True)

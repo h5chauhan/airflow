@@ -15,16 +15,20 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import ast
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Sequence
 
 from spython.main import Client
 
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class SingularityOperator(BaseOperator):
@@ -37,35 +41,25 @@ class SingularityOperator(BaseOperator):
     be done with --volumes
 
     :param image: Singularity image or URI from which to create the container.
-    :type image: str
     :param auto_remove: Delete the container when the process exits.
         The default is False.
-    :type auto_remove: bool
     :param command: Command to be run in the container. (templated)
-    :type command: str or list
     :param start_command: Start command to pass to the container instance.
-    :type start_command: str or list
     :param environment: Environment variables to set in the container. (templated)
-    :type environment: dict
     :param working_dir: Set a working directory for the instance.
-    :type working_dir: str
     :param force_pull: Pull the image on every run. Default is False.
-    :type force_pull: bool
     :param volumes: List of volumes to mount into the container, e.g.
         ``['/host/path:/container/path', '/host/path2:/container/path2']``.
-    :type volumes: Optional[List[str]]
     :param options: Other flags (list) to provide to the instance start.
-    :type options: list
     :param working_dir: Working directory to
         set on the container (equivalent to the -w switch the docker client).
-    :type working_dir: str
     """
 
-    template_fields = (
+    template_fields: Sequence[str] = (
         'command',
         'environment',
     )
-    template_ext = (
+    template_ext: Sequence[str] = (
         '.sh',
         '.bash',
     )
@@ -75,15 +69,15 @@ class SingularityOperator(BaseOperator):
         self,
         *,
         image: str,
-        command: Union[str, ast.AST],
-        start_command: Optional[Union[str, List[str]]] = None,
-        environment: Optional[Dict[str, Any]] = None,
-        pull_folder: Optional[str] = None,
-        working_dir: Optional[str] = None,
-        force_pull: Optional[bool] = False,
-        volumes: Optional[List[str]] = None,
-        options: Optional[List[str]] = None,
-        auto_remove: Optional[bool] = False,
+        command: str | ast.AST,
+        start_command: str | list[str] | None = None,
+        environment: dict[str, Any] | None = None,
+        pull_folder: str | None = None,
+        working_dir: str | None = None,
+        force_pull: bool | None = False,
+        volumes: list[str] | None = None,
+        options: list[str] | None = None,
+        auto_remove: bool | None = False,
         **kwargs,
     ) -> None:
 
@@ -102,7 +96,7 @@ class SingularityOperator(BaseOperator):
         self.cli = None
         self.container = None
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
 
         self.log.info('Preparing Singularity container %s', self.image)
         self.cli = Client
@@ -172,7 +166,7 @@ class SingularityOperator(BaseOperator):
 
         self.log.info('Output from command %s', result['message'])
 
-    def _get_command(self) -> Optional[Any]:
+    def _get_command(self) -> Any | None:
         if self.command is not None and self.command.strip().find('[') == 0:  # type: ignore
             commands = ast.literal_eval(self.command)
         else:

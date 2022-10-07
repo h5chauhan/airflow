@@ -14,23 +14,25 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import shlex
 import time
 from io import StringIO
-from typing import Any, Dict, Optional
+from typing import Any
 
-import paramiko
-
-try:
-    from functools import cached_property
-except ImportError:
-    from cached_property import cached_property
 from google.api_core.retry import exponential_sleep_generator
 
 from airflow import AirflowException
+from airflow.compat.functools import cached_property
 from airflow.providers.google.cloud.hooks.compute import ComputeEngineHook
 from airflow.providers.google.cloud.hooks.os_login import OSLoginHook
 from airflow.providers.ssh.hooks.ssh import SSHHook
+
+# Paramiko should be imported after airflow.providers.ssh. Then the import will fail with
+# cannot import "airflow.providers.ssh" and will be correctly discovered as optional feature
+# TODO:(potiuk) We should add test harness detecting such cases shortly
+import paramiko  # isort:skip
 
 
 class _GCloudAuthorizedSSHClient(paramiko.SSHClient):
@@ -65,42 +67,30 @@ class ComputeEngineSSHHook(SSHHook):
     Hook to connect to a remote instance in compute engine
 
     :param instance_name: The name of the Compute Engine instance
-    :type instance_name: str
     :param zone: The zone of the Compute Engine instance
-    :type zone: str
     :param user: The name of the user on which the login attempt will be made
-    :type user: str
     :param project_id: The project ID of the remote instance
-    :type project_id: str
     :param gcp_conn_id: The connection id to use when fetching connection info
-    :type gcp_conn_id: str
     :param hostname: The hostname of the target instance. If it is not passed, it will be detected
         automatically.
-    :type hostname: str
     :param use_iap_tunnel: Whether to connect through IAP tunnel
-    :type use_iap_tunnel: bool
     :param use_internal_ip: Whether to connect using internal IP
-    :type use_internal_ip: bool
     :param use_oslogin: Whether to manage keys using OsLogin API. If false,
         keys are managed using instance metadata
-    :type use_oslogin: bool
     :param expire_time: The maximum amount of time in seconds before the private key expires
-    :type expire_time: int
     :param gcp_conn_id: The connection id to use when fetching connection information
-    :type gcp_conn_id: str
     :param delegate_to: The account to impersonate, if any.
         For this to work, the service account making the request must have
         domain-wide delegation enabled.
-    :type delegate_to: str
     """
 
     conn_name_attr = 'gcp_conn_id'
-    default_conn_name = 'google_cloud_default'
+    default_conn_name = 'google_cloud_ssh_default'
     conn_type = 'gcpssh'
     hook_name = 'Google Cloud SSH'
 
     @staticmethod
-    def get_ui_field_behaviour() -> Dict:
+    def get_ui_field_behaviour() -> dict[str, Any]:
         return {
             "hidden_fields": ['host', 'schema', 'login', 'password', 'port', 'extra'],
             "relabeling": {},
@@ -109,16 +99,16 @@ class ComputeEngineSSHHook(SSHHook):
     def __init__(
         self,
         gcp_conn_id: str = 'google_cloud_default',
-        instance_name: Optional[str] = None,
-        zone: Optional[str] = None,
-        user: Optional[str] = 'root',
-        project_id: Optional[str] = None,
-        hostname: Optional[str] = None,
+        instance_name: str | None = None,
+        zone: str | None = None,
+        user: str | None = 'root',
+        project_id: str | None = None,
+        hostname: str | None = None,
         use_internal_ip: bool = False,
         use_iap_tunnel: bool = False,
         use_oslogin: bool = True,
         expire_time: int = 300,
-        delegate_to: Optional[str] = None,
+        delegate_to: str | None = None,
     ) -> None:
         # Ignore original constructor
         # super().__init__()
@@ -133,7 +123,7 @@ class ComputeEngineSSHHook(SSHHook):
         self.expire_time = expire_time
         self.gcp_conn_id = gcp_conn_id
         self.delegate_to = delegate_to
-        self._conn: Optional[Any] = None
+        self._conn: Any | None = None
 
     @cached_property
     def _oslogin_hook(self) -> OSLoginHook:

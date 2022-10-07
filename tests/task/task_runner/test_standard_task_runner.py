@@ -15,33 +15,41 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import logging
 import os
 import time
 from logging.config import dictConfig
+from pathlib import Path
 from unittest import mock
 
 import psutil
 import pytest
 
-from airflow import models, settings
+from airflow.config_templates.airflow_local_settings import DEFAULT_LOGGING_CONFIG
 from airflow.jobs.local_task_job import LocalTaskJob
-from airflow.models import TaskInstance as TI
+from airflow.models.dagbag import DagBag
+from airflow.models.taskinstance import TaskInstance
 from airflow.task.task_runner.standard_task_runner import StandardTaskRunner
 from airflow.utils import timezone
 from airflow.utils.platform import getuser
+from airflow.utils.session import create_session
 from airflow.utils.state import State
+from airflow.utils.timeout import timeout
 from tests.test_utils.db import clear_db_runs
 
 TEST_DAG_FOLDER = os.environ['AIRFLOW__CORE__DAGS_FOLDER']
 
 DEFAULT_DATE = timezone.datetime(2016, 1, 1)
 
+TASK_FORMAT = '{{%(filename)s:%(lineno)d}} %(levelname)s - %(message)s'
+
 LOGGING_CONFIG = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'airflow.task': {'format': '[%(asctime)s] {{%(filename)s:%(lineno)d}} %(levelname)s - %(message)s'},
+        'airflow.task': {'format': TASK_FORMAT},
     },
     'handlers': {
         'console': {
@@ -62,15 +70,13 @@ class TestStandardTaskRunner:
         (as the test environment does not have enough context for the normal
         way to run) and ensures they reset back to normal on the way out.
         """
+        clear_db_runs()
         dictConfig(LOGGING_CONFIG)
         yield
         airflow_logger = logging.getLogger('airflow')
         airflow_logger.handlers = []
-        try:
-            clear_db_runs()
-        except Exception:
-            # It might happen that we lost connection to the server here so we need to ignore any errors here
-            pass
+        clear_db_runs()
+        dictConfig(DEFAULT_LOGGING_CONFIG)
 
     def test_start_and_terminate(self):
         local_task_job = mock.Mock()
@@ -79,7 +85,7 @@ class TestStandardTaskRunner:
         local_task_job.task_instance.command_as_list.return_value = [
             'airflow',
             'tasks',
-            'test',
+            'run',
             'test_on_kill',
             'task1',
             '2016-01-01',
@@ -87,14 +93,17 @@ class TestStandardTaskRunner:
 
         runner = StandardTaskRunner(local_task_job)
         runner.start()
-        time.sleep(0.5)
+        # Wait until process sets its pgid to be equal to pid
+        with timeout(seconds=1):
+            while True:
+                runner_pgid = os.getpgid(runner.process.pid)
+                if runner_pgid == runner.process.pid:
+                    break
+                time.sleep(0.01)
 
-        pgid = os.getpgid(runner.process.pid)
-        assert pgid > 0
-        assert pgid != os.getpgid(0), "Task should be in a different process group to us"
-
-        processes = list(self._procs_in_pgroup(pgid))
-
+        assert runner_pgid > 0
+        assert runner_pgid != os.getpgid(0), "Task should be in a different process group to us"
+        processes = list(self._procs_in_pgroup(runner_pgid))
         runner.terminate()
 
         for process in processes:
@@ -105,6 +114,8 @@ class TestStandardTaskRunner:
     def test_start_and_terminate_run_as_user(self):
         local_task_job = mock.Mock()
         local_task_job.task_instance = mock.MagicMock()
+        local_task_job.task_instance.task_id = 'task_id'
+        local_task_job.task_instance.dag_id = 'dag_id'
         local_task_job.task_instance.run_as_user = getuser()
         local_task_job.task_instance.command_as_list.return_value = [
             'airflow',
@@ -142,6 +153,8 @@ class TestStandardTaskRunner:
         # Set up mock task
         local_task_job = mock.Mock()
         local_task_job.task_instance = mock.MagicMock()
+        local_task_job.task_instance.task_id = 'task_id'
+        local_task_job.task_instance.dag_id = 'dag_id'
         local_task_job.task_instance.run_as_user = getuser()
         local_task_job.task_instance.command_as_list.return_value = [
             'airflow',
@@ -175,58 +188,127 @@ class TestStandardTaskRunner:
         Test that ensures that clearing in the UI SIGTERMS
         the task
         """
-        path = "/tmp/airflow_on_kill"
+        path_on_kill_running = "/tmp/airflow_on_kill_running"
+        path_on_kill_killed = "/tmp/airflow_on_kill_killed"
         try:
-            os.unlink(path)
+            os.unlink(path_on_kill_running)
+        except OSError:
+            pass
+        try:
+            os.unlink(path_on_kill_killed)
         except OSError:
             pass
 
-        dagbag = models.DagBag(
+        dagbag = DagBag(
             dag_folder=TEST_DAG_FOLDER,
             include_examples=False,
         )
         dag = dagbag.dags.get('test_on_kill')
         task = dag.get_task('task1')
 
-        session = settings.Session()
+        with create_session() as session:
+            dag.create_dagrun(
+                run_id="test",
+                data_interval=(DEFAULT_DATE, DEFAULT_DATE),
+                state=State.RUNNING,
+                start_date=DEFAULT_DATE,
+                session=session,
+            )
+            ti = TaskInstance(task=task, run_id="test")
+            job1 = LocalTaskJob(task_instance=ti, ignore_ti_state=True)
+            session.commit()
+            ti.refresh_from_task(task)
 
-        dag.clear()
-        dag.create_dagrun(
-            run_id="test",
-            state=State.RUNNING,
-            execution_date=DEFAULT_DATE,
-            start_date=DEFAULT_DATE,
-            session=session,
-        )
-        ti = TI(task=task, execution_date=DEFAULT_DATE)
-        job1 = LocalTaskJob(task_instance=ti, ignore_ti_state=True)
-        session.commit()
+            runner = StandardTaskRunner(job1)
+            runner.start()
 
-        runner = StandardTaskRunner(job1)
-        runner.start()
+            with timeout(seconds=3):
+                while True:
+                    runner_pgid = os.getpgid(runner.process.pid)
+                    if runner_pgid == runner.process.pid:
+                        break
+                    time.sleep(0.01)
 
-        # give the task some time to startup
-        time.sleep(3)
+            processes = list(self._procs_in_pgroup(runner_pgid))
 
-        pgid = os.getpgid(runner.process.pid)
-        assert pgid > 0
-        assert pgid != os.getpgid(0), "Task should be in a different process group to us"
+            logging.info("Waiting for the task to start")
+            with timeout(seconds=20):
+                while True:
+                    if os.path.exists(path_on_kill_running):
+                        break
+                    time.sleep(0.01)
+            logging.info("Task started. Give the task some time to settle")
+            time.sleep(3)
+            logging.info("Terminating processes %s belonging to %s group", processes, runner_pgid)
+            runner.terminate()
+            session.close()  # explicitly close as `create_session`s commit will blow up otherwise
 
-        processes = list(self._procs_in_pgroup(pgid))
+        ti.refresh_from_db()
 
-        runner.terminate()
+        logging.info("Waiting for the on kill killed file to appear")
+        with timeout(seconds=4):
+            while True:
+                if os.path.exists(path_on_kill_killed):
+                    break
+                time.sleep(0.01)
+        logging.info("The file appeared")
 
-        # Wait some time for the result
-        for _ in range(20):
-            if os.path.exists(path):
-                break
-            time.sleep(2)
-
-        with open(path) as f:
+        with open(path_on_kill_killed) as f:
             assert "ON_KILL_TEST" == f.readline()
 
         for process in processes:
             assert not psutil.pid_exists(process.pid), f"{process} is still alive"
+
+    def test_parsing_context(self):
+        context_file = Path("/tmp/airflow_parsing_context")
+        try:
+            context_file.unlink()
+        except FileNotFoundError:
+            pass
+        dagbag = DagBag(
+            dag_folder=TEST_DAG_FOLDER,
+            include_examples=False,
+        )
+        dag = dagbag.dags.get('test_parsing_context')
+        task = dag.get_task('task1')
+
+        with create_session() as session:
+            dag.create_dagrun(
+                run_id="test",
+                data_interval=(DEFAULT_DATE, DEFAULT_DATE),
+                state=State.RUNNING,
+                start_date=DEFAULT_DATE,
+                session=session,
+            )
+            ti = TaskInstance(task=task, run_id="test")
+            job1 = LocalTaskJob(task_instance=ti, ignore_ti_state=True)
+            session.commit()
+            ti.refresh_from_task(task)
+
+            runner = StandardTaskRunner(job1)
+            runner.start()
+
+            # Wait until process sets its pgid to be equal to pid
+            with timeout(seconds=1):
+                while True:
+                    runner_pgid = os.getpgid(runner.process.pid)
+                    if runner_pgid == runner.process.pid:
+                        break
+                    time.sleep(0.01)
+
+            assert runner_pgid > 0
+            assert runner_pgid != os.getpgid(0), "Task should be in a different process group to us"
+            processes = list(self._procs_in_pgroup(runner_pgid))
+            psutil.wait_procs([runner.process])
+            session.close()
+        for process in processes:
+            assert not psutil.pid_exists(process.pid), f"{process} is still alive"
+        assert runner.return_code() == 0
+        text = context_file.read_text()
+        assert (
+            text == "_AIRFLOW_PARSING_CONTEXT_DAG_ID=test_parsing_context\n"
+            "_AIRFLOW_PARSING_CONTEXT_TASK_ID=task1\n"
+        )
 
     @staticmethod
     def _procs_in_pgroup(pgid):

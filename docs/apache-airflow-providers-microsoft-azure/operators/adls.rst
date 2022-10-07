@@ -19,28 +19,23 @@
 Azure DataLake Storage Operators
 =================================
 
-.. contents::
-  :depth: 1
-  :local:
-
-
 Prerequisite Tasks
 ^^^^^^^^^^^^^^^^^^
 
 .. include::/operators/_partials/prerequisite_tasks.rst
 
-.. _howto/operator:AzureDataLakeStorageDeleteOperator:
+.. _howto/operator:ADLSDeleteOperator:
 
-AzureDataLakeStorageDeleteOperator
+ADLSDeleteOperator
 ----------------------------------
 Use the
-:class:`~airflow.providers.microsoft.azure.operators.adls_delete.AzureDataLakeStorageDeleteOperator` to remove
+:class:`~airflow.providers.microsoft.azure.operators.adls_delete.ADLSDeleteOperator` to remove
 file(s) from Azure DataLake Storage
 
 
 Below is an example of using this operator to delete a file from ADL.
 
-.. exampleinclude:: /../../airflow/providers/microsoft/azure/example_dags/example_adls_delete.py
+.. exampleinclude:: /../../tests/system/providers/microsoft/azure/example_adls_delete.py
     :language: python
     :dedent: 0
     :start-after: [START howto_operator_adls_delete]

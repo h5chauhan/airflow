@@ -36,13 +36,20 @@ Content
     Python API <_api/airflow/providers/yandex/index>
 
 .. toctree::
+    :hidden:
+    :caption: System tests
+
+    System Tests <_api/tests/system/providers/yandex/index>
+
+.. toctree::
     :maxdepth: 1
     :caption: Resources
 
-    Example DAGs <https://github.com/apache/airflow/tree/main/airflow/providers/yandex/example_dags>
+    Example DAGs <https://github.com/apache/airflow/tree/providers-yandex/3.0.0/tests/system/providers/yandex/example_yandexcloud_dataproc.py>
     PyPI Repository <https://pypi.org/project/apache-airflow-providers-yandex/>
+    Installing from sources <installing-providers-from-sources>
 
-.. THE REMINDER OF THE FILE IS AUTOMATICALLY GENERATED. IT WILL BE OVERWRITTEN AT RELEASE TIME!
+.. THE REMAINDER OF THE FILE IS AUTOMATICALLY GENERATED. IT WILL BE OVERWRITTEN AT RELEASE TIME!
 
 
 .. toctree::
@@ -58,7 +65,7 @@ Package apache-airflow-providers-yandex
 Yandex including `Yandex.Cloud <https://cloud.yandex.com/>`__
 
 
-Release: 2.0.0
+Release: 3.1.0
 
 Provider package
 ----------------
@@ -69,17 +76,18 @@ are in ``airflow.providers.yandex`` python package.
 Installation
 ------------
 
-You can install this package on top of an existing airflow 2.1+ installation via
+You can install this package on top of an existing Airflow 2 installation (see ``Requirements`` below)
+for the minimum Airflow version supported) via
 ``pip install apache-airflow-providers-yandex``
 
-PIP requirements
-----------------
+Requirements
+------------
 
 ==================  ==================
 PIP package         Version required
 ==================  ==================
-``apache-airflow``  ``>=2.1.0``
-``yandexcloud``     ``>=0.22.0``
+``apache-airflow``  ``>=2.2.0``
+``yandexcloud``     ``>=0.173.0``
 ==================  ==================
 
 .. include:: ../../airflow/providers/yandex/CHANGELOG.rst

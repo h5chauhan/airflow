@@ -14,9 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
 import unittest
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -55,12 +57,15 @@ MOCK_TASK_RESPONSE_DATA = {
     'ReplicationTaskArn': MOCK_TASK_ARN,
     'Status': 'creating',
 }
-MOCK_DESCRIBE_RESPONSE = {'ReplicationTasks': [MOCK_TASK_RESPONSE_DATA]}
-MOCK_DESCRIBE_RESPONSE_WITH_MARKER = {'ReplicationTasks': [MOCK_TASK_RESPONSE_DATA], 'Marker': 'marker'}
-MOCK_CREATE_RESPONSE = {'ReplicationTask': MOCK_TASK_RESPONSE_DATA}
-MOCK_START_RESPONSE = {'ReplicationTask': {**MOCK_TASK_RESPONSE_DATA, 'Status': 'starting'}}
-MOCK_STOP_RESPONSE = {'ReplicationTask': {**MOCK_TASK_RESPONSE_DATA, 'Status': 'stopping'}}
-MOCK_DELETE_RESPONSE = {'ReplicationTask': {**MOCK_TASK_RESPONSE_DATA, 'Status': 'deleting'}}
+MOCK_DESCRIBE_RESPONSE: dict[str, Any] = {'ReplicationTasks': [MOCK_TASK_RESPONSE_DATA]}
+MOCK_DESCRIBE_RESPONSE_WITH_MARKER: dict[str, Any] = {
+    'ReplicationTasks': [MOCK_TASK_RESPONSE_DATA],
+    'Marker': 'marker',
+}
+MOCK_CREATE_RESPONSE: dict[str, Any] = {'ReplicationTask': MOCK_TASK_RESPONSE_DATA}
+MOCK_START_RESPONSE: dict[str, Any] = {'ReplicationTask': {**MOCK_TASK_RESPONSE_DATA, 'Status': 'starting'}}
+MOCK_STOP_RESPONSE: dict[str, Any] = {'ReplicationTask': {**MOCK_TASK_RESPONSE_DATA, 'Status': 'stopping'}}
+MOCK_DELETE_RESPONSE: dict[str, Any] = {'ReplicationTask': {**MOCK_TASK_RESPONSE_DATA, 'Status': 'deleting'}}
 
 
 class TestDmsHook(unittest.TestCase):

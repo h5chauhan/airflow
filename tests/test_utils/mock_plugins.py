@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 from contextlib import ExitStack, contextmanager
 from unittest import mock
@@ -31,6 +32,7 @@ PLUGINS_MANAGER_NULLABLE_ATTRIBUTES = [
     "global_operator_extra_links",
     "operator_extra_links",
     "registered_operator_link_classes",
+    "timetable_classes",
 ]
 
 

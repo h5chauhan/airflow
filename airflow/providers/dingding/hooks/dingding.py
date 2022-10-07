@@ -15,9 +15,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
-from typing import List, Optional, Union
 
 import requests
 from requests import Session
@@ -36,16 +36,11 @@ class DingdingHook(HttpHook):
     `Dingding custom bot <https://open-doc.dingtalk.com/microapp/serverapi2/qf2nxq>`_
 
     :param dingding_conn_id: The name of the Dingding connection to use
-    :type dingding_conn_id: str
     :param message_type: Message type you want to send to Dingding, support five type so far
         including text, link, markdown, actionCard, feedCard
-    :type message_type: str
     :param message: The message send to Dingding chat group
-    :type message: str or dict
     :param at_mobiles: Remind specific users with this message
-    :type at_mobiles: list[str]
     :param at_all: Remind all people in group or not. If True, will overwrite ``at_mobiles``
-    :type at_all: bool
     """
 
     conn_name_attr = 'dingding_conn_id'
@@ -57,8 +52,8 @@ class DingdingHook(HttpHook):
         self,
         dingding_conn_id='dingding_default',
         message_type: str = 'text',
-        message: Optional[Union[str, dict]] = None,
-        at_mobiles: Optional[List[str]] = None,
+        message: str | dict | None = None,
+        at_mobiles: list[str] | None = None,
         at_all: bool = False,
         *args,
         **kwargs,
@@ -95,13 +90,12 @@ class DingdingHook(HttpHook):
             data = {'msgtype': self.message_type, self.message_type: self.message}
         return json.dumps(data)
 
-    def get_conn(self, headers: Optional[dict] = None) -> Session:
+    def get_conn(self, headers: dict | None = None) -> Session:
         """
         Overwrite HttpHook get_conn because just need base_url and headers and
         not don't need generic params
 
         :param headers: additional headers to be passed through as a dictionary
-        :type headers: dict
         """
         conn = self.get_connection(self.http_conn_id)
         self.base_url = conn.host if conn.host else 'https://oapi.dingtalk.com'
@@ -115,8 +109,7 @@ class DingdingHook(HttpHook):
         support_type = ['text', 'link', 'markdown', 'actionCard', 'feedCard']
         if self.message_type not in support_type:
             raise ValueError(
-                'DingdingWebhookHook only support {} '
-                'so far, but receive {}'.format(support_type, self.message_type)
+                f'DingdingWebhookHook only support {support_type} so far, but receive {self.message_type}'
             )
 
         data = self._build_message()

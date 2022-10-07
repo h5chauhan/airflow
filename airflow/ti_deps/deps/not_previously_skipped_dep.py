@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 from airflow.ti_deps.deps.base_ti_dep import BaseTIDep
 
 
@@ -39,9 +41,9 @@ class NotPreviouslySkippedDep(BaseTIDep):
 
         upstream = ti.task.get_direct_relatives(upstream=True)
 
-        finished_tasks = dep_context.ensure_finished_tasks(ti.task.dag, ti.execution_date, session)
+        finished_tis = dep_context.ensure_finished_tis(ti.get_dagrun(session), session)
 
-        finished_task_ids = {t.task_id for t in finished_tasks}
+        finished_task_ids = {t.task_id for t in finished_tis}
 
         for parent in upstream:
             if isinstance(parent, SkipMixin):

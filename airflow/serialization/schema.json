@@ -48,7 +48,38 @@
       }
     },
     "timezone": {
-      "type": "string"
+      "anyOf": [
+        { "type": "string" },
+        { "type": "integer" }
+      ]
+    },
+    "dataset": {
+      "type": "object",
+      "properties": {
+        "uri": { "type": "string" },
+        "extra": {
+            "anyOf": [
+                {"type": "null"},
+                { "$ref": "#/definitions/dict" }
+            ]
+        }
+      },
+      "required": [ "uri", "extra" ]
+    },
+    "typed_dataset": {
+      "type": "object",
+      "properties": {
+        "__type": {
+          "type": "string",
+            "constant": "dataset"
+        },
+        "__var": { "$ref": "#/definitions/dataset" }
+      },
+      "required": [
+        "__type",
+        "__var"
+      ],
+      "additionalProperties": false
     },
     "dict": {
       "description": "A python dictionary containing values of any type",
@@ -75,7 +106,7 @@
     "dag": {
       "type": "object",
       "properties": {
-        "params": { "$ref": "#/definitions/dict" },
+        "params": { "$ref": "#/definitions/params_dict" },
         "_dag_id": { "type": "string" },
         "tasks": {  "$ref": "#/definitions/tasks" },
         "timezone": { "$ref": "#/definitions/timezone" },
@@ -87,10 +118,28 @@
             { "$ref": "#/definitions/typed_relativedelta" }
           ]
         },
+        "dataset_triggers": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/typed_dataset" }
+        },
+        "owner_links": { "type": "object" },
+        "timetable": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "value": { "$ref": "#/definitions/dict" }
+          }
+        },
         "catchup": { "type": "boolean" },
         "is_subdag": { "type": "boolean" },
         "fileloc": { "type" : "string"},
-        "orientation": { "type" : "string"},
+        "_processor_dags_folder": {
+            "anyOf": [
+                { "type": "null" },
+                {"type": "string"}
+            ]
+        },
+         "orientation": { "type" : "string"},
         "_description": { "type" : "string"},
         "_concurrency": { "type" : "number"},
         "_max_active_tasks": { "type" : "number"},
@@ -125,6 +174,24 @@
       "type": "array",
       "additionalProperties": { "$ref": "#/definitions/operator" }
     },
+    "params_dict": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/definitions/param" }
+    },
+    "param": {
+      "$comment": "A param for a dag / operator",
+      "type": "object",
+      "required": [
+        "__class",
+        "default"
+      ],
+      "properties": {
+        "__class": { "type": "string" },
+        "default": {},
+        "description": {"anyOf": [{"type":"string"}, {"type":"null"}]},
+        "schema": { "$ref": "#/definitions/dict" }
+      }
+    },
     "operator": {
       "$comment": "A task/operator in a DAG",
       "type": "object",
@@ -147,6 +214,7 @@
         "end_date": { "$ref": "#/definitions/datetime" },
         "trigger_rule": { "type": "string" },
         "depends_on_past": { "type": "boolean" },
+        "ignore_first_depends_on_past": { "type": "boolean" },
         "wait_for_downstream": { "type": "boolean" },
         "retries": { "type": "number" },
         "queue": { "type": "string" },
@@ -156,7 +224,7 @@
         "retry_delay": { "$ref": "#/definitions/timedelta" },
         "retry_exponential_backoff": { "type": "boolean" },
         "max_retry_delay": { "$ref": "#/definitions/timedelta" },
-        "params": { "$ref": "#/definitions/dict" },
+        "params": { "$ref": "#/definitions/params_dict" },
         "priority_weight": { "type": "number" },
         "weight_rule": { "type": "string" },
         "executor_config": { "$ref": "#/definitions/dict" },
@@ -168,7 +236,7 @@
           "items": { "type": "string" }
         },
         "subdag": { "$ref": "#/definitions/dag" },
-        "_downstream_task_ids": {
+        "downstream_task_ids": {
           "type": "array",
           "items": { "type": "string" }
         },
@@ -183,7 +251,15 @@
         "doc_md":  { "type": "string" },
         "doc_json":  { "type": "string" },
         "doc_yaml":  { "type": "string" },
-        "doc_rst":  { "type": "string" }
+        "doc_rst":  { "type": "string" },
+        "_is_mapped": { "const": true, "$comment": "only present when True" },
+        "expand_input": { "type": "object" },
+        "partial_kwargs": { "type": "object" }
+      },
+      "dependencies": {
+        "expand_input": ["partial_kwargs", "_is_mapped"],
+        "partial_kwargs": ["expand_input", "_is_mapped"],
+        "_is_mapped": ["expand_input", "partial_kwargs"]
       },
       "additionalProperties": true
     },

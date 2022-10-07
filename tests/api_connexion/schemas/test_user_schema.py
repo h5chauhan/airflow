@@ -14,12 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import pytest
-from flask_appbuilder.security.sqla.models import User
 
 from airflow.api_connexion.schemas.user_schema import user_collection_item_schema, user_schema
 from airflow.utils import timezone
+from airflow.www.fab_security.sqla.models import User
 from tests.test_utils.api_connexion_utils import create_role, delete_role
 
 TEST_EMAIL = "test@example.org"

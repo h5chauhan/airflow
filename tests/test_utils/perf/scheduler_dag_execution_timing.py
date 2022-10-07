@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import gc
 import os
 import statistics
@@ -24,7 +26,7 @@ import time
 from argparse import Namespace
 from operator import attrgetter
 
-import click
+import rich_click as click
 
 MAX_DAG_RUNS_ALLOWED = 1
 
@@ -163,18 +165,19 @@ def create_dag_runs(dag, num_runs, session):
 
         id_prefix = DagRun.ID_PREFIX
 
-    last_dagrun_at = None
+    last_dagrun_data_interval = None
     for _ in range(num_runs):
-        next_info = dag.next_dagrun_info(last_dagrun_at)
-        last_dagrun_at = next_info.logical_date
+        next_info = dag.next_dagrun_info(last_dagrun_data_interval)
+        logical_date = next_info.logical_date
         dag.create_dagrun(
-            run_id=f"{id_prefix}{last_dagrun_at.isoformat()}",
-            execution_date=last_dagrun_at,
+            run_id=f"{id_prefix}{logical_date.isoformat()}",
+            execution_date=logical_date,
             start_date=timezone.utcnow(),
             state=State.RUNNING,
             external_trigger=False,
             session=session,
         )
+        last_dagrun_data_interval = next_info.data_interval
 
 
 @click.command()
@@ -253,17 +256,17 @@ def main(num_runs, repeat, pre_create_dag_runs, executor_class, dag_ids):
             dags.append(dag)
             reset_dag(dag, session)
 
-            next_run_date = dag.normalize_schedule(dag.start_date or min(t.start_date for t in dag.tasks))
+            next_info = dag.next_dagrun_info(None)
 
             for _ in range(num_runs - 1):
-                next_run_date = dag.following_schedule(next_run_date)
+                next_info = dag.next_dagrun_info(next_info.data_interval)
 
             end_date = dag.end_date or dag.default_args.get('end_date')
-            if end_date != next_run_date:
+            if end_date != next_info.logical_date:
                 message = (
                     f"DAG {dag_id} has incorrect end_date ({end_date}) for number of runs! "
                     f"It should be "
-                    f" {next_run_date}"
+                    f" {next_info.logical_date}"
                 )
                 sys.exit(message)
 

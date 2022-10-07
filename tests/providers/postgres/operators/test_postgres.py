@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 
@@ -98,3 +99,18 @@ class TestPostgres(unittest.TestCase):
             op.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, ignore_ti_state=True)
         except OperationalError as e:
             assert 'database "foobar" does not exist' in str(e)
+
+    def test_runtime_parameter_setting(self):
+        """
+        Verifies ability to pass server configuration parameters to
+        PostgresOperator
+        """
+
+        sql = "SELECT 1;"
+        op = PostgresOperator(
+            task_id='postgres_operator_test_runtime_parameter_setting',
+            sql=sql,
+            dag=self.dag,
+            runtime_parameters={'statement_timeout': '3000ms'},
+        )
+        op.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, ignore_ti_state=True)

@@ -14,6 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import configparser
 import os
 import unittest
@@ -26,6 +28,7 @@ CONFIG_TEMPLATES_FOLDER = os.path.join(AIRFLOW_MAIN_FOLDER, "airflow", "config_t
 
 DEFAULT_AIRFLOW_SECTIONS = [
     'core',
+    'database',
     "logging",
     "metrics",
     'secrets',
@@ -40,6 +43,7 @@ DEFAULT_AIRFLOW_SECTIONS = [
     'email',
     'smtp',
     'sentry',
+    'local_kubernetes_executor',
     'celery_kubernetes_executor',
     'celery',
     'celery_broker_transport_options',
@@ -47,28 +51,22 @@ DEFAULT_AIRFLOW_SECTIONS = [
     'scheduler',
     'triggerer',
     'kerberos',
-    'github_enterprise',
     'elasticsearch',
     'elasticsearch_configs',
     'kubernetes',
-    'smart_sensor',
+    'sensors',
 ]
 
 DEFAULT_TEST_SECTIONS = [
     'core',
+    'database',
     "logging",
-    'cli',
     'api',
-    'operators',
     'hive',
-    'webserver',
-    'email',
     'smtp',
     'celery',
     'scheduler',
     'elasticsearch',
-    'elasticsearch_configs',
-    'kubernetes',
 ]
 
 

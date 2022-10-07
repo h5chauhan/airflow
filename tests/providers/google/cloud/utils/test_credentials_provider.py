@@ -14,13 +14,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import unittest
 from io import StringIO
 from unittest import mock
+from unittest.mock import ANY
 from uuid import uuid4
 
 import pytest
@@ -166,7 +169,7 @@ class TestGetGcpCredentialsAndProjectId(unittest.TestCase):
         assert mock_auth_default.return_value == result
 
     @mock.patch(
-        'airflow.providers.google.cloud.utils.credentials_provider.' 'impersonated_credentials.Credentials'
+        'airflow.providers.google.cloud.utils.credentials_provider.impersonated_credentials.Credentials'
     )
     @mock.patch('google.auth.default')
     def test_get_credentials_and_project_id_with_default_auth_and_target_principal(
@@ -188,7 +191,7 @@ class TestGetGcpCredentialsAndProjectId(unittest.TestCase):
         assert (mock_impersonated_credentials.return_value, ANOTHER_PROJECT_ID) == result
 
     @mock.patch(
-        'airflow.providers.google.cloud.utils.credentials_provider.' 'impersonated_credentials.Credentials'
+        'airflow.providers.google.cloud.utils.credentials_provider.impersonated_credentials.Credentials'
     )
     @mock.patch('google.auth.default')
     def test_get_credentials_and_project_id_with_default_auth_and_scopes_and_target_principal(
@@ -211,7 +214,7 @@ class TestGetGcpCredentialsAndProjectId(unittest.TestCase):
         assert (mock_impersonated_credentials.return_value, self.test_project_id) == result
 
     @mock.patch(
-        'airflow.providers.google.cloud.utils.credentials_provider.' 'impersonated_credentials.Credentials'
+        'airflow.providers.google.cloud.utils.credentials_provider.impersonated_credentials.Credentials'
     )
     @mock.patch('google.auth.default')
     def test_get_credentials_and_project_id_with_default_auth_and_target_principal_and_delegates(
@@ -267,12 +270,52 @@ class TestGetGcpCredentialsAndProjectId(unittest.TestCase):
             'connection using JSON Dict'
         ] == cm.output
 
+    @mock.patch("google.auth.default", return_value=("CREDENTIALS", "PROJECT_ID"))
+    @mock.patch('google.oauth2.service_account.Credentials.from_service_account_info')
+    @mock.patch("airflow.providers.google.cloud.utils.credentials_provider._SecretManagerClient")
+    def test_get_credentials_and_project_id_with_key_secret_name(
+        self, mock_secret_manager_client, mock_from_service_account_info, mock_default
+    ):
+        mock_secret_manager_client.return_value.is_valid_secret_name.return_value = True
+        mock_secret_manager_client.return_value.get_secret.return_value = (
+            "{\"type\":\"service_account\",\"project_id\":\"pid\","
+            "\"private_key_id\":\"pkid\","
+            "\"private_key\":\"payload\"}"
+        )
+
+        get_credentials_and_project_id(key_secret_name="secret name")
+        mock_from_service_account_info.assert_called_once_with(
+            {
+                'type': 'service_account',
+                'project_id': 'pid',
+                'private_key_id': 'pkid',
+                'private_key': 'payload',
+            },
+            scopes=ANY,
+        )
+
+    @mock.patch("google.auth.default", return_value=("CREDENTIALS", "PROJECT_ID"))
+    @mock.patch("airflow.providers.google.cloud.utils.credentials_provider._SecretManagerClient")
+    def test_get_credentials_and_project_id_with_key_secret_name_when_key_is_invalid(
+        self, mock_secret_manager_client, mock_default
+    ):
+        mock_secret_manager_client.return_value.is_valid_secret_name.return_value = True
+        mock_secret_manager_client.return_value.get_secret.return_value = ""
+
+        with pytest.raises(
+            AirflowException,
+            match=re.escape('Key data read from GCP Secret Manager is not valid JSON.'),
+        ):
+            get_credentials_and_project_id(key_secret_name="secret name")
+
     def test_get_credentials_and_project_id_with_mutually_exclusive_configuration(
         self,
     ):
         with pytest.raises(
             AirflowException,
-            match=re.escape('The `keyfile_dict` and `key_path` fields are mutually exclusive.'),
+            match=re.escape(
+                'The `keyfile_dict`, `key_path`, and `key_secret_name` fields are all mutually exclusive.'
+            ),
         ):
             get_credentials_and_project_id(key_path='KEY.json', keyfile_dict={'private_key': 'PRIVATE_KEY'})
 
@@ -285,22 +328,28 @@ class TestGetGcpCredentialsAndProjectId(unittest.TestCase):
     )
     def test_disable_logging(self, mock_default, mock_info, mock_file):
         # assert not logs
-        with pytest.raises(AssertionError), self.assertLogs(level="DEBUG"):
+        with self.assertLogs(level="DEBUG") as logs:
+            logging.debug('nothing')
             get_credentials_and_project_id(disable_logging=True)
+        assert logs.output == ['DEBUG:root:nothing']
 
-        # assert not logs
-        with pytest.raises(AssertionError), self.assertLogs(level="DEBUG"):
+        # assert no debug logs emitted from get_credentials_and_project_id
+        with self.assertLogs(level="DEBUG") as logs:
+            logging.debug('nothing')
             get_credentials_and_project_id(
                 keyfile_dict={'private_key': 'PRIVATE_KEY'},
                 disable_logging=True,
             )
+        assert logs.output == ['DEBUG:root:nothing']
 
-        # assert not logs
-        with pytest.raises(AssertionError), self.assertLogs(level="DEBUG"):
+        # assert no debug logs emitted from get_credentials_and_project_id
+        with self.assertLogs(level="DEBUG") as logs:
+            logging.debug('nothing')
             get_credentials_and_project_id(
                 key_path='KEY.json',
                 disable_logging=True,
             )
+        assert logs.output == ['DEBUG:root:nothing']
 
 
 class TestGetScopes(unittest.TestCase):

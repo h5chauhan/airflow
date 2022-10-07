@@ -15,14 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """This module contains AWS Firehose hook"""
+from __future__ import annotations
+
 from typing import Iterable
 
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 
 
-class AwsFirehoseHook(AwsBaseHook):
+class FirehoseHook(AwsBaseHook):
     """
     Interact with AWS Kinesis Firehose.
 
@@ -33,7 +34,6 @@ class AwsFirehoseHook(AwsBaseHook):
         :class:`~airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`
 
     :param delivery_stream: Name of the delivery stream
-    :type delivery_stream: str
     """
 
     def __init__(self, delivery_stream: str, *args, **kwargs) -> None:
@@ -43,6 +43,4 @@ class AwsFirehoseHook(AwsBaseHook):
 
     def put_records(self, records: Iterable):
         """Write batch records to Kinesis Firehose"""
-        response = self.get_conn().put_record_batch(DeliveryStreamName=self.delivery_stream, Records=records)
-
-        return response
+        return self.get_conn().put_record_batch(DeliveryStreamName=self.delivery_stream, Records=records)

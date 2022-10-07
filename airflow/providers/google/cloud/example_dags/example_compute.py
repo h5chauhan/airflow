@@ -15,7 +15,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """
 Example Airflow DAG that starts, stops and sets the machine type of a Google Compute
 Engine instance.
@@ -28,16 +27,18 @@ This DAG relies on the following OS environment variables
 * GCE_SHORT_MACHINE_TYPE_NAME - Machine type resource name to set, e.g. 'n1-standard-1'.
     See https://cloud.google.com/compute/docs/machine-types
 """
+from __future__ import annotations
 
 import os
+from datetime import datetime
 
 from airflow import models
+from airflow.models.baseoperator import chain
 from airflow.providers.google.cloud.operators.compute import (
     ComputeEngineSetMachineTypeOperator,
     ComputeEngineStartInstanceOperator,
     ComputeEngineStopInstanceOperator,
 )
-from airflow.utils.dates import days_ago
 
 # [START howto_operator_gce_args_common]
 GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'example-project')
@@ -51,8 +52,8 @@ GCE_SHORT_MACHINE_TYPE_NAME = os.environ.get('GCE_SHORT_MACHINE_TYPE_NAME', 'n1-
 
 with models.DAG(
     'example_gcp_compute',
-    schedule_interval=None,  # Override to match your needs
-    start_date=days_ago(1),
+    start_date=datetime(2021, 1, 1),
+    catchup=False,
     tags=['example'],
 ) as dag:
     # [START howto_operator_gce_start]
@@ -96,5 +97,11 @@ with models.DAG(
     )
     # [END howto_operator_gce_set_machine_type_no_project_id]
 
-    gce_instance_start >> gce_instance_start2 >> gce_instance_stop >> gce_instance_stop2
-    gce_instance_stop2 >> gce_set_machine_type >> gce_set_machine_type2
+    chain(
+        gce_instance_start,
+        gce_instance_start2,
+        gce_instance_stop,
+        gce_instance_stop2,
+        gce_set_machine_type,
+        gce_set_machine_type2,
+    )

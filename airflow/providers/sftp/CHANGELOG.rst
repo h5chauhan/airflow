@@ -16,8 +16,174 @@
     under the License.
 
 
+.. NOTE TO CONTRIBUTORS:
+   Please, only add notes to the Changelog just below the "Changelog" header when there are some breaking changes
+   and you want to add an explanation to the users on how they are supposed to deal with them.
+   The changelog is updated and maintained semi-automatically by release manager.
+
 Changelog
 ---------
+
+4.1.0
+.....
+
+Features
+~~~~~~~~
+
+* ``SFTPOperator - add support for list of file paths (#26666)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Apply PEP-563 (Postponed Evaluation of Annotations) to non-core airflow (#26289)``
+
+4.0.0
+.....
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+* ``Convert sftp hook to use paramiko instead of pysftp (#24512)``
+
+Features
+~~~~~~~~
+
+* ``Update 'actual_file_to_check' with rendered 'path' (#24451)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Automatically detect if non-lazy logging interpolation is used (#24910)``
+   * ``Move provider dependencies to inside provider folders (#24672)``
+   * ``Remove 'hook-class-names' from provider.yaml (#24702)``
+   * ``Add documentation for July 2022 Provider's release (#25030)``
+
+3.0.0
+.....
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+* This release of provider is only available for Airflow 2.2+ as explained in the Apache Airflow
+  providers support policy https://github.com/apache/airflow/blob/main/README.md#support-for-providers
+
+Features
+~~~~~~~~
+
+* ``Adding fnmatch type regex to SFTPSensor (#24084)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Add explanatory note for contributors about updating Changelog (#24229)``
+   * ``Prepare docs for May 2022 provider's release (#24231)``
+   * ``Update package description to remove double min-airflow specification (#24292)``
+
+2.6.0
+.....
+
+Features
+~~~~~~~~
+
+* ``add newer_than parameter to SFTP sensor (#21655) (#22377)``
+
+2.5.2
+.....
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix mistakenly added install_requires for all providers (#22382)``
+
+2.5.1
+.....
+
+Misc
+~~~~~
+
+* ``Add Trove classifiers in PyPI (Framework :: Apache Airflow :: Provider)``
+
+2.5.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Updates FTPHook provider to have test_connection (#21997)``
+
+Misc
+~~~~
+
+* ``Support for Python 3.10``
+* ``Add optional features in providers. (#21074)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Fixed changelog for January 2022 (delayed) provider's release (#21439)``
+   * ``Add documentation for January 2021 providers release (#21257)``
+   * ``Remove ':type' lines now sphinx-autoapi supports typehints (#20951)``
+
+2.4.1
+.....
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Bugfix: ''SFTPHook'' does not respect ''ssh_conn_id'' arg (#20756)``
+* ``fix deprecation messages for SFTPHook (#20692)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+
+2.4.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Making SFTPHook's constructor consistent with its superclass SSHHook (#20164)``
+
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Fix MyPy Errors for SFTP provider (#20242)``
+   * ``Use typed Context EVERYWHERE (#20565)``
+   * ``Fix template_fields type to have MyPy friendly Sequence type (#20571)``
+   * ``Update documentation for provider December 2021 release (#20523)``
+
+2.3.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add test_connection method for sftp hook (#19609)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+
+2.2.0
+.....
+
+Features
+~~~~~~~~
+
+* ``SFTP hook to prefer the SSH paramiko key over the key file path (#18988)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``More f-strings (#18855)``
+
+2.1.1
+.....
+
+Misc
+~~~~
+
+* ``Optimise connection importing for Airflow 2.2.0``
+
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Update description about the new ''connection-types'' provider meta-data (#17767)``
+   * ``Import Hooks lazily individually in providers manager (#17682)``
 
 2.1.0
 .....
@@ -31,7 +197,7 @@ Features
    appropriate section above if needed. Do not delete the lines(!):
    * ``Remove redundant logging in SFTP Hook (#16704)``
    * ``Prepare documentation for July release of providers. (#17015)``
-   * ``Fixed wrongly escaped characters in amazon&#39;s changelog (#17020)``
+   * ``Fixed wrongly escaped characters in amazon's changelog (#17020)``
 
 2.0.0
 .....

@@ -15,10 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Dict, Sequence, Tuple
+from __future__ import annotations
+
 from unittest import TestCase, mock
 
-from google.api_core.retry import Retry
+from google.api_core.gapic_v1.method import DEFAULT
 from google.cloud.memcache_v1beta2.types import cloud_memcache
 from google.cloud.redis_v1 import FailoverInstanceRequest
 from google.cloud.redis_v1.types import Instance
@@ -49,18 +50,19 @@ TEST_INSTANCE_ID = "test-instance-id"
 TEST_INSTANCE = Instance(name="instance")
 TEST_INSTANCE_NAME = "test-instance-name"
 TEST_PROJECT_ID = "test-project-id"
-TEST_RETRY = Retry()  # type: Retry
-TEST_TIMEOUT = 10  # type: float
-TEST_INSTANCE_SIZE = 4  # type: int
-TEST_METADATA = [("KEY", "VALUE")]  # type: Sequence[Tuple[str, str]]
-TEST_OUTPUT_CONFIG = {"gcs_destination": {"uri": "gs://test-bucket/file.rdb"}}  # type: Dict
+TEST_RETRY = DEFAULT
+TEST_TIMEOUT = 10.0
+TEST_INSTANCE_SIZE = 4
+TEST_METADATA = [("KEY", "VALUE")]
+TEST_OUTPUT_CONFIG = {"gcs_destination": {"uri": "gs://test-bucket/file.rdb"}}
 TEST_DATA_PROTECTION_MODE = FailoverInstanceRequest.DataProtectionMode.LIMITED_DATA_LOSS
-TEST_INPUT_CONFIG = {"gcs_source": {"uri": "gs://test-bucket/file.rdb"}}  # type: Dict
-TEST_PAGE_SIZE = 100  # type: int
+TEST_INPUT_CONFIG = {"gcs_source": {"uri": "gs://test-bucket/file.rdb"}}
+TEST_PAGE_SIZE = 100
 TEST_UPDATE_MASK = {"paths": ["memory_size_gb"]}  # TODO: Fill missing value
 TEST_UPDATE_MASK_MEMCACHED = {"displayName": "memcached instance"}
 TEST_PARENT = "test-parent"
 TEST_NAME = "test-name"
+TEST_UPDATE_INSTANCE_NAME = "projects/{project_id}/locations/{location}/instances/{instance_id}"
 
 
 class TestCloudMemorystoreCreateInstanceOperator(TestCase):
@@ -279,6 +281,11 @@ class TestCloudMemorystoreListInstancesOperator(TestCase):
 class TestCloudMemorystoreUpdateInstanceOperator(TestCase):
     @mock.patch("airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreHook")
     def test_assert_valid_hook_call(self, mock_hook):
+        mock_hook.return_value.update_instance.return_value.name = TEST_UPDATE_INSTANCE_NAME.format(
+            project_id=TEST_PROJECT_ID,
+            location=TEST_LOCATION,
+            instance_id=TEST_INSTANCE_ID,
+        )
         task = CloudMemorystoreUpdateInstanceOperator(
             task_id=TEST_TASK_ID,
             update_mask=TEST_UPDATE_MASK,
@@ -312,6 +319,11 @@ class TestCloudMemorystoreUpdateInstanceOperator(TestCase):
 class TestCloudMemorystoreScaleInstanceOperator(TestCase):
     @mock.patch("airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreHook")
     def test_assert_valid_hook_call(self, mock_hook):
+        mock_hook.return_value.update_instance.return_value.name = TEST_UPDATE_INSTANCE_NAME.format(
+            project_id=TEST_PROJECT_ID,
+            location=TEST_LOCATION,
+            instance_id=TEST_INSTANCE_ID,
+        )
         task = CloudMemorystoreScaleInstanceOperator(
             task_id=TEST_TASK_ID,
             memory_size_gb=TEST_INSTANCE_SIZE,
@@ -499,6 +511,11 @@ class TestCloudMemorystoreMemcachedListInstancesOperator(TestCase):
 class TestCloudMemorystoreMemcachedUpdateInstanceOperator(TestCase):
     @mock.patch("airflow.providers.google.cloud.operators.cloud_memorystore.CloudMemorystoreMemcachedHook")
     def test_assert_valid_hook_call(self, mock_hook):
+        mock_hook.return_value.update_instance.return_value.name = TEST_UPDATE_INSTANCE_NAME.format(
+            project_id=TEST_PROJECT_ID,
+            location=TEST_LOCATION,
+            instance_id=TEST_INSTANCE_ID,
+        )
         task = CloudMemorystoreMemcachedUpdateInstanceOperator(
             task_id=TEST_TASK_ID,
             update_mask=TEST_UPDATE_MASK_MEMCACHED,

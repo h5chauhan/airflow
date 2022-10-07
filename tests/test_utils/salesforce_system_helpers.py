@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
 import os
@@ -34,7 +35,6 @@ def provide_salesforce_connection(key_file_path: str):
     Context manager that provides a temporary value of SALESFORCE_DEFAULT connection.
 
     :param key_file_path: Path to file with SALESFORCE credentials .json file.
-    :type key_file_path: str
     """
     if not key_file_path.endswith(".json"):
         raise AirflowException("Use a JSON key file.")

@@ -14,14 +14,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import csv
 from tempfile import NamedTemporaryFile
-from typing import Any, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Sequence
 
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.providers.google.suite.hooks.sheets import GSheetsHook
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class GoogleSheetsToGCSOperator(BaseOperator):
@@ -33,22 +37,16 @@ class GoogleSheetsToGCSOperator(BaseOperator):
         :ref:`howto/operator:GoogleSheetsToGCSOperator`
 
     :param spreadsheet_id: The Google Sheet ID to interact with.
-    :type spreadsheet_id: str
     :param sheet_filter: Default to None, if provided, Should be an array of the sheet
         titles to pull from.
-    :type sheet_filter: List[str]
     :param destination_bucket: The destination Google cloud storage bucket where the
         report should be written to. (templated)
-    :type destination_bucket: str
     :param destination_path: The Google cloud storage URI array for the object created by the operator.
         For example: ``path/to/my/files``.
-    :type destination_path: str
     :param gcp_conn_id: The connection ID to use when fetching connection info.
-    :type gcp_conn_id: str
     :param delegate_to: The account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
-    :type delegate_to: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -57,27 +55,26 @@ class GoogleSheetsToGCSOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
-    template_fields = [
+    template_fields: Sequence[str] = (
         "spreadsheet_id",
         "destination_bucket",
         "destination_path",
         "sheet_filter",
         "impersonation_chain",
-    ]
+    )
 
     def __init__(
         self,
         *,
         spreadsheet_id: str,
         destination_bucket: str,
-        sheet_filter: Optional[List[str]] = None,
-        destination_path: Optional[str] = None,
+        sheet_filter: list[str] | None = None,
+        destination_path: str | None = None,
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -94,7 +91,7 @@ class GoogleSheetsToGCSOperator(BaseOperator):
         gcs_hook: GCSHook,
         hook: GSheetsHook,
         sheet_range: str,
-        sheet_values: List[Any],
+        sheet_values: list[Any],
     ) -> str:
         # Construct destination file path
         sheet = hook.get_spreadsheet(self.spreadsheet_id)
@@ -117,7 +114,7 @@ class GoogleSheetsToGCSOperator(BaseOperator):
             )
         return dest_file_name
 
-    def execute(self, context):
+    def execute(self, context: Context):
         sheet_hook = GSheetsHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -130,7 +127,7 @@ class GoogleSheetsToGCSOperator(BaseOperator):
         )
 
         # Pull data and upload
-        destination_array: List[str] = []
+        destination_array: list[str] = []
         sheet_titles = sheet_hook.get_sheet_titles(
             spreadsheet_id=self.spreadsheet_id, sheet_filter=self.sheet_filter
         )

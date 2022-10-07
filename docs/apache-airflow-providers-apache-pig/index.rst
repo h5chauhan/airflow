@@ -23,18 +23,31 @@ Content
 
 .. toctree::
     :maxdepth: 1
+    :caption: Guides
+
+    Operators <operators>
+
+.. toctree::
+    :maxdepth: 1
     :caption: References
 
     Python API <_api/airflow/providers/apache/pig/index>
 
 .. toctree::
+    :hidden:
+    :caption: System tests
+
+    System Tests <_api/tests/system/providers/apache/pig/index>
+
+.. toctree::
     :maxdepth: 1
     :caption: Resources
 
-    Example DAGs <https://github.com/apache/airflow/tree/main/airflow/providers/apache/pig/example_dags>
+    Example DAGs <https://github.com/apache/airflow/tree/providers-apache-pig/3.0.0/tests/system/providers/apache/pig>
     PyPI Repository <https://pypi.org/project/apache-airflow-providers-apache-pig/>
+    Installing from sources <installing-providers-from-sources>
 
-.. THE REMINDER OF THE FILE IS AUTOMATICALLY GENERATED. IT WILL BE OVERWRITTEN AT RELEASE TIME!
+.. THE REMAINDER OF THE FILE IS AUTOMATICALLY GENERATED. IT WILL BE OVERWRITTEN AT RELEASE TIME!
 
 
 .. toctree::
@@ -50,7 +63,7 @@ Package apache-airflow-providers-apache-pig
 `Apache Pig <https://pig.apache.org/>`__
 
 
-Release: 2.0.0
+Release: 3.0.0
 
 Provider package
 ----------------
@@ -61,7 +74,8 @@ are in ``airflow.providers.apache.pig`` python package.
 Installation
 ------------
 
-You can install this package on top of an existing airflow 2.1+ installation via
+You can install this package on top of an existing Airflow 2 installation (see ``Requirements`` below)
+for the minimum Airflow version supported) via
 ``pip install apache-airflow-providers-apache-pig``
 
 .. include:: ../../airflow/providers/apache/pig/CHANGELOG.rst

@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from datetime import datetime
@@ -101,6 +102,45 @@ class TestGoogleCloudStorageToCloudStorageOperator(unittest.TestCase):
         mock_calls = [
             mock.call(TEST_BUCKET, prefix="test_object", delimiter=""),
             mock.call(DESTINATION_BUCKET, prefix="test_object", delimiter=""),
+        ]
+        mock_hook.return_value.list.assert_has_calls(mock_calls)
+
+    @mock.patch('airflow.providers.google.cloud.transfers.gcs_to_gcs.GCSHook')
+    def test_execute_no_wildcard_with_replace_flag_false(self, mock_hook):
+        operator = GCSToGCSOperator(
+            task_id=TASK_ID,
+            source_bucket=TEST_BUCKET,
+            source_object=SOURCE_OBJECT_NO_WILDCARD,
+            destination_bucket=DESTINATION_BUCKET,
+            replace=False,
+        )
+
+        operator.execute(None)
+        mock_calls = [
+            mock.call(TEST_BUCKET, prefix="test_object.txt", delimiter=None),
+            mock.call(DESTINATION_BUCKET, prefix="test_object.txt", delimiter=None),
+        ]
+        mock_hook.return_value.list.assert_has_calls(mock_calls)
+
+    @mock.patch('airflow.providers.google.cloud.transfers.gcs_to_gcs.GCSHook')
+    def test_copy_file_with_exact_match(self, mock_hook):
+        SOURCE_FILES = [
+            'test_object.txt',
+            'test_object.txt.copy/',
+            'test_object.txt.folder/',
+        ]
+        mock_hook.return_value.list.return_value = SOURCE_FILES
+        operator = GCSToGCSOperator(
+            task_id=TASK_ID,
+            source_bucket=TEST_BUCKET,
+            source_object=SOURCE_OBJECT_NO_WILDCARD,
+            destination_bucket=DESTINATION_BUCKET,
+            exact_match=True,
+        )
+
+        operator.execute(None)
+        mock_calls = [
+            mock.call(TEST_BUCKET, prefix="test_object.txt", delimiter=None),
         ]
         mock_hook.return_value.list.assert_has_calls(mock_calls)
 
@@ -379,9 +419,7 @@ class TestGoogleCloudStorageToCloudStorageOperator(unittest.TestCase):
 
         total_wildcards = operator.source_object.count(WILDCARD)
 
-        error_msg = "Only one wildcard '[*]' is allowed in source_object parameter. Found {}".format(
-            total_wildcards
-        )
+        error_msg = f"Only one wildcard '[*]' is allowed in source_object parameter. Found {total_wildcards}"
 
         with pytest.raises(AirflowException, match=error_msg):
             operator.execute(None)
@@ -548,3 +586,20 @@ class TestGoogleCloudStorageToCloudStorageOperator(unittest.TestCase):
             mock.call(DESTINATION_BUCKET, prefix="foo/bar", delimiter=""),
         ]
         mock_hook.return_value.list.assert_has_calls(mock_calls)
+
+    @mock.patch('airflow.providers.google.cloud.transfers.gcs_to_gcs.GCSHook')
+    def test_execute_source_object_required_flag_true(self, mock_hook):
+        mock_hook.return_value.exists.return_value = False
+        operator = GCSToGCSOperator(
+            task_id=TASK_ID,
+            source_bucket=TEST_BUCKET,
+            source_objects=SOURCE_OBJECTS_SINGLE_FILE,
+            destination_bucket=DESTINATION_BUCKET,
+            destination_object=DESTINATION_OBJECT_PREFIX,
+            source_object_required=True,
+        )
+
+        with pytest.raises(
+            AirflowException, match=f"{SOURCE_OBJECTS_SINGLE_FILE} does not exist in bucket {TEST_BUCKET}"
+        ):
+            operator.execute(None)

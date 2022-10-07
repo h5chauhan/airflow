@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import base64
 import binascii
@@ -27,7 +28,7 @@ try:
     from airflow.providers.google.cloud.utils import mlengine_prediction_summary
 except ImportError as e:
     if 'apache_beam' in str(e):
-        raise unittest.SkipTest(f"package apache_beam not present. Skipping all tests in {__name__}")
+        pytestmark = pytest.mark.skip(f"package apache_beam not present. Skipping all tests in {__name__}")
 
 
 class TestJsonCode(unittest.TestCase):

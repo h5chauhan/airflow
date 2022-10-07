@@ -15,10 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import List, Optional, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Sequence
 
 from airflow.models import BaseOperator
 from airflow.providers.dingding.hooks.dingding import DingdingHook
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class DingdingOperator(BaseOperator):
@@ -31,19 +36,14 @@ class DingdingOperator(BaseOperator):
     `Dingding custom bot <https://open-doc.dingtalk.com/microapp/serverapi2/qf2nxq>`_
 
     :param dingding_conn_id: The name of the Dingding connection to use
-    :type dingding_conn_id: str
     :param message_type: Message type you want to send to Dingding, support five type so far
         including text, link, markdown, actionCard, feedCard
-    :type message_type: str
     :param message: The message send to Dingding chat group
-    :type message: str or dict
     :param at_mobiles: Remind specific users with this message
-    :type at_mobiles: list[str]
     :param at_all: Remind all people in group or not. If True, will overwrite ``at_mobiles``
-    :type at_all: bool
     """
 
-    template_fields = ('message',)
+    template_fields: Sequence[str] = ('message',)
     ui_color = '#4ea4d4'  # Dingding icon color
 
     def __init__(
@@ -51,8 +51,8 @@ class DingdingOperator(BaseOperator):
         *,
         dingding_conn_id: str = 'dingding_default',
         message_type: str = 'text',
-        message: Union[str, dict, None] = None,
-        at_mobiles: Optional[List[str]] = None,
+        message: str | dict | None = None,
+        at_mobiles: list[str] | None = None,
         at_all: bool = False,
         **kwargs,
     ) -> None:
@@ -63,7 +63,7 @@ class DingdingOperator(BaseOperator):
         self.at_mobiles = at_mobiles
         self.at_all = at_all
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         self.log.info('Sending Dingding message.')
         hook = DingdingHook(
             self.dingding_conn_id, self.message_type, self.message, self.at_mobiles, self.at_all

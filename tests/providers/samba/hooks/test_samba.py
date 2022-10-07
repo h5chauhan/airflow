@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from inspect import getfullargspec
@@ -130,3 +131,15 @@ class TestSambaHook(unittest.TestCase):
 
             # We expect keyword arguments to include the connection settings.
             assert dict(kwargs, **connection_settings) == p_kwargs
+
+    @parameterized.expand(
+        [
+            ("/start/path/with/slash", "//ip/share/start/path/with/slash"),
+            ("start/path/without/slash", "//ip/share/start/path/without/slash"),
+        ],
+    )
+    @mock.patch('airflow.hooks.base.BaseHook.get_connection')
+    def test__join_path(self, path, full_path, get_conn_mock):
+        get_conn_mock.return_value = CONNECTION
+        hook = SambaHook('samba_default')
+        assert hook._join_path(path) == full_path

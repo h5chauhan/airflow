@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 from airflow.providers.yandex.hooks.yandex import YandexCloudBaseHook
 
@@ -24,7 +24,6 @@ class DataprocHook(YandexCloudBaseHook):
     A base hook for Yandex.Cloud Data Proc.
 
     :param yandex_conn_id: The connection ID to use when fetching connection info.
-    :type yandex_conn_id: str
     """
 
     def __init__(self, *args, **kwargs) -> None:

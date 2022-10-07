@@ -20,29 +20,33 @@ API and outputs a kubernetes.client.models.V1Pod.
 The advantage being that the full Kubernetes API
 is supported and no serialization need be written.
 """
+from __future__ import annotations
+
 import copy
 import datetime
 import hashlib
+import logging
 import os
 import re
 import uuid
 import warnings
 from functools import reduce
-from typing import List, Optional, Union
 
 from dateutil import parser
 from kubernetes.client import models as k8s
 from kubernetes.client.api_client import ApiClient
 
-from airflow.exceptions import AirflowConfigException
+from airflow.exceptions import AirflowConfigException, PodReconciliationError, RemovedInAirflow3Warning
 from airflow.kubernetes.pod_generator_deprecated import PodDefaults, PodGenerator as PodGeneratorDeprecated
 from airflow.utils import yaml
 from airflow.version import version as airflow_version
 
+log = logging.getLogger(__name__)
+
 MAX_LABEL_LEN = 63
 
 
-def make_safe_label_value(string):
+def make_safe_label_value(string: str) -> str:
     """
     Valid label values must be 63 characters or less and must be empty or begin and
     end with an alphanumeric character ([a-z0-9A-Z]) with dashes (-), underscores (_),
@@ -94,17 +98,14 @@ class PodGenerator:
     the first container in the list of containers.
 
     :param pod: The fully specified pod. Mutually exclusive with `path_or_string`
-    :type pod: Optional[kubernetes.client.models.V1Pod]
     :param pod_template_file: Path to YAML file. Mutually exclusive with `pod`
-    :type pod_template_file: Optional[str]
     :param extract_xcom: Whether to bring up a container for xcom
-    :type extract_xcom: bool
     """
 
     def __init__(
         self,
-        pod: Optional[k8s.V1Pod] = None,
-        pod_template_file: Optional[str] = None,
+        pod: k8s.V1Pod | None = None,
+        pod_template_file: str | None = None,
         extract_xcom: bool = True,
     ):
         if not pod_template_file and not pod:
@@ -150,7 +151,7 @@ class PodGenerator:
         return pod_cp
 
     @staticmethod
-    def from_obj(obj) -> Optional[Union[dict, k8s.V1Pod]]:
+    def from_obj(obj) -> dict | k8s.V1Pod | None:
         """Converts to pod from obj"""
         if obj is None:
             return None
@@ -175,7 +176,7 @@ class PodGenerator:
                 'Using a dictionary for the executor_config is deprecated and will soon be removed.'
                 'please use a `kubernetes.client.models.V1Pod` class with a "pod_override" key'
                 ' instead. ',
-                category=DeprecationWarning,
+                category=RemovedInAirflow3Warning,
             )
             return PodGenerator.from_legacy_obj(obj)
         else:
@@ -184,7 +185,7 @@ class PodGenerator:
             )
 
     @staticmethod
-    def from_legacy_obj(obj) -> Optional[k8s.V1Pod]:
+    def from_legacy_obj(obj) -> k8s.V1Pod | None:
         """Converts to pod from obj"""
         if obj is None:
             return None
@@ -221,13 +222,11 @@ class PodGenerator:
         return PodGeneratorDeprecated(**namespaced).gen_pod()
 
     @staticmethod
-    def reconcile_pods(base_pod: k8s.V1Pod, client_pod: Optional[k8s.V1Pod]) -> k8s.V1Pod:
+    def reconcile_pods(base_pod: k8s.V1Pod, client_pod: k8s.V1Pod | None) -> k8s.V1Pod:
         """
         :param base_pod: has the base attributes which are overwritten if they exist
             in the client pod and remain if they do not exist in the client_pod
-        :type base_pod: k8s.V1Pod
         :param client_pod: the pod that the client wants to create.
-        :type client_pod: k8s.V1Pod
         :return: the merged pods
 
         This can't be done recursively as certain fields some overwritten, and some concatenated.
@@ -248,9 +247,7 @@ class PodGenerator:
         Merge kubernetes Metadata objects
         :param base_meta: has the base attributes which are overwritten if they exist
             in the client_meta and remain if they do not exist in the client_meta
-        :type base_meta: k8s.V1ObjectMeta
         :param client_meta: the spec that the client wants to create.
-        :type client_meta: k8s.V1ObjectMeta
         :return: the merged specs
         """
         if base_meta and not client_meta:
@@ -269,14 +266,12 @@ class PodGenerator:
 
     @staticmethod
     def reconcile_specs(
-        base_spec: Optional[k8s.V1PodSpec], client_spec: Optional[k8s.V1PodSpec]
-    ) -> Optional[k8s.V1PodSpec]:
+        base_spec: k8s.V1PodSpec | None, client_spec: k8s.V1PodSpec | None
+    ) -> k8s.V1PodSpec | None:
         """
         :param base_spec: has the base attributes which are overwritten if they exist
             in the client_spec and remain if they do not exist in the client_spec
-        :type base_spec: k8s.V1PodSpec
         :param client_spec: the spec that the client wants to create.
-        :type client_spec: k8s.V1PodSpec
         :return: the merged specs
         """
         if base_spec and not client_spec:
@@ -287,21 +282,20 @@ class PodGenerator:
             client_spec.containers = PodGenerator.reconcile_containers(
                 base_spec.containers, client_spec.containers
             )
-            merged_spec = extend_object_field(base_spec, client_spec, 'volumes')
+            merged_spec = extend_object_field(base_spec, client_spec, 'init_containers')
+            merged_spec = extend_object_field(base_spec, merged_spec, 'volumes')
             return merge_objects(base_spec, merged_spec)
 
         return None
 
     @staticmethod
     def reconcile_containers(
-        base_containers: List[k8s.V1Container], client_containers: List[k8s.V1Container]
-    ) -> List[k8s.V1Container]:
+        base_containers: list[k8s.V1Container], client_containers: list[k8s.V1Container]
+    ) -> list[k8s.V1Container]:
         """
         :param base_containers: has the base attributes which are overwritten if they exist
             in the client_containers and remain if they do not exist in the client_containers
-        :type base_containers: List[k8s.V1Container]
         :param client_containers: the containers that the client wants to create.
-        :type client_containers: List[k8s.V1Container]
         :return: the merged containers
 
         The runs recursively over the list of containers.
@@ -331,12 +325,14 @@ class PodGenerator:
         pod_id: str,
         try_number: int,
         kube_image: str,
-        date: datetime.datetime,
-        args: List[str],
-        pod_override_object: Optional[k8s.V1Pod],
+        date: datetime.datetime | None,
+        args: list[str],
+        pod_override_object: k8s.V1Pod | None,
         base_worker_pod: k8s.V1Pod,
         namespace: str,
-        scheduler_job_id: int,
+        scheduler_job_id: str,
+        run_id: str | None = None,
+        map_index: int = -1,
     ) -> k8s.V1Pod:
         """
         Construct a pod by gathering and consolidating the configuration from 3 places:
@@ -351,25 +347,35 @@ class PodGenerator:
         except Exception:
             image = kube_image
 
+        annotations = {
+            'dag_id': dag_id,
+            'task_id': task_id,
+            'try_number': str(try_number),
+        }
+        labels = {
+            'airflow-worker': make_safe_label_value(scheduler_job_id),
+            'dag_id': make_safe_label_value(dag_id),
+            'task_id': make_safe_label_value(task_id),
+            'try_number': str(try_number),
+            'airflow_version': airflow_version.replace('+', '-'),
+            'kubernetes_executor': 'True',
+        }
+        if map_index >= 0:
+            annotations['map_index'] = str(map_index)
+            labels['map_index'] = str(map_index)
+        if date:
+            annotations['execution_date'] = date.isoformat()
+            labels['execution_date'] = datetime_to_label_safe_datestring(date)
+        if run_id:
+            annotations['run_id'] = run_id
+            labels['run_id'] = make_safe_label_value(run_id)
+
         dynamic_pod = k8s.V1Pod(
             metadata=k8s.V1ObjectMeta(
                 namespace=namespace,
-                annotations={
-                    'dag_id': dag_id,
-                    'task_id': task_id,
-                    'execution_date': date.isoformat(),
-                    'try_number': str(try_number),
-                },
+                annotations=annotations,
                 name=PodGenerator.make_unique_pod_id(pod_id),
-                labels={
-                    'airflow-worker': make_safe_label_value(str(scheduler_job_id)),
-                    'dag_id': make_safe_label_value(dag_id),
-                    'task_id': make_safe_label_value(task_id),
-                    'execution_date': datetime_to_label_safe_datestring(date),
-                    'try_number': str(try_number),
-                    'airflow_version': airflow_version.replace('+', '-'),
-                    'kubernetes_executor': 'True',
-                },
+                labels=labels,
             ),
             spec=k8s.V1PodSpec(
                 containers=[
@@ -387,7 +393,10 @@ class PodGenerator:
         # Pod from the pod_template_File -> Pod from executor_config arg -> Pod from the K8s executor
         pod_list = [base_worker_pod, pod_override_object, dynamic_pod]
 
-        return reduce(PodGenerator.reconcile_pods, pod_list)
+        try:
+            return reduce(PodGenerator.reconcile_pods, pod_list)
+        except Exception as e:
+            raise PodReconciliationError from e
 
     @staticmethod
     def serialize_pod(pod: k8s.V1Pod) -> dict:
@@ -406,23 +415,24 @@ class PodGenerator:
         """
         :param path: Path to the file
         :return: a kubernetes.client.models.V1Pod
-
-        Unfortunately we need access to the private method
-        ``_ApiClient__deserialize_model`` from the kubernetes client.
-        This issue is tracked here; https://github.com/kubernetes-client/python/issues/977.
         """
         if os.path.exists(path):
             with open(path) as stream:
                 pod = yaml.safe_load(stream)
         else:
-            pod = yaml.safe_load(path)
+            pod = None
+            log.warning("Model file %s does not exist", path)
 
         return PodGenerator.deserialize_model_dict(pod)
 
     @staticmethod
-    def deserialize_model_dict(pod_dict: dict) -> k8s.V1Pod:
+    def deserialize_model_dict(pod_dict: dict | None) -> k8s.V1Pod:
         """
         Deserializes python dictionary to k8s.V1Pod
+
+        Unfortunately we need access to the private method
+        ``_ApiClient__deserialize_model`` from the kubernetes client.
+        This issue is tracked here; https://github.com/kubernetes-client/python/issues/977.
 
         :param pod_dict: Serialized dict of k8s.V1Pod object
         :return: De-serialized k8s.V1Pod
@@ -431,7 +441,7 @@ class PodGenerator:
         return api_client._ApiClient__deserialize_model(pod_dict, k8s.V1Pod)
 
     @staticmethod
-    def make_unique_pod_id(pod_id: str) -> str:
+    def make_unique_pod_id(pod_id: str) -> str | None:
         r"""
         Kubernetes pod names must consist of one or more lowercase
         rfc1035/rfc1123 labels separated by '.' with a maximum length of 253
@@ -450,11 +460,14 @@ class PodGenerator:
             return None
 
         safe_uuid = uuid.uuid4().hex  # safe uuid will always be less than 63 chars
-        # Strip trailing '-' and '.' as they can't be followed by '.'
-        trimmed_pod_id = pod_id[:MAX_LABEL_LEN].rstrip('-.')
 
-        safe_pod_id = f"{trimmed_pod_id}.{safe_uuid}"
-        return safe_pod_id
+        # Get prefix length after subtracting the uuid length. Clean up '.' and '-' from
+        # end of podID ('.' can't be followed by '-').
+        label_prefix_length = MAX_LABEL_LEN - len(safe_uuid) - 1  # -1 for separator
+        trimmed_pod_id = pod_id[:label_prefix_length].rstrip('-.')
+
+        # previously used a '.' as the separator, but this could create errors in some situations
+        return f"{trimmed_pod_id}-{safe_uuid}"
 
 
 def merge_objects(base_obj, client_obj):
@@ -492,7 +505,6 @@ def extend_object_field(base_obj, client_obj, field_name):
     :param client_obj: an object which has a property `field_name` that is a list.
         A copy of this object is returned with `field_name` modified
     :param field_name: the name of the list field
-    :type field_name: str
     :return: the client_obj with the property `field_name` being the two properties appended
     """
     client_obj_cp = copy.deepcopy(client_obj)

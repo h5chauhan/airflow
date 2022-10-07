@@ -15,9 +15,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import copy
+import logging
 import logging.config
 import pathlib
+import shutil
 import sys
 import tempfile
 import unittest.mock
@@ -27,14 +31,17 @@ import pytest
 
 from airflow import settings
 from airflow.config_templates.airflow_local_settings import DEFAULT_LOGGING_CONFIG
-from airflow.models import DAG, DagBag, TaskInstance
-from airflow.operators.dummy import DummyOperator
+from airflow.models import DagBag, DagRun
+from airflow.models.tasklog import LogTemplate
 from airflow.utils import timezone
+from airflow.utils.log.file_task_handler import FileTaskHandler
 from airflow.utils.log.logging_mixin import ExternalLoggingMixin
 from airflow.utils.session import create_session
-from airflow.utils.state import State
+from airflow.utils.state import DagRunState, TaskInstanceState
+from airflow.utils.types import DagRunType
 from airflow.www.app import create_app
 from tests.test_utils.config import conf_vars
+from tests.test_utils.db import clear_db_dags, clear_db_runs
 from tests.test_utils.decorators import dont_initialize_flask_app_submodules
 from tests.test_utils.www import client_with_login
 
@@ -52,9 +59,19 @@ def backup_modules():
 
 
 @pytest.fixture(scope="module")
-def log_app(backup_modules):
+def log_path(tmp_path_factory):
+    return tmp_path_factory.mktemp("logs")
+
+
+@pytest.fixture(scope="module")
+def log_app(backup_modules, log_path):
     @dont_initialize_flask_app_submodules(
-        skip_all_except=["init_appbuilder", "init_jinja_globals", "init_appbuilder_views"]
+        skip_all_except=[
+            "init_appbuilder",
+            "init_jinja_globals",
+            "init_appbuilder_views",
+            "init_api_connexion",
+        ]
     )
     @conf_vars({('logging', 'logging_config_class'): 'airflow_local_settings.LOGGING_CONFIG'})
     def factory():
@@ -75,12 +92,7 @@ def log_app(backup_modules):
 
     # Create a custom logging configuration
     logging_config = copy.deepcopy(DEFAULT_LOGGING_CONFIG)
-    logging_config['handlers']['task']['base_log_folder'] = str(
-        pathlib.Path(__file__, "..", "..", "test_logs").resolve(),
-    )
-    logging_config['handlers']['task'][
-        'filename_template'
-    ] = '{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts | replace(":", ".") }}/{{ try_number }}.log'
+    logging_config['handlers']['task']['base_log_folder'] = str(log_path)
 
     with tempfile.TemporaryDirectory() as settings_dir:
         local_settings = pathlib.Path(settings_dir, "airflow_local_settings.py")
@@ -102,46 +114,80 @@ def reset_modules_after_every_test(backup_modules):
 
 
 @pytest.fixture(autouse=True)
-def dags(log_app):
-    dag = DAG(DAG_ID, start_date=DEFAULT_DATE)
-    dag_removed = DAG(DAG_ID_REMOVED, start_date=DEFAULT_DATE)
+def dags(log_app, create_dummy_dag, session):
+    dag, _ = create_dummy_dag(
+        dag_id=DAG_ID,
+        task_id=TASK_ID,
+        start_date=DEFAULT_DATE,
+        with_dagrun_type=None,
+        session=session,
+    )
+    dag_removed, _ = create_dummy_dag(
+        dag_id=DAG_ID_REMOVED,
+        task_id=TASK_ID,
+        start_date=DEFAULT_DATE,
+        with_dagrun_type=None,
+        session=session,
+    )
 
     bag = DagBag(include_examples=False)
     bag.bag_dag(dag=dag, root_dag=dag)
     bag.bag_dag(dag=dag_removed, root_dag=dag_removed)
-
-    # Since we don't want to store the code for the DAG defined in this file
-    with unittest.mock.patch.object(settings, "STORE_DAG_CODE", False):
-        dag.sync_to_db()
-        dag_removed.sync_to_db()
-        bag.sync_to_db()
-
+    bag.sync_to_db(session=session)
     log_app.dag_bag = bag
-    return dag, dag_removed
+
+    yield dag, dag_removed
+
+    clear_db_dags()
 
 
 @pytest.fixture(autouse=True)
-def tis(dags):
+def tis(dags, session):
     dag, dag_removed = dags
-    ti = TaskInstance(
-        task=DummyOperator(task_id=TASK_ID, dag=dag),
+    dagrun = dag.create_dagrun(
+        run_type=DagRunType.SCHEDULED,
         execution_date=DEFAULT_DATE,
+        data_interval=(DEFAULT_DATE, DEFAULT_DATE),
+        start_date=DEFAULT_DATE,
+        state=DagRunState.RUNNING,
+        session=session,
     )
+    (ti,) = dagrun.task_instances
     ti.try_number = 1
-    ti_removed_dag = TaskInstance(
-        task=DummyOperator(task_id=TASK_ID, dag=dag_removed),
+    ti.hostname = 'localhost'
+    dagrun_removed = dag_removed.create_dagrun(
+        run_type=DagRunType.SCHEDULED,
         execution_date=DEFAULT_DATE,
+        data_interval=(DEFAULT_DATE, DEFAULT_DATE),
+        start_date=DEFAULT_DATE,
+        state=DagRunState.RUNNING,
+        session=session,
     )
+    (ti_removed_dag,) = dagrun_removed.task_instances
     ti_removed_dag.try_number = 1
-
-    with create_session() as session:
-        session.merge(ti)
-        session.merge(ti_removed_dag)
 
     yield ti, ti_removed_dag
 
-    with create_session() as session:
-        session.query(TaskInstance).delete()
+    clear_db_runs()
+
+
+@pytest.fixture
+def create_expected_log_file(log_path, tis):
+    ti, _ = tis
+    handler = FileTaskHandler(log_path)
+
+    def create_expected_log_file(try_number):
+        ti.try_number = try_number - 1
+        handler.set_context(ti)
+        handler.emit(logging.makeLogRecord({"msg": "Log for testing."}))
+        handler.flush()
+
+    yield create_expected_log_file
+    # log_path fixture is used in log_app, so both have "module" scope. Because of that
+    # log_path isn't deleted automatically by pytest between tests
+    # We delete created log files manually to make sure tests do not reuse logs created by other tests
+    for sub_path in log_path.iterdir():
+        shutil.rmtree(sub_path)
 
 
 @pytest.fixture()
@@ -152,13 +198,13 @@ def log_admin_client(log_app):
 @pytest.mark.parametrize(
     "state, try_number, num_logs",
     [
-        (State.NONE, 0, 0),
-        (State.UP_FOR_RETRY, 2, 2),
-        (State.UP_FOR_RESCHEDULE, 0, 1),
-        (State.UP_FOR_RESCHEDULE, 1, 2),
-        (State.RUNNING, 1, 1),
-        (State.SUCCESS, 1, 1),
-        (State.FAILED, 3, 3),
+        (None, 0, 0),
+        (TaskInstanceState.UP_FOR_RETRY, 2, 2),
+        (TaskInstanceState.UP_FOR_RESCHEDULE, 0, 1),
+        (TaskInstanceState.UP_FOR_RESCHEDULE, 1, 2),
+        (TaskInstanceState.RUNNING, 1, 1),
+        (TaskInstanceState.SUCCESS, 1, 1),
+        (TaskInstanceState.FAILED, 3, 3),
     ],
     ids=[
         "none",
@@ -192,17 +238,19 @@ def test_get_file_task_log(log_admin_client, tis, state, try_number, num_logs):
     assert f'log-group-{num_logs + 1}' not in data
 
 
-def test_get_logs_with_metadata_as_download_file(log_admin_client):
+def test_get_logs_with_metadata_as_download_file(log_admin_client, create_expected_log_file):
     url_template = (
         "get_logs_with_metadata?dag_id={}&"
         "task_id={}&execution_date={}&"
         "try_number={}&metadata={}&format=file"
     )
     try_number = 1
+    create_expected_log_file(try_number)
+    date = DEFAULT_DATE.isoformat()
     url = url_template.format(
         DAG_ID,
         TASK_ID,
-        urllib.parse.quote_plus(DEFAULT_DATE.isoformat()),
+        urllib.parse.quote_plus(date),
         try_number,
         "{}",
     )
@@ -210,9 +258,60 @@ def test_get_logs_with_metadata_as_download_file(log_admin_client):
 
     content_disposition = response.headers['Content-Disposition']
     assert content_disposition.startswith('attachment')
-    assert f'{DAG_ID}/{TASK_ID}/{DEFAULT_DATE.isoformat()}/{try_number}.log' in content_disposition
+    assert (
+        f'dag_id={DAG_ID}/run_id=scheduled__{date}/task_id={TASK_ID}/attempt={try_number}.log'
+        in content_disposition
+    )
     assert 200 == response.status_code
     assert 'Log for testing.' in response.data.decode('utf-8')
+    assert 'localhost\n' in response.data.decode('utf-8')
+
+
+DIFFERENT_LOG_FILENAME = "{{ ti.dag_id }}/{{ ti.run_id }}/{{ ti.task_id }}/{{ try_number }}.log"
+
+
+@pytest.fixture()
+def dag_run_with_log_filename(tis):
+    run_filters = [DagRun.dag_id == DAG_ID, DagRun.execution_date == DEFAULT_DATE]
+    with create_session() as session:
+        log_template = session.merge(
+            LogTemplate(filename=DIFFERENT_LOG_FILENAME, elasticsearch_id="irrelevant")
+        )
+        session.flush()  # To populate 'log_template.id'.
+        run_query = session.query(DagRun).filter(*run_filters)
+        run_query.update({"log_template_id": log_template.id})
+        dag_run = run_query.one()
+    # Dag has been updated, replace Dag in Task Instance
+    ti, _ = tis
+    ti.dag_run = dag_run
+    yield dag_run
+    with create_session() as session:
+        session.query(DagRun).filter(*run_filters).update({"log_template_id": None})
+        session.query(LogTemplate).filter(LogTemplate.id == log_template.id).delete()
+
+
+def test_get_logs_for_changed_filename_format_db(
+    log_admin_client, dag_run_with_log_filename, create_expected_log_file
+):
+    try_number = 1
+    create_expected_log_file(try_number)
+    url = (
+        f"get_logs_with_metadata?dag_id={dag_run_with_log_filename.dag_id}&"
+        f"task_id={TASK_ID}&"
+        f"execution_date={urllib.parse.quote_plus(dag_run_with_log_filename.logical_date.isoformat())}&"
+        f"try_number={try_number}&metadata={{}}&format=file"
+    )
+    response = log_admin_client.get(url)
+
+    # Should find the log under corresponding db entry.
+    assert 200 == response.status_code
+    assert "Log for testing." in response.data.decode("utf-8")
+    content_disposition = response.headers['Content-Disposition']
+    expected_filename = (
+        f"{dag_run_with_log_filename.dag_id}/{dag_run_with_log_filename.run_id}/{TASK_ID}/{try_number}.log"
+    )
+    assert content_disposition.startswith("attachment")
+    assert expected_filename in content_disposition
 
 
 @unittest.mock.patch(
@@ -248,7 +347,32 @@ def test_get_logs_with_metadata_as_download_large_file(_, log_admin_client):
 
 
 @pytest.mark.parametrize("metadata", ["null", "{}"])
-def test_get_logs_with_metadata(log_admin_client, metadata):
+def test_get_logs_with_metadata(log_admin_client, metadata, create_expected_log_file):
+    url_template = "get_logs_with_metadata?dag_id={}&task_id={}&execution_date={}&try_number={}&metadata={}"
+    try_number = 1
+    create_expected_log_file(try_number)
+    response = log_admin_client.get(
+        url_template.format(
+            DAG_ID,
+            TASK_ID,
+            urllib.parse.quote_plus(DEFAULT_DATE.isoformat()),
+            try_number,
+            metadata,
+        ),
+        data={"username": "test", "password": "test"},
+        follow_redirects=True,
+    )
+    assert 200 == response.status_code
+
+    data = response.data.decode()
+    assert '"message":' in data
+    assert '"metadata":' in data
+    assert 'Log for testing.' in data
+
+
+def test_get_logs_with_invalid_metadata(log_admin_client):
+    """Test invalid metadata JSON returns error message"""
+    metadata = "invalid"
     url_template = "get_logs_with_metadata?dag_id={}&task_id={}&execution_date={}&try_number={}&metadata={}"
     response = log_admin_client.get(
         url_template.format(
@@ -261,12 +385,9 @@ def test_get_logs_with_metadata(log_admin_client, metadata):
         data={"username": "test", "password": "test"},
         follow_redirects=True,
     )
-    assert 200 == response.status_code
 
-    data = response.data.decode()
-    assert '"message":' in data
-    assert '"metadata":' in data
-    assert 'Log for testing.' in data
+    assert response.status_code == 400
+    assert response.json == {"error": "Invalid JSON metadata"}
 
 
 @unittest.mock.patch(
@@ -316,13 +437,14 @@ def test_get_logs_response_with_ti_equal_to_none(log_admin_client):
     assert "*** Task instance did not exist in the DB\n" == data['message']
 
 
-def test_get_logs_with_json_response_format(log_admin_client):
+def test_get_logs_with_json_response_format(log_admin_client, create_expected_log_file):
     url_template = (
         "get_logs_with_metadata?dag_id={}&"
         "task_id={}&execution_date={}&"
         "try_number={}&metadata={}&format=json"
     )
     try_number = 1
+    create_expected_log_file(try_number)
     url = url_template.format(
         DAG_ID,
         TASK_ID,
@@ -376,7 +498,7 @@ def test_redirect_to_external_log_with_local_log_handler(log_admin_client, task_
     )
     response = log_admin_client.get(url)
     assert 302 == response.status_code
-    assert 'http://localhost/home' == response.headers['Location']
+    assert '/home' == response.headers['Location']
 
 
 class _ExternalHandler(ExternalLoggingMixin):

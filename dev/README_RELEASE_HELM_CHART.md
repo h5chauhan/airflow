@@ -22,7 +22,9 @@
 
 - [Prepare the Apache Airflow Helm Chart Release Candidate](#prepare-the-apache-airflow-helm-chart-release-candidate)
   - [Pre-requisites](#pre-requisites)
+  - [Build Release Notes](#build-release-notes)
   - [Build RC artifacts](#build-rc-artifacts)
+  - [Prepare issue for testing status of rc](#prepare-issue-for-testing-status-of-rc)
   - [Prepare Vote email on the Apache Airflow release candidate](#prepare-vote-email-on-the-apache-airflow-release-candidate)
 - [Verify the release candidate by PMCs](#verify-the-release-candidate-by-pmcs)
   - [SVN check](#svn-check)
@@ -33,10 +35,18 @@
 - [Publish the final release](#publish-the-final-release)
   - [Summarize the voting for the release](#summarize-the-voting-for-the-release)
   - [Publish release to SVN](#publish-release-to-svn)
+  - [Publish release tag](#publish-release-tag)
   - [Publish documentation](#publish-documentation)
-  - [Update `index.yaml` to Airflow Website](#update-indexyaml-to-airflow-website)
   - [Notify developers of release](#notify-developers-of-release)
+  - [Add release data to Apache Committee Report Helper](#add-release-data-to-apache-committee-report-helper)
   - [Update Announcements page](#update-announcements-page)
+  - [Create release on GitHub](#create-release-on-github)
+  - [Close the milestone](#close-the-milestone)
+  - [Close the testing status issue](#close-the-testing-status-issue)
+  - [Update issue template with the new release](#update-issue-template-with-the-new-release)
+  - [Announce the release on the community slack](#announce-the-release-on-the-community-slack)
+  - [Tweet about the release](#tweet-about-the-release)
+  - [Bump chart version in Chart.yaml](#bump-chart-version-in-chartyaml)
   - [Remove old releases](#remove-old-releases)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -50,6 +60,39 @@ details the steps for releasing Helm Chart.
 
 - Helm version >= 3.5.4
 
+## Build Release Notes
+
+Before creating the RC, you need to build and commit the release notes for the release:
+
+Preview with:
+
+```shell script
+towncrier build --draft --version=${VERSION_WITHOUT_RC} --date=2021-12-15 --dir chart --config chart/newsfragments/config.toml
+```
+
+Then remove the `--draft` flag to have towncrier build the release notes for real.
+
+If no significant changes where added in this release, add the header and put "No significant changes.".
+
+### Add changelog annotations to `Chart.yaml`
+
+Once the release notes have been built, run the script to generate the changelog annotations.
+
+```shell
+./dev/chart/build_changelog_annotations.py
+```
+
+Verify the output looks right (only entries from this release), then put them in `Chart.yaml`, for example:
+
+```yaml
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: Add resources for `cleanup` and `createuser` jobs
+      links:
+        - name: "#19263"
+          url: https://github.com/apache/airflow/pull/19263
+```
 
 ## Build RC artifacts
 
@@ -90,15 +133,25 @@ official Apache releases must not include the rcN suffix.
 - Update Helm Chart version in `Chart.yaml`, example: `version: 1.0.0` (without
   the RC tag). If the default version of Airflow is different from `appVersion` change it.
 
-- Commit the version change.
+- Add and commit the version change.
+
+    ```shell
+    git add chart
+    git commit -m "Chart: Bump version to $VERSION_WITHOUT_RC"
+    ```
+
+  Note: You will tag this commit, you do not need to open a PR for it.
 
 - Tag your release
 
     ```shell
-    git tag -s helm-chart/${VERSION}
+    git tag -s helm-chart/${VERSION} -m "Apache Airflow Helm Chart $VERSION"
     ```
 
 - Tarball the repo
+
+    NOTE: Make sure your checkout is clean at this stage - any untracked or changed files will otherwise be included
+     in the file produced.
 
     ```shell
     git archive --format=tar.gz helm-chart/${VERSION} --prefix=airflow-chart-${VERSION_WITHOUT_RC}/ \
@@ -107,45 +160,36 @@ official Apache releases must not include the rcN suffix.
 
 - Generate chart binary
 
-    NOTE: Make sure your checkout is clean at this stage - any untracked or changed files will otherwise be included
-     in the file produced.
 
-    Replace key email to your email address and path of keyring if it is different.
+    ```shell
+    helm package chart --dependency-update
+    ```
+
+- Sign the chart binary
+
+    In the following command, replace the email address with your email address or your KEY ID
+    so GPG uses the right key to sign the chart.
     (If you have not generated a key yet, generate it by following instructions on
     http://www.apache.org/dev/openpgp.html#key-gen-generate-key)
 
     ```shell
-    helm package chart --dependency-update --sign --key "kaxilnaik@apache.org" \
-        --keyring ~/.gnupg/secring.gpg
+    helm gpg sign -u jedcunningham@apache.org airflow-${VERSION_WITHOUT_RC}.tgz
     ```
 
-    Warning: the GnuPG v2 store your secret keyring using a new format kbx on the default
-    location `~/.gnupg/pubring.kbx`. Please use the following command to convert your keyring to the
-    legacy gpg format and run the above command again:
+    Warning: you need the `helm gpg` plugin to sign the chart. It can be found at: https://github.com/technosophos/helm-gpg
+
+    This should also generate a provenance file (Example: `airflow-1.0.0.tgz.prov`) as described in
+    https://helm.sh/docs/topics/provenance/, which can be used to verify integrity of the Helm chart.
+
+    Verify the signed chart (with example output shown):
 
     ```shell
-    gpg --export-secret-keys > ~/.gnupg/secring.gpg
+    $ helm gpg verify airflow-${VERSION_WITHOUT_RC}.tgz
+    gpg: Signature made Thu Jan  6 21:33:35 2022 MST
+    gpg:                using RSA key E1A1E984F55B8F280BD9CBA20BB7163892A2E48E
+    gpg: Good signature from "Jed Cunningham <jedcunningham@apache.org>" [ultimate]
+    plugin: Chart SHA verified. sha256:b33eac716e0416a18af89fb4fa1043fcfcf24f9f903cda3912729815213525df
     ```
-
-    This should also generate Provenance file (Example: `airflow-1.0.0.tgz.prov`) as described in
-    https://helm.sh/docs/topics/provenance/ which can be used to verify integrity of the Helm chart.
-
-    Verify the signed chart:
-
-    ```shell
-    helm verify airflow-${VERSION_WITHOUT_RC}.tgz --keyring ~/.gnupg/secring.gpg
-    ```
-
-    Example Output:
-
-    ```shell
-    $ helm verify airflow-${VERSION_WITHOUT_RC}.tgz --keyring ~/.gnupg/secring.gpg
-    Signed by: Kaxil Naik <kaxilnaik@apache.org>
-    Signed by: Kaxil Naik <kaxilnaik@gmail.com>
-    Using Key With Fingerprint: CDE15C6E4D3A8EC4ECF4BA4B6674E08AD7DE406F
-    Chart Hash Verified: sha256:6185e54735e136d7d30d329cd16555a3a6c951be876aca8deac2022ab0568e53
-    ```
-
 
 - Generate SHA512/ASC
 
@@ -200,8 +244,29 @@ official Apache releases must not include the rcN suffix.
 
   ```shell
   cd ${AIRFLOW_REPO_ROOT}
-  git push origin helm-chart/${VERSION}
+  git push origin tag helm-chart/${VERSION}
   ```
+
+## Prepare issue for testing status of rc
+
+Create an issue for testing status of the RC (PREVIOUS_RELEASE should be the previous release version
+(for example 1.4.0).
+
+```shell script
+cat <<EOF
+Status of testing of Apache Airflow Helm Chart ${VERSION}
+EOF
+```
+
+Content is generated with:
+
+```shell
+./dev/prepare_release_issue.py generate-issue-content --previous-release helm-chart/<PREVIOUS_RELEASE> \
+    --current-release helm-chart/${VERSION} --is-helm-chart
+
+```
+
+Copy the URL of the issue.
 
 ## Prepare Vote email on the Apache Airflow release candidate
 
@@ -209,42 +274,50 @@ official Apache releases must not include the rcN suffix.
 
 Subject:
 
+```shell
+cat <<EOF
+[VOTE] Release Apache Airflow Helm Chart ${VERSION_WITHOUT_RC} based on ${VERSION}
+EOF
 ```
-[VOTE] Release Apache Airflow Helm Chart 1.0.1 based on 1.0.1rc1
+
+```shell
+export VOTE_END_TIME=$(date --utc -d "now + 72 hours + 10 minutes" +'%Y-%m-%d %H:%M')
+export TIME_DATE_URL="to?iso=$(date --utc -d "now + 72 hours + 10 minutes" +'%Y%m%dT%H%M')&p0=136&font=cursive"
 ```
 
 Body:
 
-```
+```shell
+cat <<EOF
 Hello Apache Airflow Community,
 
-This is a call for the vote to release Helm Chart version 1.0.1.
+This is a call for the vote to release Helm Chart version ${VERSION_WITHOUT_RC}.
 
 The release candidate is available at:
-https://dist.apache.org/repos/dist/dev/airflow/helm-chart/1.0.1rc1/
+https://dist.apache.org/repos/dist/dev/airflow/helm-chart/$VERSION/
 
-airflow-chart-1.0.1-source.tar.gz - is the "main source release" that comes with INSTALL instructions.
-airflow-1.0.1.tgz - is the binary Helm Chart release.
+airflow-chart-${VERSION_WITHOUT_RC}-source.tar.gz - is the "main source release" that comes with INSTALL instructions.
+airflow-${VERSION_WITHOUT_RC}.tgz - is the binary Helm Chart release.
 
 Public keys are available at: https://www.apache.org/dist/airflow/KEYS
 
 For convenience "index.yaml" has been uploaded (though excluded from voting), so you can also run the below commands.
 
-helm repo add apache-airflow-dev https://dist.apache.org/repos/dist/dev/airflow/helm-chart/1.0.1rc1/
+helm repo add apache-airflow-dev https://dist.apache.org/repos/dist/dev/airflow/helm-chart/$VERSION/
 helm repo update
 helm install airflow apache-airflow-dev/airflow
 
-airflow-1.0.1.tgz.prov - is also uploaded for verifying Chart Integrity, though not strictly required for releasing the artifact based on ASF Guidelines.
+airflow-${VERSION_WITHOUT_RC}.tgz.prov - is also uploaded for verifying Chart Integrity, though not strictly required for releasing the artifact based on ASF Guidelines.
 
-$ helm verify airflow-1.0.1.tgz --keyring  ~/.gnupg/secring.gpg
-Signed by: Kaxil Naik <kaxilnaik@apache.org>
-Signed by: Kaxil Naik <kaxilnaik@gmail.com>
-Using Key With Fingerprint: CDE15C6E4D3A8EC4ECF4BA4B6674E08AD7DE406F
-Chart Hash Verified: sha256:6cd3f13fc93d60424a771a1a8a4121c4439f7b6b48fab946436da0ab70d5a507
+$ helm gpg verify airflow-${VERSION_WITHOUT_RC}.tgz
+gpg: Signature made Thu Jan  6 21:33:35 2022 MST
+gpg:                using RSA key E1A1E984F55B8F280BD9CBA20BB7163892A2E48E
+gpg: Good signature from "Jed Cunningham <jedcunningham@apache.org>" [ultimate]
+plugin: Chart SHA verified. sha256:b33eac716e0416a18af89fb4fa1043fcfcf24f9f903cda3912729815213525df
 
-The vote will be open for at least 72 hours (2021-05-19 01:30 UTC) or until the necessary number of votes are reached.
+The vote will be open for at least 72 hours ($VOTE_END_TIME UTC) or until the necessary number of votes is reached.
 
-https://www.timeanddate.com/countdown/to?iso=20210519T0230&p0=136&font=cursive
+https://www.timeanddate.com/countdown/$TIME_DATE_URL
 
 Please vote accordingly:
 
@@ -257,18 +330,23 @@ encouraged to test the release and vote with "(non-binding)".
 
 For license checks, the .rat-excludes files is included, so you can run the following to verify licenses (just update $PATH_TO_RAT):
 
-tar -xvf airflow-chart-1.0.1-source.tar.gz
-cd airflow-chart-1.0.1
+tar -xvf airflow-chart-${VERSION_WITHOUT_RC}-source.tar.gz
+cd airflow-chart-${VERSION_WITHOUT_RC}
 java -jar $PATH_TO_RAT/apache-rat-0.13/apache-rat-0.13.jar chart -E .rat-excludes
 
-Please note that the version number excludes the `rcX` string, so it's now
-simply 1.0.1. This will allow us to rename the artifact without modifying
-the artifact checksums when we actually release.
+Please note that the version number excludes the \`rcX\` string, so it's now
+simply ${VERSION_WITHOUT_RC}. This will allow us to rename the artifact without modifying
+the artifact checksums when we actually release it.
+
+The status of testing the Helm Chart by the community is kept here:
+<TODO COPY LINK TO THE ISSUE CREATED>
 
 Thanks,
 <your name>
+EOF
 ```
 
+Note, you need to update the `helm gpg verify` output and verify the end of the voting period in the body.
 
 # Verify the release candidate by PMCs
 
@@ -314,8 +392,8 @@ This can be done with the Apache RAT tool.
 
 * Download the latest jar from https://creadur.apache.org/rat/download_rat.cgi (unpack the binary,
   the jar is inside)
-* Unpack the binary (`-bin.tar.gz`) to a folder
-* Enter the folder and run the check (point to the place where you extracted the .jar)
+* Unpack the release source archive (the `<package + version>-source.tar.gz` file) to a folder
+* Enter the sources folder run the check
 
 ```shell
 java -jar $PATH_TO_RAT/apache-rat-0.13/apache-rat-0.13.jar chart -E .rat-excludes
@@ -325,12 +403,12 @@ where `.rat-excludes` is the file in the root of Chart source code.
 
 ## Signature check
 
-Make sure you have the key of person signed imported in your GPG. You can find the valid keys in
+Make sure you have imported into your GPG the PGP key of the person signing the release. You can find the valid keys in
 [KEYS](https://dist.apache.org/repos/dist/release/airflow/KEYS).
 
 You can import the whole KEYS file:
 
-```shell
+```shell script
 gpg --import KEYS
 ```
 
@@ -338,8 +416,8 @@ You can also import the keys individually from a keyserver. The below one uses K
 retrieves it from the default GPG keyserver
 [OpenPGP.org](https://keys.openpgp.org):
 
-```shell
-gpg --receive-keys 12717556040EEF2EEAF1B9C275FCCD0A25FA0E4B
+```shell script
+gpg --keyserver keys.openpgp.org --receive-keys CDE15C6E4D3A8EC4ECF4BA4B6674E08AD7DE406F
 ```
 
 You should choose to import the key when asked.
@@ -348,25 +426,26 @@ Note that by being default, the OpenPGP server tends to be overloaded often and 
 errors or timeouts. Many of the release managers also uploaded their keys to the
 [GNUPG.net](https://keys.gnupg.net) keyserver, and you can retrieve it from there.
 
-```shell
-gpg --keyserver keys.gnupg.net --receive-keys 12717556040EEF2EEAF1B9C275FCCD0A25FA0E4B
+```shell script
+gpg --keyserver keys.gnupg.net --receive-keys CDE15C6E4D3A8EC4ECF4BA4B6674E08AD7DE406F
 ```
 
 Once you have the keys, the signatures can be verified by running this:
 
-```shell
+```shell script
 for i in *.asc
 do
-   echo "Checking $i"; gpg --verify $i
+   echo -e "Checking $i\n"; gpg --verify $i
 done
 ```
 
 This should produce results similar to the below. The "Good signature from ..." is indication
 that the signatures are correct. Do not worry about the "not certified with a trusted signature"
-warning. Most of the certificates used by release managers are self signed, that's why you get this
-warning. By importing the server in the previous step and importing it via ID from
+warning. Most of the certificates used by release managers are self-signed, and that's why you get this
+warning. By importing the key either from the server in the previous step or from the
 [KEYS](https://dist.apache.org/repos/dist/release/airflow/KEYS) page, you know that
-this is a valid Key already.
+this is a valid key already.  To suppress the warning you may edit the key's trust level
+by running `gpg --edit-key <key id> trust` and entering `5` to assign trust level `ultimate`.
 
 ```
 Checking airflow-1.0.0.tgz.asc
@@ -379,6 +458,7 @@ gpg:                 aka "Kaxil Naik <kaxilnaik@gmail.com>" [unknown]
 gpg: WARNING: The key's User ID is not certified with a trusted signature!
 gpg:          There is no indication that the signature belongs to the owner.
 Primary key fingerprint: CDE1 5C6E 4D3A 8EC4 ECF4  BA4B 6674 E08A D7DE 406F
+
 Checking airflow-chart-1.0.0-source.tar.gz.asc
 gpg: assuming signed data in 'airflow-chart-1.0.0-source.tar.gz'
 gpg: Signature made Sun 16 May 02:24:09 2021 BST
@@ -483,6 +563,7 @@ svn checkout https://dist.apache.org/repos/dist/release/airflow airflow-release
 
 # Create new folder for the release
 cd airflow-release/helm-chart
+export AIRFLOW_SVN_RELEASE_HELM=$(pwd)
 svn mkdir ${VERSION}
 cd ${VERSION}
 
@@ -495,6 +576,17 @@ svn commit -m "Release Airflow Helm Chart Check ${VERSION} from ${RC}"
 
 Verify that the packages appear in [Airflow Helm Chart](https://dist.apache.org/repos/dist/release/airflow/helm-chart/).
 
+## Publish release tag
+
+Create and push the release tag:
+
+```shell
+cd "${AIRFLOW_REPO_ROOT}"
+git checkout helm-chart/${RC}
+git tag -s helm-chart/${VERSION} -m "Apache Airflow Helm Chart ${VERSION}"
+git push origin helm-chart/${VERSION}
+```
+
 ## Publish documentation
 
 In our cases, documentation for the released versions is published in a separate repository -
@@ -502,11 +594,12 @@ In our cases, documentation for the released versions is published in a separate
 build tools are available in the `apache/airflow` repository, so you have to coordinate
 between the two repositories to be able to build the documentation.
 
-- First, copy the airflow-site repository and set the environment variable ``AIRFLOW_SITE_DIRECTORY``.
+- First, copy the airflow-site repository, create branch, and set the environment variable ``AIRFLOW_SITE_DIRECTORY``.
 
     ```shell
     git clone https://github.com/apache/airflow-site.git airflow-site
     cd airflow-site
+    git checkout -b helm-${VERSION}-docs
     export AIRFLOW_SITE_DIRECTORY="$(pwd)"
     ```
 
@@ -514,10 +607,9 @@ between the two repositories to be able to build the documentation.
 
     ```shell
     cd "${AIRFLOW_REPO_ROOT}"
-    ./breeze build-docs -- --package-filter helm-chart --for-production
+    git checkout helm-chart/${VERSION}
+    breeze build-docs --package-filter helm-chart --clean-build --for-production
     ```
-
-- We upload `index.yaml` to the Airflow website to allow: `helm repo add https://airflow.apache.org`.
 
 - Now you can preview the documentation.
 
@@ -528,29 +620,34 @@ between the two repositories to be able to build the documentation.
 - Copy the documentation to the ``airflow-site`` repository.
 
     ```shell
-    ./docs/publish_docs.py --package-filter apache-airflow --package-filter docker-stack
-    cd "${AIRFLOW_SITE_DIRECTORY}"
-    git commit -m "Add documentation for Apache Airflow Helm Chart ${VERSION}"
-    git push
+    ./docs/publish_docs.py --package-filter helm-chart
     ```
 
-## Update `index.yaml` to Airflow Website
+- Update `index.yaml`
 
-We upload `index.yaml` to the Airflow website to allow: `helm repo add https://airflow.apache.org`.
+  Regenerate `index.yaml` so it can be added to the Airflow website to allow: `helm repo add https://airflow.apache.org`.
 
-  ```shell
-  cd "${AIRFLOW_SITE_DIRECTORY}"
-  curl https://dist.apache.org/repos/dist/dev/airflow/helm-chart/${RC}/index.yaml -o index.yaml
-  https://dist.apache.org/repos/dist/dev/airflow/helm-chart/${VERSION}
-  sed -i "s|https://dist.apache.org/repos/dist/dev/airflow/helm-chart/$RC|https://downloads.apache.org/airflow/helm-chart/$VERSION|" index.yaml
+    ```shell
+    cd "${AIRFLOW_SITE_DIRECTORY}"
+    curl https://dist.apache.org/repos/dist/dev/airflow/helm-chart/$RC/index.yaml -o index.yaml
+    cp ${AIRFLOW_SVN_RELEASE_HELM}/${VERSION}/airflow-${VERSION}.tgz .
+    helm repo index --merge ./index.yaml . --url "https://downloads.apache.org/airflow/helm-chart/$VERSION"
+    rm airflow-${VERSION}.tgz
+    mv index.yaml landing-pages/site/static/index.yaml
+    ```
 
-  git commit -m "Add documentation for Apache Airflow Helm Chart ${VERSION}"
-  git push
-  ```
+- Commit new docs, push, and open PR
+
+    ```shell
+    git add .
+    git commit -m "Add documentation for Apache Airflow Helm Chart ${VERSION}"
+    git push
+    # and finally open a PR
+    ```
 
 ## Notify developers of release
 
-- Notify users@airflow.apache.org (cc'ing dev@airflow.apache.org and announce@apache.org) that
+- Notify users@airflow.apache.org (cc'ing dev@airflow.apache.org) that
 the artifacts have been published:
 
 Subject:
@@ -569,11 +666,13 @@ Dear Airflow community,
 
 I am pleased to announce that we have released Apache Airflow Helm chart $VERSION 🎉 🎊
 
-The source release, as well as the "binary" Helm Chart release, is available here https://downloads.apache.org/airflow/helm-chart/$VERSION/
+The source release, as well as the "binary" Helm Chart release, are available:
 
-📦   Official Source: https://downloads.apache.org/airflow/helm-chart/$VERSION
+📦   Official Sources: https://airflow.apache.org/docs/helm-chart/$VERSION/installing-helm-chart-from-sources.html
 📦   ArtifactHub: https://artifacthub.io/packages/helm/apache-airflow/airflow
 📚   Docs: https://airflow.apache.org/docs/helm-chart/$VERSION/
+🚀   Quick Start Installation Guide: https://airflow.apache.org/docs/helm-chart/$VERSION/quick-start.html
+🛠️   Release Notes: https://airflow.apache.org/docs/helm-chart/$VERSION/release_notes.html
 
 Thanks to all the contributors who made this possible.
 
@@ -582,9 +681,73 @@ Cheers,
 EOF
 ```
 
+Send the same email to announce@apache.org, except change the opening line to `Dear community,`.
+It is more reliable to send it via the web ui at https://lists.apache.org/list.html?announce@apache.org
+(press "c" to compose a new thread)
+
+## Add release data to Apache Committee Report Helper
+
+Add the release data (version and date) at: https://reporter.apache.org/addrelease.html?airflow
+
 ## Update Announcements page
 
 Update "Announcements" page at the [Official Airflow website](https://airflow.apache.org/announcements/)
+
+## Create release on GitHub
+
+Create a new release on GitHub with the release notes and assets from the release svn.
+
+## Close the milestone
+
+Close the milestone on GitHub. Create the next one if it hasn't been already (it probably has been).
+Update the new milestone in the [*Currently we are working on* issue](https://github.com/apache/airflow/issues/10176)
+make sure to update the last updated timestamp as well.
+
+## Close the testing status issue
+
+Don't forget to thank the folks who tested and close the issue tracking the testing status.
+
+## Update issue template with the new release
+
+Updating issue templates in `.github/ISSUE_TEMPLATE/airflow_helmchart_bug_report.yml` with the new version
+
+## Announce the release on the community slack
+
+Post this in the #announce channel:
+
+```shell
+cat <<EOF
+We've just released Apache Airflow Helm Chart ${VERSION} 🎉
+
+📦 ArtifactHub: https://artifacthub.io/packages/helm/apache-airflow/airflow
+📚 Docs: https://airflow.apache.org/docs/helm-chart/$VERSION/
+🚀 Quick Start Installation Guide: https://airflow.apache.org/docs/helm-chart/$VERSION/quick-start.html
+🛠 Release Notes: https://airflow.apache.org/docs/helm-chart/$VERSION/release_notes.html
+
+Thanks to all the contributors who made this possible.
+EOF
+```
+
+## Tweet about the release
+
+Tweet about the release:
+
+```shell
+cat <<EOF
+We've just released Apache Airflow Helm chart $VERSION 🎉
+
+📦 ArtifactHub: https://artifacthub.io/packages/helm/apache-airflow/airflow
+📚 Docs: https://airflow.apache.org/docs/helm-chart/$VERSION/
+🛠️ Release Notes: https://airflow.apache.org/docs/helm-chart/$VERSION/release_notes.html
+
+Thanks to all the contributors who made this possible.
+EOF
+```
+
+## Bump chart version in Chart.yaml
+
+Bump the chart version to the next version in `chart/Chart.yaml` in main.
+
 
 ## Remove old releases
 

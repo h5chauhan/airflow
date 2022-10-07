@@ -15,11 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Sequence
 
 from airflow.providers.microsoft.azure.hooks.wasb import WasbHook
 from airflow.sensors.base import BaseSensorOperator
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class WasbBlobSensor(BaseSensorOperator):
@@ -27,17 +31,13 @@ class WasbBlobSensor(BaseSensorOperator):
     Waits for a blob to arrive on Azure Blob Storage.
 
     :param container_name: Name of the container.
-    :type container_name: str
     :param blob_name: Name of the blob.
-    :type blob_name: str
     :param wasb_conn_id: Reference to the :ref:`wasb connection <howto/connection:wasb>`.
-    :type wasb_conn_id: str
     :param check_options: Optional keyword arguments that
         `WasbHook.check_for_blob()` takes.
-    :type check_options: dict
     """
 
-    template_fields = ('container_name', 'blob_name')
+    template_fields: Sequence[str] = ('container_name', 'blob_name')
 
     def __init__(
         self,
@@ -45,7 +45,7 @@ class WasbBlobSensor(BaseSensorOperator):
         container_name: str,
         blob_name: str,
         wasb_conn_id: str = 'wasb_default',
-        check_options: Optional[dict] = None,
+        check_options: dict | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -56,8 +56,8 @@ class WasbBlobSensor(BaseSensorOperator):
         self.blob_name = blob_name
         self.check_options = check_options
 
-    def poke(self, context: dict):
-        self.log.info('Poking for blob: %s\nin wasb://%s', self.blob_name, self.container_name)
+    def poke(self, context: Context):
+        self.log.info('Poking for blob: %s\n in wasb://%s', self.blob_name, self.container_name)
         hook = WasbHook(wasb_conn_id=self.wasb_conn_id)
         return hook.check_for_blob(self.container_name, self.blob_name, **self.check_options)
 
@@ -67,17 +67,13 @@ class WasbPrefixSensor(BaseSensorOperator):
     Waits for blobs matching a prefix to arrive on Azure Blob Storage.
 
     :param container_name: Name of the container.
-    :type container_name: str
     :param prefix: Prefix of the blob.
-    :type prefix: str
     :param wasb_conn_id: Reference to the wasb connection.
-    :type wasb_conn_id: str
     :param check_options: Optional keyword arguments that
         `WasbHook.check_for_prefix()` takes.
-    :type check_options: dict
     """
 
-    template_fields = ('container_name', 'prefix')
+    template_fields: Sequence[str] = ('container_name', 'prefix')
 
     def __init__(
         self,
@@ -85,7 +81,7 @@ class WasbPrefixSensor(BaseSensorOperator):
         container_name: str,
         prefix: str,
         wasb_conn_id: str = 'wasb_default',
-        check_options: Optional[dict] = None,
+        check_options: dict | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -96,7 +92,7 @@ class WasbPrefixSensor(BaseSensorOperator):
         self.prefix = prefix
         self.check_options = check_options
 
-    def poke(self, context: dict) -> bool:
+    def poke(self, context: Context) -> bool:
         self.log.info('Poking for prefix: %s in wasb://%s', self.prefix, self.container_name)
         hook = WasbHook(wasb_conn_id=self.wasb_conn_id)
         return hook.check_for_prefix(self.container_name, self.prefix, **self.check_options)

@@ -22,12 +22,19 @@ description: |
     `Samba <https://www.samba.org/>`__
 
 versions:
+  - 4.0.0
+  - 3.0.4
+  - 3.0.3
+  - 3.0.2
+  - 3.0.1
+  - 3.0.0
   - 2.0.0
   - 1.0.1
   - 1.0.0
 
-additional-dependencies:
-  - apache-airflow>=2.1.0
+dependencies:
+  - apache-airflow>=2.2.0
+  - smbprotocol>=1.5.0
 
 integrations:
   - integration-name: Samba
@@ -40,5 +47,7 @@ hooks:
     python-modules:
       - airflow.providers.samba.hooks.samba
 
-hook-class-names:
-  - airflow.providers.samba.hooks.samba.SambaHook
+
+connection-types:
+  - hook-class-name: airflow.providers.samba.hooks.samba.SambaHook
+    connection-type: samba

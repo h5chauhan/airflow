@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 from importlib import import_module
 
@@ -35,3 +36,8 @@ def import_string(dotted_path):
         return getattr(module, class_name)
     except AttributeError:
         raise ImportError(f'Module "{module_path}" does not define a "{class_name}" attribute/class')
+
+
+def as_importable_string(thing) -> str:
+    """Convert an attribute/class to a string importable by ``import_string``."""
+    return f"{thing.__module__}.{thing.__name__}"

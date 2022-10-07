@@ -15,12 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 """Launches PODs"""
+from __future__ import annotations
+
 import json
 import math
 import time
 import warnings
 from datetime import datetime as dt
-from typing import Optional, Tuple
 
 import pendulum
 import tenacity
@@ -28,9 +29,9 @@ from kubernetes import client, watch
 from kubernetes.client.models.v1_pod import V1Pod
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream as kubernetes_stream
-from requests.exceptions import BaseHTTPError
+from requests.exceptions import HTTPError
 
-from airflow.exceptions import AirflowException
+from airflow.exceptions import AirflowException, RemovedInAirflow3Warning
 from airflow.kubernetes.kube_client import get_kube_client
 from airflow.kubernetes.pod_generator import PodDefaults
 from airflow.settings import pod_mutation_hook
@@ -39,14 +40,14 @@ from airflow.utils.state import State
 
 warnings.warn(
     """
-    Please use :mod: Please use `airflow.providers.cncf.kubernetes.utils.pod_launcher`
+    Please use :mod: Please use `airflow.providers.cncf.kubernetes.utils.pod_manager`
 
     To use this module install the provider package by installing this pip package:
 
     https://pypi.org/project/apache-airflow-providers-cncf-kubernetes/
 
     """,
-    DeprecationWarning,
+    RemovedInAirflow3Warning,
     stacklevel=2,
 )
 
@@ -62,19 +63,19 @@ class PodStatus:
 
 class PodLauncher(LoggingMixin):
     """Deprecated class for launching pods. please use
-    airflow.providers.cncf.kubernetes.utils.pod_launcher.PodLauncher instead
+    airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager instead
     """
 
     def __init__(
         self,
         kube_client: client.CoreV1Api = None,
         in_cluster: bool = True,
-        cluster_context: Optional[str] = None,
+        cluster_context: str | None = None,
         extract_xcom: bool = False,
     ):
         """
         Deprecated class for launching pods. please use
-        airflow.providers.cncf.kubernetes.utils.pod_launcher.PodLauncher instead
+        airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager instead
         Creates the launcher.
 
         :param kube_client: kubernetes client
@@ -134,12 +135,11 @@ class PodLauncher(LoggingMixin):
                     raise AirflowException("Pod took too long to start")
                 time.sleep(1)
 
-    def monitor_pod(self, pod: V1Pod, get_logs: bool) -> Tuple[State, Optional[str]]:
+    def monitor_pod(self, pod: V1Pod, get_logs: bool) -> tuple[State, str | None]:
         """
         Monitors a pod and returns the final state
 
         :param pod: pod spec that will be monitored
-        :type pod : V1Pod
         :param get_logs: whether to read the logs locally
         :return:  Tuple[State, Optional[str]]
         """
@@ -150,7 +150,8 @@ class PodLauncher(LoggingMixin):
                 logs = self.read_pod_logs(pod, timestamps=True, since_seconds=read_logs_since_sec)
                 for line in logs:
                     timestamp, message = self.parse_log_line(line.decode('utf-8'))
-                    last_log_time = pendulum.parse(timestamp)
+                    if timestamp:
+                        last_log_time = pendulum.parse(timestamp)
                     self.log.info(message)
                 time.sleep(1)
 
@@ -175,18 +176,22 @@ class PodLauncher(LoggingMixin):
             time.sleep(2)
         return self._task_status(self.read_pod(pod)), result
 
-    def parse_log_line(self, line: str) -> Tuple[str, str]:
+    def parse_log_line(self, line: str) -> tuple[str | None, str]:
         """
         Parse K8s log line and returns the final state
 
         :param line: k8s log line
-        :type line: str
         :return: timestamp and log message
         :rtype: Tuple[str, str]
         """
         split_at = line.find(' ')
         if split_at == -1:
-            raise Exception(f'Log not in "{{timestamp}} {{log}}" format. Got: {line}')
+            self.log.error(
+                "Error parsing timestamp (no timestamp in message: %r). "
+                "Will continue execution but won't update timestamp",
+                line,
+            )
+            return None, line
         timestamp = line[:split_at]
         message = line[split_at + 1 :].rstrip()
         return timestamp, message
@@ -209,7 +214,7 @@ class PodLauncher(LoggingMixin):
     def base_container_is_running(self, pod: V1Pod):
         """Tests if base container is running"""
         event = self.read_pod(pod)
-        status = next(iter(filter(lambda s: s.name == 'base', event.status.container_statuses)), None)
+        status = next((s for s in event.status.container_statuses if s.name == 'base'), None)
         if not status:
             return False
         return status.state.running is not None
@@ -218,9 +223,9 @@ class PodLauncher(LoggingMixin):
     def read_pod_logs(
         self,
         pod: V1Pod,
-        tail_lines: Optional[int] = None,
+        tail_lines: int | None = None,
         timestamps: bool = False,
-        since_seconds: Optional[int] = None,
+        since_seconds: int | None = None,
     ):
         """Reads log from the POD"""
         additional_kwargs = {}
@@ -240,7 +245,7 @@ class PodLauncher(LoggingMixin):
                 _preload_content=False,
                 **additional_kwargs,
             )
-        except BaseHTTPError as e:
+        except HTTPError as e:
             raise AirflowException(f'There was an error reading the kubernetes API: {e}')
 
     @tenacity.retry(stop=tenacity.stop_after_attempt(3), wait=tenacity.wait_exponential(), reraise=True)
@@ -250,7 +255,7 @@ class PodLauncher(LoggingMixin):
             return self._client.list_namespaced_event(
                 namespace=pod.metadata.namespace, field_selector=f"involvedObject.name={pod.metadata.name}"
             )
-        except BaseHTTPError as e:
+        except HTTPError as e:
             raise AirflowException(f'There was an error reading the kubernetes API: {e}')
 
     @tenacity.retry(stop=tenacity.stop_after_attempt(3), wait=tenacity.wait_exponential(), reraise=True)
@@ -258,7 +263,7 @@ class PodLauncher(LoggingMixin):
         """Read POD information"""
         try:
             return self._client.read_namespaced_pod(pod.metadata.name, pod.metadata.namespace)
-        except BaseHTTPError as e:
+        except HTTPError as e:
             raise AirflowException(f'There was an error reading the kubernetes API: {e}')
 
     def _extract_xcom(self, pod: V1Pod):

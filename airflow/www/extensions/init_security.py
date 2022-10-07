@@ -14,8 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import logging
 from importlib import import_module
+
+from flask import g, redirect, url_for
+from flask_login import logout_user
 
 from airflow.configuration import conf
 from airflow.exceptions import AirflowConfigException, AirflowException
@@ -31,7 +36,7 @@ def init_xframe_protection(app):
     See also: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
     """
     x_frame_enabled = conf.getboolean('webserver', 'X_FRAME_ENABLED', fallback=True)
-    if not x_frame_enabled:
+    if x_frame_enabled:
         return
 
     def apply_caching(response):
@@ -42,16 +47,27 @@ def init_xframe_protection(app):
 
 
 def init_api_experimental_auth(app):
-    """Loads authentication backend"""
-    auth_backend = 'airflow.api.auth.backend.default'
+    """Loads authentication backends"""
+    auth_backends = 'airflow.api.auth.backend.default'
     try:
-        auth_backend = conf.get("api", "auth_backend")
+        auth_backends = conf.get("api", "auth_backends")
     except AirflowConfigException:
         pass
 
-    try:
-        app.api_auth = import_module(auth_backend)
-        app.api_auth.init_app(app)
-    except ImportError as err:
-        log.critical("Cannot import %s for API authentication due to: %s", auth_backend, err)
-        raise AirflowException(err)
+    app.api_auth = []
+    for backend in auth_backends.split(','):
+        try:
+            auth = import_module(backend.strip())
+            auth.init_app(app)
+            app.api_auth.append(auth)
+        except ImportError as err:
+            log.critical("Cannot import %s for API authentication due to: %s", backend, err)
+            raise AirflowException(err)
+
+
+def init_check_user_active(app):
+    @app.before_request
+    def check_user_active():
+        if g.user is not None and not g.user.is_anonymous and not g.user.is_active:
+            logout_user()
+            return redirect(url_for(app.appbuilder.sm.auth_view.endpoint + ".login"))

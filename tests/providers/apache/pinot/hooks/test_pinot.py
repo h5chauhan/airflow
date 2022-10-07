@@ -15,7 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import io
 import os
@@ -263,8 +263,8 @@ class TestPinotDbApiHook(unittest.TestCase):
         self.cur.fetchall.return_value = result_sets
         df = self.db_hook().get_pandas_df(statement)
         assert column == df.columns[0]
-        for i in range(len(result_sets)):
-            assert result_sets[i][0] == df.values.tolist()[i][0]
+        for i, item in enumerate(result_sets):
+            assert item[0] == df.values.tolist()[i][0]
 
 
 class TestPinotDbApiHookIntegration(unittest.TestCase):

@@ -15,9 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 ---
-{{- $nodeSelector := or .Values.nodeSelector .Values.workers.nodeSelector }}
-{{- $affinity := or .Values.affinity .Values.workers.affinity }}
-{{- $tolerations := or .Values.tolerations .Values.workers.tolerations }}
+{{- $nodeSelector := or .Values.workers.nodeSelector .Values.nodeSelector }}
+{{- $affinity := or .Values.workers.affinity .Values.affinity }}
+{{- $tolerations := or .Values.workers.tolerations .Values.tolerations }}
+{{- $topologySpreadConstraints := or .Values.workers.topologySpreadConstraints .Values.topologySpreadConstraints }}
+{{- $securityContext := include "airflowSecurityContext" (list . .Values.workers) }}
 apiVersion: v1
 kind: Pod
 metadata:
@@ -26,12 +28,17 @@ metadata:
     tier: airflow
     component: worker
     release: {{ .Release.Name }}
-{{- with .Values.labels }}
-{{ toYaml . | indent 4 }}
+{{- if or (.Values.labels) (.Values.workers.labels) }}
+{{- mustMerge .Values.workers.labels .Values.labels | toYaml | nindent 4 }}
 {{- end }}
-  {{- if .Values.airflowPodAnnotations }}
+  {{- if or .Values.airflowPodAnnotations .Values.workers.podAnnotations }}
   annotations:
-  {{- toYaml .Values.airflowPodAnnotations | nindent 4 }}
+    {{- if .Values.airflowPodAnnotations }}
+    {{- toYaml .Values.airflowPodAnnotations | nindent 4 }}
+    {{- end }}
+    {{- if .Values.workers.podAnnotations }}
+    {{- toYaml .Values.workers.podAnnotations | nindent 4 }}
+    {{- end }}
   {{- end }}
 spec:
   {{- if or (and .Values.dags.gitSync.enabled (not .Values.dags.persistence.enabled)) .Values.workers.extraInitContainers }}
@@ -44,19 +51,17 @@ spec:
     {{- end }}
   {{- end }}
   containers:
-    - args: []
-      command: []
-      envFrom:
+    - envFrom:
       {{- include "custom_airflow_environment_from" . | default "\n  []" | indent 6 }}
       env:
         - name: AIRFLOW__CORE__EXECUTOR
           value: LocalExecutor
 {{- include "standard_airflow_environment" . | indent 6}}
 {{- include "custom_airflow_environment" . | indent 6 }}
+{{- include "container_extra_envs" (list . .Values.workers.env) | indent 6 }}
       image: {{ template "pod_template_image" . }}
-      imagePullPolicy: {{ .Values.images.airflow.pullPolicy }}
+      imagePullPolicy: {{ .Values.images.pod_template.pullPolicy }}
       name: base
-      ports: []
       resources:
 {{ toYaml .Values.workers.resources | indent 8 }}
       volumeMounts:
@@ -81,18 +86,16 @@ spec:
 {{- if .Values.workers.extraContainers }}
 {{- toYaml .Values.workers.extraContainers | nindent 4 }}
 {{- end }}
-  hostNetwork: false
   {{- if or .Values.registry.secretName .Values.registry.connection }}
   imagePullSecrets:
     - name: {{ template "registry_secret" . }}
   {{- end }}
   restartPolicy: Never
-  securityContext:
-    runAsUser: {{ .Values.uid }}
-    fsGroup: {{ .Values.gid }}
+  securityContext: {{ $securityContext | nindent 4 }}
   nodeSelector: {{ toYaml $nodeSelector | nindent 4 }}
   affinity: {{ toYaml $affinity | nindent 4 }}
   tolerations: {{ toYaml $tolerations | nindent 4 }}
+  topologySpreadConstraints: {{ toYaml $topologySpreadConstraints | nindent 4 }}
   serviceAccountName: {{ include "worker.serviceAccountName" . }}
   volumes:
   {{- if .Values.dags.persistence.enabled }}

@@ -16,6 +16,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Google Storage Transfer Service Hook."""
+from __future__ import annotations
 
 import json
 import logging
@@ -23,7 +24,7 @@ import time
 import warnings
 from copy import deepcopy
 from datetime import timedelta
-from typing import List, Optional, Sequence, Set, Union
+from typing import Sequence
 
 from googleapiclient.discovery import Resource, build
 from googleapiclient.errors import HttpError
@@ -80,6 +81,7 @@ MONTH = 'month'
 NAME = 'name'
 OBJECT_CONDITIONS = 'object_conditions'
 OPERATIONS = 'operations'
+PATH = 'path'
 PROJECT_ID = 'projectId'
 SCHEDULE = 'schedule'
 SCHEDULE_END_DATE = 'scheduleEndDate'
@@ -107,9 +109,7 @@ def gen_job_name(job_name: str) -> str:
     Suffix — current timestamp
 
     :param job_name:
-    :rtype job_name: str
     :return: job_name with suffix
-    :rtype: str
     """
     uniq = int(time.time())
     return f"{job_name}_{uniq}"
@@ -127,8 +127,8 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         self,
         api_version: str = 'v1',
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -158,15 +158,14 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
 
         :param body: (Required) A request body, as described in
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs/patch#request-body
-        :type body: dict
         :return: transfer job.
             See:
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs#TransferJob
         :rtype: dict
         """
         body = self._inject_project_id(body, BODY, PROJECT_ID)
-        try:
 
+        try:
             transfer_job = (
                 self.get_conn().transferJobs().create(body=body).execute(num_retries=self.num_retries)
             )
@@ -182,7 +181,7 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
                 if transfer_job.get(STATUS) == GcpTransferJobsStatus.DELETED:
                     body[JOB_NAME] = gen_job_name(job_name)
                     self.log.info(
-                        "Job `%s` has been soft deleted. Creating job with " "new name `%s`",
+                        "Job `%s` has been soft deleted. Creating job with new name `%s`",
                         job_name,
                         {body[JOB_NAME]},
                     )
@@ -204,11 +203,9 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         Transfer Service.
 
         :param job_name: (Required) Name of the job to be fetched
-        :type job_name: str
         :param project_id: (Optional) the ID of the project that owns the Transfer
             Job. If set to None or missing, the default project_id from the Google Cloud
             connection is used.
-        :type project_id: str
         :return: Transfer Job
         :rtype: dict
         """
@@ -219,14 +216,13 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
             .execute(num_retries=self.num_retries)
         )
 
-    def list_transfer_job(self, request_filter: Optional[dict] = None, **kwargs) -> List[dict]:
+    def list_transfer_job(self, request_filter: dict | None = None, **kwargs) -> list[dict]:
         """
         Lists long-running operations in Google Storage Transfer
         Service that match the specified filter.
 
         :param request_filter: (Required) A request filter, as described in
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs/list#body.QUERY_PARAMETERS.filter
-        :type request_filter: dict
         :return: List of Transfer Jobs
         :rtype: list[dict]
         """
@@ -244,7 +240,7 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         conn = self.get_conn()
         request_filter = self._inject_project_id(request_filter, FILTER, FILTER_PROJECT_ID)
         request = conn.transferJobs().list(filter=json.dumps(request_filter))
-        jobs: List[dict] = []
+        jobs: list[dict] = []
 
         while request is not None:
             response = request.execute(num_retries=self.num_retries)
@@ -260,11 +256,9 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         New transfers will be performed based on the schedule.
 
         :param job_name: (Required) Name of the job to be updated
-        :type job_name: str
         :param project_id: (Optional) the ID of the project that owns the Transfer
             Job. If set to None or missing, the default project_id from the Google Cloud
             connection is used.
-        :type project_id: str
         :return: If successful, TransferJob.
         :rtype: dict
         """
@@ -287,10 +281,8 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         Updates a transfer job that runs periodically.
 
         :param job_name: (Required) Name of the job to be updated
-        :type job_name: str
         :param body: A request body, as described in
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs/patch#request-body
-        :type body: dict
         :return: If successful, TransferJob.
         :rtype: dict
         """
@@ -311,11 +303,9 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         30 days after soft delete.
 
         :param job_name: (Required) Name of the job to be deleted
-        :type job_name: str
         :param project_id: (Optional) the ID of the project that owns the Transfer
             Job. If set to None or missing, the default project_id from the Google Cloud
             connection is used.
-        :type project_id: str
         :rtype: None
         """
         (
@@ -337,7 +327,6 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         Cancels an transfer operation in Google Storage Transfer Service.
 
         :param operation_name: Name of the transfer operation.
-        :type operation_name: str
         :rtype: None
         """
         self.get_conn().transferOperations().cancel(name=operation_name).execute(num_retries=self.num_retries)
@@ -347,7 +336,6 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         Gets an transfer operation in Google Storage Transfer Service.
 
         :param operation_name: (Required) Name of the transfer operation.
-        :type operation_name: str
         :return: transfer operation
             See:
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/Operation
@@ -360,7 +348,7 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
             .execute(num_retries=self.num_retries)
         )
 
-    def list_transfer_operations(self, request_filter: Optional[dict] = None, **kwargs) -> List[dict]:
+    def list_transfer_operations(self, request_filter: dict | None = None, **kwargs) -> list[dict]:
         """
         Gets an transfer operation in Google Storage Transfer Service.
 
@@ -372,7 +360,6 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
               in the connection
               See: :doc:`/connections/gcp`
 
-        :type request_filter: dict
         :return: transfer operation
         :rtype: list[dict]
         """
@@ -393,7 +380,7 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
 
         request_filter = self._inject_project_id(request_filter, FILTER, FILTER_PROJECT_ID)
 
-        operations: List[dict] = []
+        operations: list[dict] = []
 
         request = conn.transferOperations().list(name=TRANSFER_OPERATIONS, filter=json.dumps(request_filter))
 
@@ -413,7 +400,6 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         Pauses an transfer operation in Google Storage Transfer Service.
 
         :param operation_name: (Required) Name of the transfer operation.
-        :type operation_name: str
         :rtype: None
         """
         self.get_conn().transferOperations().pause(name=operation_name).execute(num_retries=self.num_retries)
@@ -423,7 +409,6 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         Resumes an transfer operation in Google Storage Transfer Service.
 
         :param operation_name: (Required) Name of the transfer operation.
-        :type operation_name: str
         :rtype: None
         """
         self.get_conn().transferOperations().resume(name=operation_name).execute(num_retries=self.num_retries)
@@ -431,8 +416,8 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
     def wait_for_transfer_job(
         self,
         job: dict,
-        expected_statuses: Optional[Set[str]] = None,
-        timeout: Optional[Union[float, timedelta]] = None,
+        expected_statuses: set[str] | None = None,
+        timeout: float | timedelta | None = None,
     ) -> None:
         """
         Waits until the job reaches the expected state.
@@ -440,14 +425,11 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         :param job: Transfer job
             See:
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs#TransferJob
-        :type job: dict
         :param expected_statuses: State that is expected
             See:
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferOperations#Status
-        :type expected_statuses: set[str]
         :param timeout: Time in which the operation must end in seconds. If not specified, defaults to 60
             seconds.
-        :type timeout: Optional[Union[float, timedelta]]
         :rtype: None
         """
         expected_statuses = (
@@ -476,16 +458,14 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         body[target_key] = body.get(target_key, self.project_id)
         if not body.get(target_key):
             raise AirflowException(
-                "The project id must be passed either as `{}` key in `{}` parameter or as project_id "
-                "extra in Google Cloud connection definition. Both are not set!".format(
-                    target_key, param_name
-                )
+                f"The project id must be passed either as `{target_key}` key in `{param_name}` "
+                f"parameter or as project_id extra in Google Cloud connection definition. Both are not set!"
             )
         return body
 
     @staticmethod
     def operations_contain_expected_statuses(
-        operations: List[dict], expected_statuses: Union[Set[str], str]
+        operations: list[dict], expected_statuses: set[str] | str
     ) -> bool:
         """
         Checks whether the operation list has an operation with the
@@ -494,11 +474,9 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
         throw :class:`airflow.exceptions.AirflowException`.
 
         :param operations: (Required) List of transfer operations to check.
-        :type operations: list[dict]
         :param expected_statuses: (Required) status that is expected
             See:
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferOperations#Status
-        :type expected_statuses: set[str]
         :return: If there is an operation with the expected state
             in the operation list, returns true,
         :raises: airflow.exceptions.AirflowException If it encounters operations
@@ -518,8 +496,7 @@ class CloudDataTransferServiceHook(GoogleBaseHook):
 
         if len(NEGATIVE_STATUSES - current_statuses) != len(NEGATIVE_STATUSES):
             raise AirflowException(
-                'An unexpected operation status was encountered. Expected: {}'.format(
-                    ", ".join(expected_statuses_set)
-                )
+                f"An unexpected operation status was encountered. "
+                f"Expected: {', '.join(expected_statuses_set)}"
             )
         return False

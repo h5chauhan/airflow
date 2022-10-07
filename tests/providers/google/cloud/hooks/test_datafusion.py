@@ -14,13 +14,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
 from unittest import mock
 
 import pytest
 
-from airflow.providers.google.cloud.hooks.datafusion import SUCCESS_STATES, DataFusionHook, PipelineStates
+from airflow import AirflowException
+from airflow.providers.google.cloud.hooks.datafusion import DataFusionHook
 from tests.providers.google.cloud.utils.base_gcp_mock import mock_base_gcp_hook_default_project_id
 
 API_VERSION = "v1beta1"
@@ -31,6 +33,7 @@ INSTANCE_NAME = "airflow-test-instance"
 INSTANCE = {"type": "BASIC", "displayName": INSTANCE_NAME}
 PROJECT_ID = "test_project_id"
 PIPELINE_NAME = "shrubberyPipeline"
+PIPELINE_ID = "123"
 PIPELINE = {"test": "pipeline"}
 INSTANCE_URL = "http://datafusion.instance.com"
 RUNTIME_ARGS = {"arg1": "a", "arg2": "b"}
@@ -130,7 +133,7 @@ class TestDataFusionHook:
         method_mock.assert_called_once_with(name=hook._name(PROJECT_ID, LOCATION, INSTANCE_NAME))
 
     @mock.patch("google.auth.transport.requests.Request")
-    @mock.patch(HOOK_STR.format("DataFusionHook._get_credentials"))
+    @mock.patch(HOOK_STR.format("DataFusionHook.get_credentials"))
     def test_cdap_request(self, get_credentials_mock, mock_request, hook):
         url = "test_url"
         headers = {"Content-Type": "application/json"}
@@ -159,9 +162,63 @@ class TestDataFusionHook:
         )
 
     @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_create_pipeline_should_fail_if_empty_data_response(self, mock_request, hook):
+        mock_request.return_value.status = 200
+        mock_request.return_value.data = None
+        with pytest.raises(
+            AirflowException,
+            match=r"Empty response received. Please, check for possible root causes "
+            r"of this behavior either in DAG code or on Cloud Datafusion side",
+        ):
+            hook.create_pipeline(pipeline_name=PIPELINE_NAME, pipeline=PIPELINE, instance_url=INSTANCE_URL)
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}",
+            method="PUT",
+            body=PIPELINE,
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_create_pipeline_should_fail_if_status_not_200(self, mock_request, hook):
+        mock_request.return_value.status = 404
+        with pytest.raises(AirflowException, match=r"Creating a pipeline failed with code 404"):
+            hook.create_pipeline(pipeline_name=PIPELINE_NAME, pipeline=PIPELINE, instance_url=INSTANCE_URL)
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}",
+            method="PUT",
+            body=PIPELINE,
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
     def test_delete_pipeline(self, mock_request, hook):
         mock_request.return_value.status = 200
         hook.delete_pipeline(pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL)
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}",
+            method="DELETE",
+            body=None,
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_delete_pipeline_should_fail_if_empty_data_response(self, mock_request, hook):
+        mock_request.return_value.status = 200
+        mock_request.return_value.data = None
+        with pytest.raises(
+            AirflowException,
+            match=r"Empty response received. Please, check for possible root causes "
+            r"of this behavior either in DAG code or on Cloud Datafusion side",
+        ):
+            hook.delete_pipeline(pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL)
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}",
+            method="DELETE",
+            body=None,
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_delete_pipeline_should_fail_if_status_not_200(self, mock_request, hook):
+        mock_request.return_value.status = 404
+        with pytest.raises(AirflowException, match=r"Deleting a pipeline failed with code 404"):
+            hook.delete_pipeline(pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL)
         mock_request.assert_called_once_with(
             url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}",
             method="DELETE",
@@ -180,8 +237,30 @@ class TestDataFusionHook:
         assert result == data
 
     @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
-    @mock.patch(HOOK_STR.format("DataFusionHook.wait_for_pipeline_state"))
-    def test_start_pipeline(self, mock_wait_for_pipeline_state, mock_request, hook):
+    def test_list_pipelines_should_fail_if_empty_data_response(self, mock_request, hook):
+        mock_request.return_value.status = 200
+        mock_request.return_value.data = None
+        with pytest.raises(
+            AirflowException,
+            match=r"Empty response received. Please, check for possible root causes "
+            r"of this behavior either in DAG code or on Cloud Datafusion side",
+        ):
+            hook.list_pipelines(instance_url=INSTANCE_URL)
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps", method="GET", body=None
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_list_pipelines_should_fail_if_status_not_200(self, mock_request, hook):
+        mock_request.return_value.status = 404
+        with pytest.raises(AirflowException, match=r"Listing pipelines failed with code 404"):
+            hook.list_pipelines(instance_url=INSTANCE_URL)
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps", method="GET", body=None
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_start_pipeline(self, mock_request, hook):
         run_id = 1234
         mock_request.return_value = mock.MagicMock(status=200, data=f'[{{"runId":{run_id}}}]')
 
@@ -197,12 +276,48 @@ class TestDataFusionHook:
         mock_request.assert_called_once_with(
             url=f"{INSTANCE_URL}/v3/namespaces/default/start", method="POST", body=body
         )
-        mock_wait_for_pipeline_state.assert_called_once_with(
-            instance_url=INSTANCE_URL,
-            namespace="default",
-            pipeline_name=PIPELINE_NAME,
-            pipeline_id=run_id,
-            success_states=SUCCESS_STATES + [PipelineStates.RUNNING],
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_start_pipeline_should_fail_if_empty_data_response(self, mock_request, hook):
+        mock_request.return_value.status = 200
+        mock_request.return_value.data = None
+        with pytest.raises(
+            AirflowException,
+            match=r"Empty response received. Please, check for possible root causes "
+            r"of this behavior either in DAG code or on Cloud Datafusion side",
+        ):
+            hook.start_pipeline(
+                pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL, runtime_args=RUNTIME_ARGS
+            )
+        body = [
+            {
+                "appId": PIPELINE_NAME,
+                "programType": "workflow",
+                "programId": "DataPipelineWorkflow",
+                "runtimeargs": RUNTIME_ARGS,
+            }
+        ]
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/start", method="POST", body=body
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_start_pipeline_should_fail_if_status_not_200(self, mock_request, hook):
+        mock_request.return_value.status = 404
+        with pytest.raises(AirflowException, match=r"Starting a pipeline failed with code 404"):
+            hook.start_pipeline(
+                pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL, runtime_args=RUNTIME_ARGS
+            )
+        body = [
+            {
+                "appId": PIPELINE_NAME,
+                "programType": "workflow",
+                "programId": "DataPipelineWorkflow",
+                "runtimeargs": RUNTIME_ARGS,
+            }
+        ]
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/start", method="POST", body=body
         )
 
     @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
@@ -213,4 +328,75 @@ class TestDataFusionHook:
             url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}/"
             f"workflows/DataPipelineWorkflow/stop",
             method="POST",
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_stop_pipeline_should_fail_if_empty_data_response(self, mock_request, hook):
+        mock_request.return_value.status = 200
+        mock_request.return_value.data = None
+        with pytest.raises(
+            AirflowException,
+            match=r"Empty response received. Please, check for possible root causes "
+            r"of this behavior either in DAG code or on Cloud Datafusion side",
+        ):
+            hook.stop_pipeline(pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL)
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}/"
+            f"workflows/DataPipelineWorkflow/stop",
+            method="POST",
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_stop_pipeline_should_fail_if_status_not_200(self, mock_request, hook):
+        mock_request.return_value.status = 404
+        with pytest.raises(AirflowException, match=r"Stopping a pipeline failed with code 404"):
+            hook.stop_pipeline(pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL)
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}/"
+            f"workflows/DataPipelineWorkflow/stop",
+            method="POST",
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_get_pipeline_workflow(self, mock_request, hook):
+        run_id = 1234
+        mock_request.return_value = mock.MagicMock(status=200, data=f'[{{"runId":{run_id}}}]')
+        hook.get_pipeline_workflow(
+            pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL, pipeline_id=PIPELINE_ID
+        )
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}/"
+            f"workflows/DataPipelineWorkflow/runs/{PIPELINE_ID}",
+            method="GET",
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_get_pipeline_workflow_should_fail_if_empty_data_response(self, mock_request, hook):
+        mock_request.return_value.status = 200
+        mock_request.return_value.data = None
+        with pytest.raises(
+            AirflowException,
+            match=r"Empty response received. Please, check for possible root causes "
+            r"of this behavior either in DAG code or on Cloud Datafusion side",
+        ):
+            hook.get_pipeline_workflow(
+                pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL, pipeline_id=PIPELINE_ID
+            )
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}/"
+            f"workflows/DataPipelineWorkflow/runs/{PIPELINE_ID}",
+            method="GET",
+        )
+
+    @mock.patch(HOOK_STR.format("DataFusionHook._cdap_request"))
+    def test_get_pipeline_workflow_should_fail_if_status_not_200(self, mock_request, hook):
+        mock_request.return_value.status = 404
+        with pytest.raises(AirflowException, match=r"Retrieving a pipeline state failed with code 404"):
+            hook.get_pipeline_workflow(
+                pipeline_name=PIPELINE_NAME, instance_url=INSTANCE_URL, pipeline_id=PIPELINE_ID
+            )
+        mock_request.assert_called_once_with(
+            url=f"{INSTANCE_URL}/v3/namespaces/default/apps/{PIPELINE_NAME}/"
+            f"workflows/DataPipelineWorkflow/runs/{PIPELINE_ID}",
+            method="GET",
         )

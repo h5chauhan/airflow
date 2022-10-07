@@ -14,6 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import unittest
 
 import pytest
@@ -34,11 +36,14 @@ from tests.test_utils.db import clear_db_runs
 
 DEFAULT_TIME = "2020-06-09T13:59:56.336000+00:00"
 
+SECOND_TIME = "2020-06-10T13:59:56.336000+00:00"
+
 
 class TestDAGRunBase(unittest.TestCase):
     def setUp(self) -> None:
         clear_db_runs()
         self.default_time = DEFAULT_TIME
+        self.second_time = SECOND_TIME
 
     def tearDown(self) -> None:
         clear_db_runs()
@@ -48,6 +53,7 @@ class TestDAGRunSchema(TestDAGRunBase):
     @provide_session
     def test_serialize(self, session):
         dagrun_model = DagRun(
+            dag_id="my-dag-run",
             run_id="my-dag-run",
             state='running',
             run_type=DagRunType.MANUAL.value,
@@ -61,14 +67,19 @@ class TestDAGRunSchema(TestDAGRunBase):
         deserialized_dagrun = dagrun_schema.dump(dagrun_model)
 
         assert deserialized_dagrun == {
-            "dag_id": None,
+            "dag_id": "my-dag-run",
             "dag_run_id": "my-dag-run",
             "end_date": None,
             "state": "running",
             "execution_date": self.default_time,
+            "logical_date": self.default_time,
             "external_trigger": True,
             "start_date": self.default_time,
             "conf": {"start": "stop"},
+            "data_interval_end": None,
+            "data_interval_start": None,
+            "last_scheduling_decision": None,
+            "run_type": "manual",
         }
 
     @parameterized.expand(
@@ -124,6 +135,7 @@ class TestDagRunCollection(TestDAGRunBase):
     @provide_session
     def test_serialize(self, session):
         dagrun_model_1 = DagRun(
+            dag_id="my-dag-run",
             run_id="my-dag-run",
             state='running',
             execution_date=timezone.parse(self.default_time),
@@ -132,9 +144,10 @@ class TestDagRunCollection(TestDAGRunBase):
             conf='{"start": "stop"}',
         )
         dagrun_model_2 = DagRun(
+            dag_id="my-dag-run",
             run_id="my-dag-run-2",
             state='running',
-            execution_date=timezone.parse(self.default_time),
+            execution_date=timezone.parse(self.second_time),
             start_date=timezone.parse(self.default_time),
             run_type=DagRunType.MANUAL.value,
         )
@@ -146,24 +159,34 @@ class TestDagRunCollection(TestDAGRunBase):
         assert deserialized_dagruns == {
             "dag_runs": [
                 {
-                    "dag_id": None,
+                    "dag_id": "my-dag-run",
                     "dag_run_id": "my-dag-run",
                     "end_date": None,
                     "execution_date": self.default_time,
+                    "logical_date": self.default_time,
                     "external_trigger": True,
                     "state": "running",
                     "start_date": self.default_time,
                     "conf": {"start": "stop"},
+                    "data_interval_end": None,
+                    "data_interval_start": None,
+                    "last_scheduling_decision": None,
+                    "run_type": "manual",
                 },
                 {
-                    "dag_id": None,
+                    "dag_id": "my-dag-run",
                     "dag_run_id": "my-dag-run-2",
                     "end_date": None,
                     "state": "running",
-                    "execution_date": self.default_time,
+                    "execution_date": self.second_time,
+                    "logical_date": self.second_time,
                     "external_trigger": True,
                     "start_date": self.default_time,
                     "conf": {},
+                    "data_interval_end": None,
+                    "data_interval_start": None,
+                    "last_scheduling_decision": None,
+                    "run_type": "manual",
                 },
             ],
             "total_entries": 2,

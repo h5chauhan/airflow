@@ -16,10 +16,13 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Google Cloud Translate Hook."""
-from typing import List, Optional, Sequence, Union
+from __future__ import annotations
+
+from typing import Optional, Sequence
 
 from google.cloud.translate_v2 import Client
 
+from airflow.providers.google.common.consts import CLIENT_INFO
 from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 
 
@@ -34,8 +37,8 @@ class CloudTranslateHook(GoogleBaseHook):
     def __init__(
         self,
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -52,35 +55,30 @@ class CloudTranslateHook(GoogleBaseHook):
         :rtype: google.cloud.translate_v2.Client
         """
         if not self._client:
-            self._client = Client(credentials=self._get_credentials(), client_info=self.client_info)
+            self._client = Client(credentials=self.get_credentials(), client_info=CLIENT_INFO)
         return self._client
 
     @GoogleBaseHook.quota_retry()
     def translate(
         self,
-        values: Union[str, List[str]],
+        values: str | list[str],
         target_language: str,
-        format_: Optional[str] = None,
-        source_language: Optional[str] = None,
-        model: Optional[Union[str, List[str]]] = None,
+        format_: str | None = None,
+        source_language: str | None = None,
+        model: str | list[str] | None = None,
     ) -> dict:
         """Translate a string or list of strings.
 
         See https://cloud.google.com/translate/docs/translating-text
 
-        :type values: str or list
         :param values: String or list of strings to translate.
-        :type target_language: str
         :param target_language: The language to translate results into. This
                                 is required by the API and defaults to
                                 the target language of the current instance.
-        :type format_: str
         :param format_: (Optional) One of ``text`` or ``html``, to specify
                         if the input text is plain text or HTML.
-        :type source_language: str or None
         :param source_language: (Optional) The language of the text to
                                 be translated.
-        :type model: str or None
         :param model: (Optional) The model used to translate the text, such
                       as ``'base'`` or ``'nmt'``.
         :rtype: str or list

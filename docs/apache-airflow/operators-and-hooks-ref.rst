@@ -19,8 +19,11 @@ Operators and Hooks Reference
 =============================
 
 Here's the list of the operators and hooks which are available in this release in the ``apache-airflow`` package.
-Airflow has many more integrations available for separate installation as a provider packages. For details see:
-:doc:`apache-airflow-providers:operators-and-hooks-ref/index`.
+
+Airflow has many more integrations available for separate installation as
+:doc:`apache-airflow-providers:index`.
+
+For details see: :doc:`apache-airflow-providers:operators-and-hooks-ref/index`.
 
 **Base:**
 
@@ -30,10 +33,10 @@ Airflow has many more integrations available for separate installation as a prov
    * - Module
      - Guides
 
-   * - :mod:`airflow.hooks.base_hook`
+   * - :mod:`airflow.hooks.base`
      -
 
-   * - :mod:`airflow.hooks.dbapi_hook`
+   * - :mod:`airflow.hooks.dbapi`
      -
 
    * - :mod:`airflow.models.baseoperator`
@@ -53,10 +56,10 @@ Airflow has many more integrations available for separate installation as a prov
    * - :mod:`airflow.operators.bash`
      - :doc:`How to use <howto/operator/bash>`
 
-   * - :mod:`airflow.operators.branch_operator`
+   * - :mod:`airflow.operators.branch`
      -
 
-   * - :mod:`airflow.operators.trigger_dagrun`
+   * - :mod:`airflow.operators.datetime`
      -
 
    * - :mod:`airflow.operators.dummy`
@@ -77,7 +80,7 @@ Airflow has many more integrations available for separate installation as a prov
    * - :mod:`airflow.operators.subdag`
      -
 
-   * - :mod:`airflow.operators.sql`
+   * - :mod:`airflow.operators.trigger_dagrun`
      -
 
 **Sensors:**
@@ -103,20 +106,15 @@ Airflow has many more integrations available for separate installation as a prov
    * - :mod:`airflow.sensors.python`
      -
 
-   * - :mod:`airflow.sensors.sql`
-     -
-
    * - :mod:`airflow.sensors.time_delta`
      -
 
    * - :mod:`airflow.sensors.time_sensor`
      -
 
-   * - :mod:`airflow.sensors.weekday_sensor`
+   * - :mod:`airflow.sensors.weekday`
      -
 
-   * - :mod:`airflow.sensors.smart_sensor_operator`
-     - :doc:`concepts/smart-sensors`
 
 **Hooks:**
 
@@ -127,4 +125,7 @@ Airflow has many more integrations available for separate installation as a prov
      - Guides
 
    * - :mod:`airflow.hooks.filesystem`
+     -
+
+   * - :mod:`airflow.hooks.subprocess`
      -

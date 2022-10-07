@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import datetime
 import unittest
@@ -63,7 +64,7 @@ class TestCreateEvaluateOps(unittest.TestCase):
                 'model_name': 'test_model',
                 'version_name': 'test_version',
             },
-            schedule_interval='@daily',
+            schedule='@daily',
         )
         self.metric_fn = lambda x: (0.1,)
         self.metric_fn_encoded = mlengine_operator_utils.base64.b64encode(
@@ -106,34 +107,16 @@ class TestCreateEvaluateOps(unittest.TestCase):
             )
             assert success_message['predictionOutput'] == result
 
-        with patch(
-            'airflow.providers.google.cloud.operators.dataflow.DataflowHook'
-        ) as mock_dataflow_hook, patch(
-            'airflow.providers.google.cloud.operators.dataflow.BeamHook'
-        ) as mock_beam_hook:
-            dataflow_hook_instance = mock_dataflow_hook.return_value
-            dataflow_hook_instance.start_python_dataflow.return_value = None
+        with patch('airflow.providers.apache.beam.operators.beam.BeamHook') as mock_beam_hook:
             beam_hook_instance = mock_beam_hook.return_value
             summary.execute(None)
-            mock_dataflow_hook.assert_called_once_with(
-                gcp_conn_id='google_cloud_default',
-                delegate_to=None,
-                poll_sleep=10,
-                drain_pipeline=False,
-                cancel_timeout=600,
-                wait_until_finished=None,
-                impersonation_chain=None,
-            )
-            mock_beam_hook.assert_called_once_with(runner="DataflowRunner")
+            mock_beam_hook.assert_called_once_with(runner="DirectRunner")
             beam_hook_instance.start_python_pipeline.assert_called_once_with(
                 variables={
                     'prediction_path': 'gs://legal-bucket/fake-output-path',
                     'labels': {'airflow-version': TEST_VERSION},
                     'metric_keys': 'err',
                     'metric_fn_encoded': self.metric_fn_encoded,
-                    'project': 'test-project',
-                    'region': 'us-central1',
-                    'job_name': mock.ANY,
                 },
                 py_file=mock.ANY,
                 py_options=[],
@@ -142,13 +125,10 @@ class TestCreateEvaluateOps(unittest.TestCase):
                 py_system_site_packages=False,
                 process_line_callback=mock.ANY,
             )
-            dataflow_hook_instance.wait_for_done.assert_called_once_with(
-                job_name=mock.ANY, location='us-central1', job_id=mock.ANY, multiple_jobs=False
-            )
 
         with patch('airflow.providers.google.cloud.utils.mlengine_operator_utils.GCSHook') as mock_gcs_hook:
             hook_instance = mock_gcs_hook.return_value
-            hook_instance.download.return_value = '{"err": 0.9, "count": 9}'
+            hook_instance.download.return_value = b'{"err": 0.9, "count": 9}'
             result = validate.execute({})
             hook_instance.download.assert_called_once_with(
                 'legal-bucket', 'fake-output-path/prediction.summary.json'
@@ -166,7 +146,7 @@ class TestCreateEvaluateOps(unittest.TestCase):
                     'project_id': 'test-project',
                     'region': 'us-east1',
                 },
-                schedule_interval='@daily',
+                schedule='@daily',
             )
             return dag
 

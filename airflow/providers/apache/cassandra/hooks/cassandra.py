@@ -15,10 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """This module contains hook to integrate with Apache Cassandra."""
+from __future__ import annotations
 
-from typing import Any, Dict, Union
+from typing import Any, Union
 
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster, Session
@@ -141,14 +141,12 @@ class CassandraHook(BaseHook, LoggingMixin):
             self.cluster.shutdown()
 
     @staticmethod
-    def get_lb_policy(policy_name: str, policy_args: Dict[str, Any]) -> Policy:
+    def get_lb_policy(policy_name: str, policy_args: dict[str, Any]) -> Policy:
         """
         Creates load balancing policy.
 
         :param policy_name: Name of the policy to use.
-        :type policy_name: str
         :param policy_args: Parameters for the policy.
-        :type policy_args: Dict
         """
         if policy_name == 'DCAwareRoundRobinPolicy':
             local_dc = policy_args.get('local_dc', '')
@@ -171,9 +169,8 @@ class CassandraHook(BaseHook, LoggingMixin):
             child_policy_args = policy_args.get('child_load_balancing_policy_args', {})
             if child_policy_name not in allowed_child_policies:
                 return TokenAwarePolicy(RoundRobinPolicy())
-            else:
-                child_policy = CassandraHook.get_lb_policy(child_policy_name, child_policy_args)
-                return TokenAwarePolicy(child_policy)
+            child_policy = CassandraHook.get_lb_policy(child_policy_name, child_policy_args)
+            return TokenAwarePolicy(child_policy)
 
         # Fallback to default RoundRobinPolicy
         return RoundRobinPolicy()
@@ -184,7 +181,6 @@ class CassandraHook(BaseHook, LoggingMixin):
 
         :param table: Target Cassandra table.
                       Use dot notation to target a specific keyspace.
-        :type table: str
         """
         keyspace = self.keyspace
         if '.' in table:
@@ -192,20 +188,18 @@ class CassandraHook(BaseHook, LoggingMixin):
         cluster_metadata = self.get_conn().cluster.metadata
         return keyspace in cluster_metadata.keyspaces and table in cluster_metadata.keyspaces[keyspace].tables
 
-    def record_exists(self, table: str, keys: Dict[str, str]) -> bool:
+    def record_exists(self, table: str, keys: dict[str, str]) -> bool:
         """
         Checks if a record exists in Cassandra
 
         :param table: Target Cassandra table.
                       Use dot notation to target a specific keyspace.
-        :type table: str
         :param keys: The keys and their values to check the existence.
-        :type keys: dict
         """
         keyspace = self.keyspace
         if '.' in table:
             keyspace, table = table.split('.', 1)
-        ks_str = " AND ".join(f"{key}=%({key})s" for key in keys.keys())
+        ks_str = " AND ".join(f"{key}=%({key})s" for key in keys)
         query = f"SELECT * FROM {keyspace}.{table} WHERE {ks_str}"
         try:
             result = self.get_conn().execute(query, keys)

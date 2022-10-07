@@ -16,8 +16,9 @@
 # specific language governing permissions and limitations
 # under the License.
 """Hook for Google Drive service"""
-from io import TextIOWrapper
-from typing import Any, Optional, Sequence, Union
+from __future__ import annotations
+
+from typing import IO, Any, Optional, Sequence
 
 from googleapiclient.discovery import Resource, build
 from googleapiclient.http import HttpRequest, MediaFileUpload
@@ -30,13 +31,10 @@ class GoogleDriveHook(GoogleBaseHook):
     Hook for the Google Drive APIs.
 
     :param api_version: API version used (for example v3).
-    :type api_version: str
     :param gcp_conn_id: The connection ID to use when fetching connection info.
-    :type gcp_conn_id: str
     :param delegate_to: The account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
-    :type delegate_to: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -45,7 +43,6 @@ class GoogleDriveHook(GoogleBaseHook):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account.
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     _conn = None  # type: Optional[Resource]
@@ -54,8 +51,8 @@ class GoogleDriveHook(GoogleBaseHook):
         self,
         api_version: str = "v3",
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -126,7 +123,6 @@ class GoogleDriveHook(GoogleBaseHook):
         Returns a get_media http request to a Google Drive object.
 
         :param file_id: The Google Drive file id
-        :type file_id: str
         :return: request
         :rtype: HttpRequest
         """
@@ -134,37 +130,47 @@ class GoogleDriveHook(GoogleBaseHook):
         request = service.files().get_media(fileId=file_id)
         return request
 
-    def exists(self, folder_id: str, file_name: str, drive_id: Optional[str] = None):
+    def exists(
+        self, folder_id: str, file_name: str, drive_id: str | None = None, *, include_trashed: bool = True
+    ):
         """
         Checks to see if a file exists within a Google Drive folder
 
         :param folder_id: The id of the Google Drive folder in which the file resides
-        :type folder_id: str
         :param file_name: The name of a file in Google Drive
-        :type file_name: str
         :param drive_id: Optional. The id of the shared Google Drive in which the file resides.
-        :type drive_id: str
+        :param include_trashed: Whether to include objects in trash or not, default True as in Google API.
+
         :return: True if the file exists, False otherwise
         :rtype: bool
         """
-        return bool(self.get_file_id(folder_id=folder_id, file_name=file_name, drive_id=drive_id))
+        return bool(
+            self.get_file_id(
+                folder_id=folder_id, file_name=file_name, include_trashed=include_trashed, drive_id=drive_id
+            )
+        )
 
-    def get_file_id(self, folder_id: str, file_name: str, drive_id: Optional[str] = None):
+    def get_file_id(
+        self, folder_id: str, file_name: str, drive_id: str | None = None, *, include_trashed: bool = True
+    ):
         """
         Returns the file id of a Google Drive file
 
         :param folder_id: The id of the Google Drive folder in which the file resides
-        :type folder_id: str
         :param file_name: The name of a file in Google Drive
-        :type file_name: str
         :param drive_id: Optional. The id of the shared Google Drive in which the file resides.
-        :type drive_id: str
+        :param include_trashed: Whether to include objects in trash or not, default True as in Google API.
+
         :return: Google Drive file id if the file exists, otherwise None
         :rtype: str if file exists else None
         """
         query = f"name = '{file_name}'"
         if folder_id:
             query += f" and parents in '{folder_id}'"
+
+        if not include_trashed:
+            query += " and trashed=false"
+
         service = self.get_conn()
         if drive_id:
             files = (
@@ -192,14 +198,25 @@ class GoogleDriveHook(GoogleBaseHook):
             file_metadata = {"id": files['files'][0]['id'], "mime_type": files['files'][0]['mimeType']}
         return file_metadata
 
-    def upload_file(self, local_location: str, remote_location: str) -> str:
+    def upload_file(
+        self,
+        local_location: str,
+        remote_location: str,
+        chunk_size: int = 100 * 1024 * 1024,
+        resumable: bool = False,
+    ) -> str:
         """
         Uploads a file that is available locally to a Google Drive service.
 
         :param local_location: The path where the file is available.
-        :type local_location: str
         :param remote_location: The path where the file will be send
-        :type remote_location: str
+        :param chunk_size: File will be uploaded in chunks of this many bytes. Only
+            used if resumable=True. Pass in a value of -1 if the file is to be
+            uploaded as a single chunk. Note that Google App Engine has a 5MB limit
+            on request size, so you should never set your chunk size larger than 5MB,
+            or to -1.
+        :param resumable: True if this is a resumable upload. False means upload
+            in a single request.
         :return: File ID
         :rtype: str
         """
@@ -211,23 +228,22 @@ class GoogleDriveHook(GoogleBaseHook):
             parent = "root"
 
         file_metadata = {"name": file_name, "parents": [parent]}
-        media = MediaFileUpload(local_location)
+        media = MediaFileUpload(local_location, chunksize=chunk_size, resumable=resumable)
         file = (
             service.files()
-            .create(body=file_metadata, media_body=media, fields="id")
+            .create(body=file_metadata, media_body=media, fields="id", supportsAllDrives=True)
             .execute(num_retries=self.num_retries)
         )
         self.log.info("File %s uploaded to gdrive://%s.", local_location, remote_location)
         return file.get("id")
 
-    def download_file(self, file_id: str, file_handle: TextIOWrapper, chunk_size: int = 104857600):
+    def download_file(self, file_id: str, file_handle: IO, chunk_size: int = 100 * 1024 * 1024):
         """
         Download a file from Google Drive.
 
         :param file_id: the id of the file
-        :type file_id: str
         :param file_handle: file handle used to write the content to
-        :type file_handle: io.TextIOWrapper
+        :param chunk_size: File will be downloaded in chunks of this many bytes.
         """
         request = self.get_media_request(file_id=file_id)
         self.download_content_from_request(file_handle=file_handle, request=request, chunk_size=chunk_size)

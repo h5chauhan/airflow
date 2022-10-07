@@ -14,21 +14,23 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import List, NamedTuple
+from typing import NamedTuple
 
-from flask_appbuilder.security.sqla.models import Permission, PermissionView, Role, ViewMenu
 from marshmallow import Schema, fields
 from marshmallow_sqlalchemy import SQLAlchemySchema, auto_field
 
+from airflow.www.fab_security.sqla.models import Action, Permission, Resource, Role
+
 
 class ActionSchema(SQLAlchemySchema):
-    """Permission Action Schema"""
+    """Action Action Schema"""
 
     class Meta:
         """Meta"""
 
-        model = Permission
+        model = Action
 
     name = auto_field()
 
@@ -39,15 +41,15 @@ class ResourceSchema(SQLAlchemySchema):
     class Meta:
         """Meta"""
 
-        model = ViewMenu
+        model = Resource
 
     name = auto_field()
 
 
 class ActionCollection(NamedTuple):
-    """Permission Action Collection"""
+    """Action Action Collection"""
 
-    actions: List[Permission]
+    actions: list[Action]
     total_entries: int
 
 
@@ -59,15 +61,15 @@ class ActionCollectionSchema(Schema):
 
 
 class ActionResourceSchema(SQLAlchemySchema):
-    """Permission View Schema"""
+    """Action View Schema"""
 
     class Meta:
         """Meta"""
 
-        model = PermissionView
+        model = Permission
 
-    permission = fields.Nested(ActionSchema, data_key="action")
-    view_menu = fields.Nested(ResourceSchema, data_key="resource")
+    action = fields.Nested(ActionSchema, data_key="action")
+    resource = fields.Nested(ResourceSchema, data_key="resource")
 
 
 class RoleSchema(SQLAlchemySchema):
@@ -85,7 +87,7 @@ class RoleSchema(SQLAlchemySchema):
 class RoleCollection(NamedTuple):
     """List of roles"""
 
-    roles: List[Role]
+    roles: list[Role]
     total_entries: int
 
 

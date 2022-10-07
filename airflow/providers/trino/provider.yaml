@@ -22,22 +22,51 @@ description: |
     `Trino <https://trino.io/>`__
 
 versions:
+  - 4.1.0
+  - 4.0.1
+  - 4.0.0
+  - 3.1.0
+  - 3.0.0
+  - 2.3.0
+  - 2.2.0
+  - 2.1.2
+  - 2.1.1
+  - 2.1.0
+  - 2.0.2
+  - 2.0.1
   - 2.0.0
   - 1.0.0
 
-additional-dependencies:
-  - apache-airflow>=2.1.0
+dependencies:
+  - apache-airflow>=2.2.0
+  - apache-airflow-providers-common-sql>=1.2.0
+  - pandas>=0.17.1
+  - trino>=0.301.0
 
 integrations:
   - integration-name: Trino
     external-doc-url: https://trino.io/docs/
     logo: /integration-logos/trino/trino-og.png
+    how-to-guide:
+      - /docs/apache-airflow-providers-trino/operators/trino.rst
     tags: [software]
+
+operators:
+  - integration-name: Trino
+    python-modules:
+      - airflow.providers.trino.operators.trino
 
 hooks:
   - integration-name: Trino
     python-modules:
       - airflow.providers.trino.hooks.trino
 
-hook-class-names:
-  - airflow.providers.trino.hooks.trino.TrinoHook
+transfers:
+  - source-integration-name: Google Cloud Storage (GCS)
+    target-integration-name: Trino
+    how-to-guide: /docs/apache-airflow-providers-trino/operators/transfer/gcs_to_trino.rst
+    python-module: airflow.providers.trino.transfers.gcs_to_trino
+
+connection-types:
+  - hook-class-name: airflow.providers.trino.hooks.trino.TrinoHook
+    connection-type: trino

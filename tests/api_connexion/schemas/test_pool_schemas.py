@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 
@@ -43,7 +44,9 @@ class TestPoolSchema(unittest.TestCase):
             "occupied_slots": 0,
             "running_slots": 0,
             "queued_slots": 0,
+            "scheduled_slots": 0,
             "open_slots": 2,
+            "description": None,
         }
 
     @provide_session
@@ -72,7 +75,9 @@ class TestPoolCollectionSchema(unittest.TestCase):
                     "occupied_slots": 0,
                     "running_slots": 0,
                     "queued_slots": 0,
+                    "scheduled_slots": 0,
                     "open_slots": 3,
+                    "description": None,
                 },
                 {
                     "name": "test_pool_b",
@@ -80,7 +85,9 @@ class TestPoolCollectionSchema(unittest.TestCase):
                     "occupied_slots": 0,
                     "running_slots": 0,
                     "queued_slots": 0,
+                    "scheduled_slots": 0,
                     "open_slots": 3,
+                    "description": None,
                 },
             ],
             "total_entries": 2,

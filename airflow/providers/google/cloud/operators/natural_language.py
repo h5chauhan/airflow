@@ -16,8 +16,11 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains Google Cloud Language operators."""
-from typing import Optional, Sequence, Tuple, Union
+from __future__ import annotations
 
+from typing import TYPE_CHECKING, Sequence, Tuple
+
+from google.api_core.gapic_v1.method import DEFAULT, _MethodDefault
 from google.api_core.retry import Retry
 from google.cloud.language_v1 import enums
 from google.cloud.language_v1.types import Document
@@ -25,6 +28,10 @@ from google.protobuf.json_format import MessageToDict
 
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.natural_language import CloudNaturalLanguageHook
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
 
 MetaData = Sequence[Tuple[str, str]]
 
@@ -40,18 +47,13 @@ class CloudNaturalLanguageAnalyzeEntitiesOperator(BaseOperator):
 
     :param document: Input document.
         If a dict is provided, it must be of the same form as the protobuf message Document
-    :type document: dict or google.cloud.language_v1.types.Document
     :param encoding_type: The encoding type used by the API to calculate offsets.
-    :type encoding_type: google.cloud.language_v1.enums.EncodingType
     :param retry: A retry object used to retry requests. If None is specified, requests will not be
         retried.
     :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
         retry is specified, the timeout applies to each individual attempt.
-    :type timeout: float
     :param metadata: Additional metadata that is provided to the method.
-    :type metadata: Sequence[Tuple[str, str]]
     :param gcp_conn_id: The connection ID to use connecting to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -60,11 +62,10 @@ class CloudNaturalLanguageAnalyzeEntitiesOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START natural_language_analyze_entities_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "document",
         "gcp_conn_id",
         "impersonation_chain",
@@ -74,13 +75,13 @@ class CloudNaturalLanguageAnalyzeEntitiesOperator(BaseOperator):
     def __init__(
         self,
         *,
-        document: Union[dict, Document],
-        encoding_type: Optional[enums.EncodingType] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        document: dict | Document,
+        encoding_type: enums.EncodingType | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -92,7 +93,7 @@ class CloudNaturalLanguageAnalyzeEntitiesOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudNaturalLanguageHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -118,18 +119,13 @@ class CloudNaturalLanguageAnalyzeEntitySentimentOperator(BaseOperator):
 
     :param document: Input document.
         If a dict is provided, it must be of the same form as the protobuf message Document
-    :type document: dict or google.cloud.language_v1.types.Document
     :param encoding_type: The encoding type used by the API to calculate offsets.
-    :type encoding_type: google.cloud.language_v1.enums.EncodingType
     :param retry: A retry object used to retry requests. If None is specified, requests will not be
         retried.
     :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
         retry is specified, the timeout applies to each individual attempt.
-    :type timeout: float
     :param metadata: Additional metadata that is provided to the method.
-    :type metadata: Sequence[Tuple[str, str]]]
     :param gcp_conn_id: The connection ID to use connecting to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -138,13 +134,12 @@ class CloudNaturalLanguageAnalyzeEntitySentimentOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
 
     :rtype: google.cloud.language_v1.types.AnalyzeEntitiesResponse
     """
 
     # [START natural_language_analyze_entity_sentiment_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "document",
         "gcp_conn_id",
         "impersonation_chain",
@@ -154,13 +149,13 @@ class CloudNaturalLanguageAnalyzeEntitySentimentOperator(BaseOperator):
     def __init__(
         self,
         *,
-        document: Union[dict, Document],
-        encoding_type: Optional[enums.EncodingType] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        document: dict | Document,
+        encoding_type: enums.EncodingType | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -172,7 +167,7 @@ class CloudNaturalLanguageAnalyzeEntitySentimentOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudNaturalLanguageHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -201,18 +196,13 @@ class CloudNaturalLanguageAnalyzeSentimentOperator(BaseOperator):
 
     :param document: Input document.
         If a dict is provided, it must be of the same form as the protobuf message Document
-    :type document: dict or google.cloud.language_v1.types.Document
     :param encoding_type: The encoding type used by the API to calculate offsets.
-    :type encoding_type: google.cloud.language_v1.enums.EncodingType
     :param retry: A retry object used to retry requests. If None is specified, requests will not be
         retried.
     :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
         retry is specified, the timeout applies to each individual attempt.
-    :type timeout: float
     :param metadata: Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]]
     :param gcp_conn_id: The connection ID to use connecting to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -221,13 +211,12 @@ class CloudNaturalLanguageAnalyzeSentimentOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
 
     :rtype: google.cloud.language_v1.types.AnalyzeEntitiesResponse
     """
 
     # [START natural_language_analyze_sentiment_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "document",
         "gcp_conn_id",
         "impersonation_chain",
@@ -237,13 +226,13 @@ class CloudNaturalLanguageAnalyzeSentimentOperator(BaseOperator):
     def __init__(
         self,
         *,
-        document: Union[dict, Document],
-        encoding_type: Optional[enums.EncodingType] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        document: dict | Document,
+        encoding_type: enums.EncodingType | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -255,7 +244,7 @@ class CloudNaturalLanguageAnalyzeSentimentOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudNaturalLanguageHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -280,16 +269,12 @@ class CloudNaturalLanguageClassifyTextOperator(BaseOperator):
 
     :param document: Input document.
         If a dict is provided, it must be of the same form as the protobuf message Document
-    :type document: dict or google.cloud.language_v1.types.Document
     :param retry: A retry object used to retry requests. If None is specified, requests will not be
         retried.
     :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
         retry is specified, the timeout applies to each individual attempt.
-    :type timeout: float
     :param metadata: Additional metadata that is provided to the method.
-    :type metadata: sequence[tuple[str, str]]]
     :param gcp_conn_id: The connection ID to use connecting to Google Cloud.
-    :type gcp_conn_id: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -298,11 +283,10 @@ class CloudNaturalLanguageClassifyTextOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START natural_language_classify_text_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "document",
         "gcp_conn_id",
         "impersonation_chain",
@@ -312,12 +296,12 @@ class CloudNaturalLanguageClassifyTextOperator(BaseOperator):
     def __init__(
         self,
         *,
-        document: Union[dict, Document],
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[MetaData] = None,
+        document: dict | Document,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: MetaData = (),
         gcp_conn_id: str = "google_cloud_default",
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -328,7 +312,7 @@ class CloudNaturalLanguageClassifyTextOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context: Context):
         hook = CloudNaturalLanguageHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,

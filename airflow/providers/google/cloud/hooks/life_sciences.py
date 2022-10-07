@@ -16,9 +16,10 @@
 # specific language governing permissions and limitations
 # under the License.
 """Hook for Google Cloud Life Sciences service"""
+from __future__ import annotations
 
 import time
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Sequence
 
 import google.api_core.path_template
 from googleapiclient.discovery import build
@@ -38,13 +39,10 @@ class LifeSciencesHook(GoogleBaseHook):
     keyword arguments rather than positional.
 
     :param api_version: API version used (for example v1 or v1beta1).
-    :type api_version: str
     :param gcp_conn_id: The connection ID to use when fetching connection info.
-    :type gcp_conn_id: str
     :param delegate_to: The account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
-    :type delegate_to: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -53,7 +51,6 @@ class LifeSciencesHook(GoogleBaseHook):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account.
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     _conn = None  # type: Optional[Any]
@@ -62,8 +59,8 @@ class LifeSciencesHook(GoogleBaseHook):
         self,
         api_version: str = "v2beta",
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -89,12 +86,9 @@ class LifeSciencesHook(GoogleBaseHook):
         Runs a pipeline
 
         :param body: The request body.
-        :type body: dict
         :param location: The location of the project. For example: "us-east1".
-        :type location: str
         :param project_id: Optional, Google Cloud Project project_id where the function belongs.
             If set to None or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :rtype: dict
         """
         parent = self._location_path(project_id=project_id, location=location)
@@ -118,9 +112,7 @@ class LifeSciencesHook(GoogleBaseHook):
         :param project_id: Optional, Google Cloud Project project_id where the
             function belongs. If set to None or missing, the default project_id
             from the Google Cloud connection is used.
-        :type project_id: str
         :param location: The location of the project. For example: "us-east1".
-        :type location: str
         """
         return google.api_core.path_template.expand(
             'projects/{project}/locations/{location}',
@@ -134,7 +126,6 @@ class LifeSciencesHook(GoogleBaseHook):
         asynchronous call.
 
         :param operation_name: The name of the operation.
-        :type operation_name: str
         :return: The response returned by the operation.
         :rtype: dict
         :exception: AirflowException in case error is returned.

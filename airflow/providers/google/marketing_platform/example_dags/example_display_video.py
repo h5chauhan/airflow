@@ -18,10 +18,14 @@
 """
 Example Airflow DAG that shows how to use DisplayVideo.
 """
+from __future__ import annotations
+
 import os
-from typing import Dict
+from datetime import datetime
+from typing import cast
 
 from airflow import models
+from airflow.models.xcom_arg import XComArg
 from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
 from airflow.providers.google.marketing_platform.hooks.display_video import GoogleDisplayVideo360Hook
 from airflow.providers.google.marketing_platform.operators.display_video import (
@@ -38,7 +42,6 @@ from airflow.providers.google.marketing_platform.sensors.display_video import (
     GoogleDisplayVideo360GetSDFDownloadOperationSensor,
     GoogleDisplayVideo360ReportSensor,
 )
-from airflow.utils import dates
 
 # [START howto_display_video_env_variables]
 BUCKET = os.environ.get("GMP_DISPLAY_VIDEO_BUCKET", "gs://INVALID BUCKET NAME")
@@ -71,30 +74,32 @@ REPORT = {
     "schedule": {"frequency": "ONE_TIME"},
 }
 
-PARAMS = {"dataRange": "LAST_14_DAYS", "timezoneCode": "America/New_York"}
+PARAMETERS = {"dataRange": "LAST_14_DAYS", "timezoneCode": "America/New_York"}
 
-CREATE_SDF_DOWNLOAD_TASK_BODY_REQUEST: Dict = {
+CREATE_SDF_DOWNLOAD_TASK_BODY_REQUEST: dict = {
     "version": SDF_VERSION,
     "advertiserId": ADVERTISER_ID,
     "inventorySourceFilter": {"inventorySourceIds": []},
 }
 
-DOWNLOAD_LINE_ITEMS_REQUEST: Dict = {"filterType": ADVERTISER_ID, "format": "CSV", "fileSpec": "EWF"}
+DOWNLOAD_LINE_ITEMS_REQUEST: dict = {"filterType": ADVERTISER_ID, "format": "CSV", "fileSpec": "EWF"}
 # [END howto_display_video_env_variables]
+
+START_DATE = datetime(2021, 1, 1)
 
 with models.DAG(
     "example_display_video",
-    schedule_interval=None,  # Override to match your needs,
-    start_date=dates.days_ago(1),
+    start_date=START_DATE,
+    catchup=False,
 ) as dag1:
     # [START howto_google_display_video_createquery_report_operator]
     create_report = GoogleDisplayVideo360CreateReportOperator(body=REPORT, task_id="create_report")
-    report_id = create_report.output["report_id"]
+    report_id = cast(str, XComArg(create_report, key="report_id"))
     # [END howto_google_display_video_createquery_report_operator]
 
     # [START howto_google_display_video_runquery_report_operator]
     run_report = GoogleDisplayVideo360RunReportOperator(
-        report_id=report_id, params=PARAMS, task_id="run_report"
+        report_id=report_id, parameters=PARAMETERS, task_id="run_report"
     )
     # [END howto_google_display_video_runquery_report_operator]
 
@@ -126,8 +131,8 @@ with models.DAG(
 
 with models.DAG(
     "example_display_video_misc",
-    schedule_interval=None,  # Override to match your needs,
-    start_date=dates.days_ago(1),
+    start_date=START_DATE,
+    catchup=False,
 ) as dag2:
     # [START howto_google_display_video_upload_multiple_entity_read_files_to_big_query]
     upload_erf_to_bq = GCSToBigQueryOperator(
@@ -159,8 +164,8 @@ with models.DAG(
 
 with models.DAG(
     "example_display_video_sdf",
-    schedule_interval=None,  # Override to match your needs,
-    start_date=dates.days_ago(1),
+    start_date=START_DATE,
+    catchup=False,
 ) as dag3:
     # [START howto_google_display_video_create_sdf_download_task_operator]
     create_sdf_download_task = GoogleDisplayVideo360CreateSDFDownloadTaskOperator(

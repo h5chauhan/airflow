@@ -16,15 +16,18 @@
 # specific language governing permissions and limitations
 # under the License.
 """DAG runs APIs."""
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+
+from typing import Any
 
 from flask import url_for
 
 from airflow.api.common.experimental import check_and_get_dag
 from airflow.models import DagRun
+from airflow.utils.state import DagRunState
 
 
-def get_dag_runs(dag_id: str, state: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_dag_runs(dag_id: str, state: str | None = None) -> list[dict[str, Any]]:
     """
     Returns a list of Dag Runs for a specific DAG ID.
 
@@ -36,7 +39,7 @@ def get_dag_runs(dag_id: str, state: Optional[str] = None) -> List[Dict[str, Any
     check_and_get_dag(dag_id=dag_id)
 
     dag_runs = []
-    state = state.lower() if state else None
+    state = DagRunState(state.lower()) if state else None
     for run in DagRun.find(dag_id=dag_id, state=state):
         dag_runs.append(
             {

@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
 
 import pytest
@@ -31,7 +33,7 @@ class GcpDatastoreSystemTest(GoogleSystemTest):
     @provide_gcp_context(GCP_DATASTORE_KEY)
     def setUp(self):
         super().setUp()
-        self.create_gcs_bucket(BUCKET, location="europe-north1")
+        self.create_gcs_bucket(BUCKET, location="europe-central2")
 
     @provide_gcp_context(GCP_DATASTORE_KEY)
     def tearDown(self):

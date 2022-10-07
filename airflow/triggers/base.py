@@ -14,12 +14,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import abc
-from typing import Any, AsyncIterator, Dict, Tuple
+from typing import Any, AsyncIterator
+
+from airflow.utils.log.logging_mixin import LoggingMixin
 
 
-class BaseTrigger(abc.ABC):
+class BaseTrigger(abc.ABC, LoggingMixin):
     """
     Base class for all triggers.
 
@@ -30,14 +33,14 @@ class BaseTrigger(abc.ABC):
 
     We use the same class for both situations, and rely on all Trigger classes
     to be able to return the (Airflow-JSON-encodable) arguments that will
-    let them be reinsantiated elsewhere.
+    let them be re-instantiated elsewhere.
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         pass
 
     @abc.abstractmethod
-    def serialize(self) -> Tuple[str, Dict[str, Any]]:
+    def serialize(self) -> tuple[str, dict[str, Any]]:
         """
         Returns the information needed to reconstruct this Trigger.
 
@@ -56,7 +59,7 @@ class BaseTrigger(abc.ABC):
 
         If it yields, it is likely that it will be resumed very quickly,
         but it may not be (e.g. if the workload is being moved to another
-        trigger process, or a multi-event trigger was being used for a
+        triggerer process, or a multi-event trigger was being used for a
         single-event task defer).
 
         In either case, Trigger classes should assume they will be persisted,
@@ -67,7 +70,7 @@ class BaseTrigger(abc.ABC):
     def cleanup(self) -> None:
         """
         Called when the trigger is no longer needed and it's being removed
-        from the active trigger process.
+        from the active triggerer process.
         """
 
     def __repr__(self) -> str:

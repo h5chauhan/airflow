@@ -15,11 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import unittest
 
-from airflow.providers.amazon.aws.hooks.sqs import SQSHook
+from airflow.providers.amazon.aws.hooks.sqs import SqsHook
 
 try:
     from moto import mock_sqs
@@ -28,8 +28,8 @@ except ImportError:
 
 
 @unittest.skipIf(mock_sqs is None, 'moto sqs package missing')
-class TestAwsSQSHook(unittest.TestCase):
+class TestSqsHook(unittest.TestCase):
     @mock_sqs
     def test_get_conn(self):
-        hook = SQSHook(aws_conn_id='aws_default')
+        hook = SqsHook(aws_conn_id='aws_default')
         assert hook.get_conn() is not None

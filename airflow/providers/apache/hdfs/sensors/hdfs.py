@@ -15,14 +15,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import logging
 import re
 import sys
-from typing import Any, Dict, List, Optional, Pattern, Type
+from typing import TYPE_CHECKING, Any, Pattern, Sequence
 
 from airflow import settings
 from airflow.providers.apache.hdfs.hooks.hdfs import HDFSHook
 from airflow.sensors.base import BaseSensorOperator
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 log = logging.getLogger(__name__)
 
@@ -32,22 +37,17 @@ class HdfsSensor(BaseSensorOperator):
     Waits for a file or folder to land in HDFS
 
     :param filepath: The route to a stored file.
-    :type filepath: str
     :param hdfs_conn_id: The Airflow connection used for HDFS credentials.
-    :type hdfs_conn_id: str
     :param ignored_ext: This is the list of ignored extensions.
-    :type ignored_ext: Optional[List[str]]
     :param ignore_copying: Shall we ignore?
-    :type ignore_copying: Optional[bool]
     :param file_size: This is the size of the file.
-    :type file_size: Optional[int]
 
     .. seealso::
         For more information on how to use this operator, take a look at the guide:
         :ref:`howto/operator:HdfsSensor`
     """
 
-    template_fields = ('filepath',)
+    template_fields: Sequence[str] = ('filepath',)
     ui_color = settings.WEB_COLORS['LIGHTBLUE']
 
     def __init__(
@@ -55,10 +55,10 @@ class HdfsSensor(BaseSensorOperator):
         *,
         filepath: str,
         hdfs_conn_id: str = 'hdfs_default',
-        ignored_ext: Optional[List[str]] = None,
+        ignored_ext: list[str] | None = None,
         ignore_copying: bool = True,
-        file_size: Optional[int] = None,
-        hook: Type[HDFSHook] = HDFSHook,
+        file_size: int | None = None,
+        hook: type[HDFSHook] = HDFSHook,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -72,7 +72,7 @@ class HdfsSensor(BaseSensorOperator):
         self.hook = hook
 
     @staticmethod
-    def filter_for_filesize(result: List[Dict[Any, Any]], size: Optional[int] = None) -> List[Dict[Any, Any]]:
+    def filter_for_filesize(result: list[dict[Any, Any]], size: int | None = None) -> list[dict[Any, Any]]:
         """
         Will test the filepath result and test if its size is at least self.filesize
 
@@ -89,17 +89,14 @@ class HdfsSensor(BaseSensorOperator):
 
     @staticmethod
     def filter_for_ignored_ext(
-        result: List[Dict[Any, Any]], ignored_ext: List[str], ignore_copying: bool
-    ) -> List[Dict[Any, Any]]:
+        result: list[dict[Any, Any]], ignored_ext: list[str], ignore_copying: bool
+    ) -> list[dict[Any, Any]]:
         """
         Will filter if instructed to do so the result to remove matching criteria
 
         :param result: list of dicts returned by Snakebite ls
-        :type result: list[dict]
         :param ignored_ext: list of ignored extensions
-        :type ignored_ext: list
         :param ignore_copying: shall we ignore ?
-        :type ignore_copying: bool
         :return: list of dicts which were not removed
         :rtype: list[dict]
         """
@@ -115,7 +112,7 @@ class HdfsSensor(BaseSensorOperator):
             log.debug('HdfsSensor.poke: after ext filter result is %s', result)
         return result
 
-    def poke(self, context: Dict[Any, Any]) -> bool:
+    def poke(self, context: Context) -> bool:
         """Get a snakebite client connection and check for file."""
         sb_client = self.hook(self.hdfs_conn_id).get_conn()
         self.log.info('Poking for file %s', self.filepath)
@@ -149,7 +146,7 @@ class HdfsRegexSensor(HdfsSensor):
         super().__init__(*args, **kwargs)
         self.regex = regex
 
-    def poke(self, context: Dict[Any, Any]) -> bool:
+    def poke(self, context: Context) -> bool:
         """
         Poke matching files in a directory with self.regex
 
@@ -182,7 +179,7 @@ class HdfsFolderSensor(HdfsSensor):
         super().__init__(*args, **kwargs)
         self.be_empty = be_empty
 
-    def poke(self, context: Dict[str, Any]) -> bool:
+    def poke(self, context: Context) -> bool:
         """
         Poke for a non empty directory
 

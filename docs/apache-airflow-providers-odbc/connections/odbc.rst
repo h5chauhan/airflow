@@ -65,7 +65,7 @@ Extra (optional)
         * key-value pairs under ``connect_kwargs`` will be passed onto ``pyodbc.connect`` as kwargs
     - ``sqlalchemy_scheme``
         * This is only used when ``get_uri`` is invoked in
-          :py:meth:`~airflow.hooks.dbapi.DbApiHook.get_sqlalchemy_engine`.  By default, the hook uses
+          :py:meth:`~airflow.providers.common.sql.hooks.sql.DbApiHook.get_sqlalchemy_engine`.  By default, the hook uses
           scheme ``mssql+pyodbc``.  You may pass a string value here to override.
 
     .. note::
@@ -78,7 +78,7 @@ Extra (optional)
     .. code-block:: json
 
         {
-          "Driver": "ODBC Driver 17 for SQL Server",
+          "Driver": "ODBC Driver 18 for SQL Server",
           "ApplicationIntent": "ReadOnly",
           "TrustedConnection": "Yes"
         }
@@ -96,7 +96,7 @@ Extra (optional)
 
     .. code-block:: bash
 
-        export AIRFLOW_CONN_MSSQL_DEFAULT='mssql-odbc://my_user:XXXXXXXXXXXX@1.1.1.1:1433/my_database?Driver=ODBC+Driver+17+for+SQL+Server&ApplicationIntent=ReadOnly&TrustedConnection=Yes'
+        export AIRFLOW_CONN_MSSQL_DEFAULT='mssql-odbc://my_user:XXXXXXXXXXXX@1.1.1.1:1433/my_database?Driver=ODBC+Driver+18+for+SQL+Server&ApplicationIntent=ReadOnly&TrustedConnection=Yes'
 
     If you want to pass keyword arguments to ``pyodbc.connect``, you may supply a dictionary
     under ``connect_kwargs``.
@@ -107,7 +107,7 @@ Extra (optional)
     .. code-block:: json
 
         {
-          "Driver": "ODBC Driver 17 for SQL Server",
+          "Driver": "ODBC Driver 18 for SQL Server",
           "ApplicationIntent": "ReadOnly",
           "TrustedConnection": "Yes",
           "connect_kwargs": {

@@ -14,11 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import unittest
 from unittest import mock
 
 from airflow.providers.amazon.aws.hooks.dms import DmsHook
-from airflow.providers.amazon.aws.operators.dms_start_task import DmsStartTaskOperator
+from airflow.providers.amazon.aws.operators.dms import DmsStartTaskOperator
 
 TASK_ARN = 'test_arn'
 TASK_DATA = {

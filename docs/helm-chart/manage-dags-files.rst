@@ -24,11 +24,13 @@ When you create new or modify existing DAG files, it is necessary to deploy them
 Bake DAGs in Docker image
 -------------------------
 
-The recommended way to update your DAGs with this chart is to build a new docker image with the latest DAG code:
+With this approach, you include your dag files and related code in the airflow image.
+
+This method requires redeploying the services in the helm chart with the new docker image in order to deploy the new DAG code. This can work well particularly if DAG code is not expected to change frequently.
 
 .. code-block:: bash
 
-    docker build --tag "my-company/airflow:8a0da78" . -f - <<EOF
+    docker build --pull --tag "my-company/airflow:8a0da78" . -f - <<EOF
     FROM apache/airflow
 
     COPY ./dags/ \${AIRFLOW_HOME}/dags/
@@ -37,13 +39,13 @@ The recommended way to update your DAGs with this chart is to build a new docker
 
 .. note::
 
-   In airflow images prior to version 2.0.2, there was a bug that required you to use
-   a bit longer Dockerfile, to make sure the image remains OpenShift-compatible (i.e dag
+   In Airflow images prior to version 2.0.2, there was a bug that required you to use
+   a bit longer Dockerfile, to make sure the image remains OpenShift-compatible (i.e DAG
    has root group similarly as other files). In 2.0.2 this has been fixed.
 
 .. code-block:: bash
 
-    docker build --tag "my-company/airflow:8a0da78" . -f - <<EOF
+    docker build --pull --tag "my-company/airflow:8a0da78" . -f - <<EOF
     FROM apache/airflow:2.0.2
 
     USER root
@@ -71,12 +73,30 @@ Finally, update the Airflow pods with that image:
 
 If you are deploying an image with a constant tag, you need to make sure that the image is pulled every time.
 
+.. warning::
+
+    Using constant tag should be used only for testing/development purpose. It is a bad practice to use the same tag as you'll lose the history of your code.
+
 .. code-block:: bash
 
     helm upgrade --install airflow apache-airflow/airflow \
       --set images.airflow.repository=my-company/airflow \
       --set images.airflow.tag=8a0da78 \
-      --set images.airflow.pullPolicy=Always
+      --set images.airflow.pullPolicy=Always \
+      --set airflowPodAnnotations.random=r$(uuidgen)
+
+The randomly generated pod annotation will ensure that pods are refreshed on helm upgrade.
+
+If you are deploying an image from a private repository, you need to create a secret, e.g. ``gitlab-registry-credentials`` (refer `Pull an Image from a Private Registry <https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/>`_ for details), and specify it using ``--set registry.secretName``:
+
+
+.. code-block:: bash
+
+    helm upgrade --install airflow apache-airflow/airflow \
+      --set images.airflow.repository=my-company/airflow \
+      --set images.airflow.tag=8a0da78 \
+      --set images.airflow.pullPolicy=Always \
+      --set registry.secretName=gitlab-registry-credentials
 
 Mounting DAGs using Git-Sync sidecar with Persistence enabled
 -------------------------------------------------------------
@@ -93,15 +113,6 @@ for details.
     helm upgrade --install airflow apache-airflow/airflow \
       --set dags.persistence.enabled=true \
       --set dags.gitSync.enabled=true
-      # you can also override the other persistence or gitSync values
-      # by setting the  dags.persistence.* and dags.gitSync.* values
-      # Please refer to values.yaml for details
-
-.. code-block:: bash
-
-    helm upgrade --install airflow apache-airflow/airflow \
-      --set dags.persistence.enabled=true \
-      --set dags.gitSync.enabled=true \
       # you can also override the other persistence or gitSync values
       # by setting the  dags.persistence.* and dags.gitSync.* values
       # Please refer to values.yaml for details
@@ -123,24 +134,24 @@ seconds. If you are using the ``KubernetesExecutor``, Git-sync will run as an in
       # by setting the  dags.gitSync.* values
       # Refer values.yaml for details
 
-When using ``apache-airflow>=2.0.0``, :ref:`DAG Serialization <apache-airflow:dag-serialization>` is enabled by default,
+When using ``apache-airflow >= 2.0.0``, :ref:`DAG Serialization <apache-airflow:dag-serialization>` is enabled by default,
 hence Webserver does not need access to DAG files, so ``git-sync`` sidecar is not run on Webserver.
 
 Mounting DAGs from an externally populated PVC
 ----------------------------------------------
 
-In this approach, Airflow will read the DAGs from a PVC which has ``ReadOnlyMany`` or ``ReadWriteMany`` access mode. You will have to ensure that the PVC is populated/updated with the required DAGs(this won't be handled by the chart). You can pass in the name of the  volume claim to the chart
+In this approach, Airflow will read the DAGs from a PVC which has ``ReadOnlyMany`` or ``ReadWriteMany`` access mode. You will have to ensure that the PVC is populated/updated with the required DAGs (this won't be handled by the chart). You pass in the name of the volume claim to the chart:
 
 .. code-block:: bash
 
     helm upgrade --install airflow apache-airflow/airflow \
       --set dags.persistence.enabled=true \
-      --set dags.persistence.existingClaim=my-volume-claim
+      --set dags.persistence.existingClaim=my-volume-claim \
       --set dags.gitSync.enabled=false
 
-Mounting DAGs from a private Github repo using Git-Sync sidecar
+Mounting DAGs from a private GitHub repo using Git-Sync sidecar
 ---------------------------------------------------------------
-Create a private repo on Github if you have not created one already.
+Create a private repo on GitHub if you have not created one already.
 
 Then create your ssh keys:
 
@@ -166,7 +177,7 @@ In this example, you will create a yaml file called ``override-values.yaml`` to 
     dags:
       gitSync:
         enabled: true
-        repo: ssh://git@github.com/<username>/<private-repo-name>.git
+        repo: git@github.com/<username>/<private-repo-name>.git
         branch: <branch-name>
         subPath: ""
         sshKeySecret: airflow-ssh-secret
@@ -184,7 +195,7 @@ Finally, from the context of your Airflow Helm chart directory, you can install 
     helm upgrade --install airflow apache-airflow/airflow -f override-values.yaml
 
 If you have done everything correctly, Git-Sync will pick up the changes you make to the DAGs
-in your private Github repo.
+in your private GitHub repo.
 
 You should take this a step further and set ``dags.gitSync.knownHosts`` so you are not susceptible to man-in-the-middle
 attacks. This process is documented in the :ref:`production guide <production-guide:knownhosts>`.

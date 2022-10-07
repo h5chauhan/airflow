@@ -15,9 +15,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Sequence
 
 from googleapiclient.discovery import Resource, build
 
@@ -28,14 +28,14 @@ from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 class GoogleDeploymentManagerHook(GoogleBaseHook):
     """
     Interact with Google Cloud Deployment Manager using the Google Cloud connection.
-    This allows for scheduled and programmatic inspection and deletion fo resources managed by GDM.
+    This allows for scheduled and programmatic inspection and deletion of resources managed by GDM.
     """
 
     def __init__(
         self,
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -55,19 +55,16 @@ class GoogleDeploymentManagerHook(GoogleBaseHook):
     @GoogleBaseHook.fallback_to_default_project_id
     def list_deployments(
         self,
-        project_id: Optional[str] = None,
-        deployment_filter: Optional[str] = None,
-        order_by: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        project_id: str | None = None,
+        deployment_filter: str | None = None,
+        order_by: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Lists deployments in a google cloud project.
 
         :param project_id: The project ID for this request.
-        :type project_id: str
         :param deployment_filter: A filter expression which limits resources returned in the response.
-        :type deployment_filter: str
         :param order_by: A field name to order by, ex: "creationTimestamp desc"
-        :type order_by: Optional[str]
         :rtype: list
         """
         deployments = []  # type: List[Dict]
@@ -84,17 +81,14 @@ class GoogleDeploymentManagerHook(GoogleBaseHook):
 
     @GoogleBaseHook.fallback_to_default_project_id
     def delete_deployment(
-        self, project_id: Optional[str], deployment: Optional[str] = None, delete_policy: Optional[str] = None
+        self, project_id: str | None, deployment: str | None = None, delete_policy: str | None = None
     ) -> None:
         """
         Deletes a deployment and all associated resources in a google cloud project.
 
         :param project_id: The project ID for this request.
-        :type project_id: str
         :param deployment: The name of the deployment for this request.
-        :type deployment: str
         :param delete_policy: Sets the policy to use for deleting resources. (ABANDON | DELETE)
-        :type delete_policy: string
 
         :rtype: None
         """

@@ -14,6 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import sys
 import unittest
 import uuid
@@ -83,7 +85,7 @@ class TestSecret(unittest.TestCase):
             'kind': 'Pod',
             'metadata': {
                 'labels': {'app': 'myapp'},
-                'name': 'myapp-pod.cf4a56d281014217b0272af6216feb48',
+                'name': 'myapp-pod-cf4a56d281014217b0272af6216feb48',
                 'namespace': 'default',
             },
             'spec': {

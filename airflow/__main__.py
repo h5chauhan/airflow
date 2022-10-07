@@ -17,8 +17,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """Main executable module"""
+from __future__ import annotations
 
 import os
 
@@ -33,7 +33,6 @@ def main():
     if conf.get("core", "security") == 'kerberos':
         os.environ['KRB5CCNAME'] = conf.get('kerberos', 'ccache')
         os.environ['KRB5_KTNAME'] = conf.get('kerberos', 'keytab')
-
     parser = cli_parser.get_parser()
     argcomplete.autocomplete(parser)
     args = parser.parse_args()

@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -22,7 +23,7 @@ import pytest
 
 from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.hooks.dms import DmsHook
-from airflow.providers.amazon.aws.sensors.dms_task import DmsTaskCompletedSensor
+from airflow.providers.amazon.aws.sensors.dms import DmsTaskCompletedSensor
 
 
 class TestDmsTaskCompletedSensor(unittest.TestCase):

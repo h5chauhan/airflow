@@ -15,12 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import pytest
 
 from airflow.models import DagModel
 from airflow.models.dagbag import DagBag
 from airflow.models.serialized_dag import SerializedDagModel
-from airflow.operators.dummy import DummyOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.operators.subdag import SubDagOperator
 from airflow.utils import timezone
 from airflow.utils.session import create_session
@@ -31,12 +33,12 @@ from tests.test_utils.db import clear_db_runs
 @pytest.fixture()
 def running_subdag(admin_client, dag_maker):
     with dag_maker(dag_id="running_dag.subdag") as subdag:
-        DummyOperator(task_id="dummy")
+        EmptyOperator(task_id="empty")
 
-    with dag_maker(dag_id="running_dag") as dag:
+    with pytest.deprecated_call(), dag_maker(dag_id="running_dag") as dag:
         SubDagOperator(task_id="subdag", subdag=subdag)
 
-    dag_bag = DagBag(include_examples=False, include_smart_sensor=False)
+    dag_bag = DagBag(include_examples=False)
     dag_bag.bag_dag(dag, root_dag=dag)
 
     with create_session() as session:
@@ -44,10 +46,12 @@ def running_subdag(admin_client, dag_maker):
         dag_bag.sync_to_db(session=session)
 
         # Simulate triggering the SubDagOperator to run the subdag.
+        logical_date = timezone.datetime(2016, 1, 1)
         subdag.create_dagrun(
             run_id="blocked_run_example_bash_operator",
             state=State.RUNNING,
-            execution_date=timezone.datetime(2016, 1, 1),
+            execution_date=logical_date,
+            data_interval=(logical_date, logical_date),
             start_date=timezone.datetime(2016, 1, 1),
             session=session,
         )

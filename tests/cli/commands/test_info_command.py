@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import contextlib
 import importlib
@@ -81,8 +82,8 @@ class TestAirflowInfo:
 
     @classmethod
     def teardown_class(cls) -> None:
-        for handler_ref in logging._handlerList[:]:
-            logging._removeHandlerRef(handler_ref)
+        for handler_ref in logging._handlerList[:]:  # type: ignore
+            logging._removeHandlerRef(handler_ref)  # type: ignore
         importlib.reload(airflow_local_settings)
         configure_logging()
 
@@ -96,7 +97,7 @@ class TestAirflowInfo:
             ("core", "dags_folder"): "TEST_DAGS_FOLDER",
             ("core", "plugins_folder"): "TEST_PLUGINS_FOLDER",
             ("logging", "base_log_folder"): "TEST_LOG_FOLDER",
-            ('core', 'sql_alchemy_conn'): 'postgresql+psycopg2://postgres:airflow@postgres/airflow',
+            ('database', 'sql_alchemy_conn'): 'postgresql+psycopg2://postgres:airflow@postgres/airflow',
             ('logging', 'remote_logging'): 'True',
             ('logging', 'remote_base_log_folder'): 's3://logs-name',
         }
@@ -144,7 +145,7 @@ class TestAirflowInfo:
 
     @conf_vars(
         {
-            ('core', 'sql_alchemy_conn'): 'postgresql+psycopg2://postgres:airflow@postgres/airflow',
+            ('database', 'sql_alchemy_conn'): 'postgresql+psycopg2://postgres:airflow@postgres/airflow',
         }
     )
     def test_show_info(self):
@@ -157,7 +158,7 @@ class TestAirflowInfo:
 
     @conf_vars(
         {
-            ('core', 'sql_alchemy_conn'): 'postgresql+psycopg2://postgres:airflow@postgres/airflow',
+            ('database', 'sql_alchemy_conn'): 'postgresql+psycopg2://postgres:airflow@postgres/airflow',
         }
     )
     def test_show_info_anonymize(self):
@@ -177,7 +178,7 @@ def setup_parser():
 class TestInfoCommandMockHttpx:
     @conf_vars(
         {
-            ('core', 'sql_alchemy_conn'): 'postgresql+psycopg2://postgres:airflow@postgres/airflow',
+            ('database', 'sql_alchemy_conn'): 'postgresql+psycopg2://postgres:airflow@postgres/airflow',
         }
     )
     def test_show_info_anonymize_fileio(self, httpx_mock, setup_parser):

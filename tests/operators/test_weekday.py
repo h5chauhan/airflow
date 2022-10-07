@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import datetime
 import unittest
@@ -24,8 +25,8 @@ from freezegun import freeze_time
 from parameterized import parameterized
 
 from airflow.exceptions import AirflowException
-from airflow.models import DAG, DagRun, TaskInstance as TI
-from airflow.operators.dummy import DummyOperator
+from airflow.models import DAG, DagRun, TaskInstance as TI, XCom
+from airflow.operators.empty import EmptyOperator
 from airflow.operators.weekday import BranchDayOfWeekOperator
 from airflow.utils import timezone
 from airflow.utils.session import create_session
@@ -43,26 +44,26 @@ class TestBranchDayOfWeekOperator(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-
         with create_session() as session:
             session.query(DagRun).delete()
             session.query(TI).delete()
+            session.query(XCom).delete()
 
     def setUp(self):
         self.dag = DAG(
             "branch_day_of_week_operator_test",
             start_date=DEFAULT_DATE,
-            schedule_interval=INTERVAL,
+            schedule=INTERVAL,
         )
-        self.branch_1 = DummyOperator(task_id="branch_1", dag=self.dag)
-        self.branch_2 = DummyOperator(task_id="branch_2", dag=self.dag)
+        self.branch_1 = EmptyOperator(task_id="branch_1", dag=self.dag)
+        self.branch_2 = EmptyOperator(task_id="branch_2", dag=self.dag)
         self.branch_3 = None
 
     def tearDown(self):
-
         with create_session() as session:
             session.query(DagRun).delete()
             session.query(TI).delete()
+            session.query(XCom).delete()
 
     def _assert_task_ids_match_states(self, dr, task_ids_to_states):
         """Helper that asserts task instances with a given id are in a given state"""
@@ -84,9 +85,16 @@ class TestBranchDayOfWeekOperator(unittest.TestCase):
             ("with-string", "Monday"),
             ("with-enum", WeekDay.MONDAY),
             ("with-enum-set", {WeekDay.MONDAY}),
+            ("with-enum-list", [WeekDay.MONDAY]),
+            ("with-enum-dict", {WeekDay.MONDAY: "some_value"}),
             ("with-enum-set-2-items", {WeekDay.MONDAY, WeekDay.FRIDAY}),
+            ("with-enum-list-2-items", [WeekDay.MONDAY, WeekDay.FRIDAY]),
+            ("with-enum-dict-2-items", {WeekDay.MONDAY: "some_value", WeekDay.FRIDAY: "some_value_2"}),
             ("with-string-set", {"Monday"}),
             ("with-string-set-2-items", {"Monday", "Friday"}),
+            ("with-set-mix-types", {"Monday", WeekDay.FRIDAY}),
+            ("with-list-mix-types", ["Monday", WeekDay.FRIDAY]),
+            ("with-dict-mix-types", {"Monday": "some_value", WeekDay.FRIDAY: "some_value_2"}),
         ]
     )
     @freeze_time("2021-01-25")  # Monday
@@ -103,7 +111,7 @@ class TestBranchDayOfWeekOperator(unittest.TestCase):
 
         self.branch_1.set_upstream(branch_op)
         self.branch_2.set_upstream(branch_op)
-        self.branch_3 = DummyOperator(task_id="branch_3", dag=self.dag)
+        self.branch_3 = EmptyOperator(task_id="branch_3", dag=self.dag)
         self.branch_3.set_upstream(branch_op)
         self.dag.clear()
 
@@ -128,14 +136,14 @@ class TestBranchDayOfWeekOperator(unittest.TestCase):
 
     @freeze_time("2021-01-25")  # Monday
     def test_branch_follow_true_with_execution_date(self):
-        """Checks if BranchDayOfWeekOperator follows true branch when set use_task_execution_day"""
+        """Checks if BranchDayOfWeekOperator follows true branch when set use_task_logical_date"""
 
         branch_op = BranchDayOfWeekOperator(
             task_id="make_choice",
             follow_task_ids_if_true="branch_1",
             follow_task_ids_if_false="branch_2",
             week_day="Wednesday",
-            use_task_execution_day=True,  # We compare to DEFAULT_DATE which is Wednesday
+            use_task_logical_date=True,  # We compare to DEFAULT_DATE which is Wednesday
             dag=self.dag,
         )
 
@@ -207,12 +215,12 @@ class TestBranchDayOfWeekOperator(unittest.TestCase):
 
     def test_branch_with_invalid_type(self):
         """Check if BranchDayOfWeekOperator raises exception on unsupported weekday type"""
-        invalid_week_day = ['Monday']
+        invalid_week_day = 5
         with pytest.raises(
             TypeError,
-            match='Unsupported Type for week_day parameter:'
-            ' {}. It should be one of str, set or '
-            'Weekday enum type'.format(type(invalid_week_day)),
+            match=f"Unsupported Type for week_day parameter: {type(invalid_week_day)}."
+            "Input should be iterable type:"
+            "str, set, list, dict or Weekday enum type",
         ):
             BranchDayOfWeekOperator(
                 task_id="make_choice",
@@ -222,15 +230,21 @@ class TestBranchDayOfWeekOperator(unittest.TestCase):
                 dag=self.dag,
             )
 
-    def test_weekday_branch_invalid_weekday_number(self):
+    @parameterized.expand(
+        [
+            ("string", "Thsday", "Thsday"),
+            ("list", ["Monday", "Thsday"], "Thsday"),
+            ("set", {WeekDay.MONDAY, "Thsday"}, "Thsday"),
+        ]
+    )
+    def test_weekday_branch_invalid_weekday_value(self, _, week_day, fail_msg):
         """Check if BranchDayOfWeekOperator raises exception on wrong value of weekday"""
-        invalid_week_day = 'Thsday'
-        with pytest.raises(AttributeError, match=f'Invalid Week Day passed: "{invalid_week_day}"'):
+        with pytest.raises(AttributeError, match=f'Invalid Week Day passed: "{fail_msg}"'):
             BranchDayOfWeekOperator(
                 task_id="make_choice",
                 follow_task_ids_if_true="branch_1",
                 follow_task_ids_if_false="branch_2",
-                week_day=invalid_week_day,
+                week_day=week_day,
                 dag=self.dag,
             )
 
@@ -262,3 +276,18 @@ class TestBranchDayOfWeekOperator(unittest.TestCase):
         for ti in tis:
             if ti.task_id == 'make_choice':
                 assert ti.xcom_pull(task_ids='make_choice') == 'branch_1'
+
+    def test_deprecation_warning(self):
+        warning_message = (
+            """Parameter ``use_task_execution_day`` is deprecated. Use ``use_task_logical_date``."""
+        )
+        with pytest.warns(DeprecationWarning) as warnings:
+            BranchDayOfWeekOperator(
+                task_id="week_day_warn",
+                follow_task_ids_if_true="branch_1",
+                follow_task_ids_if_false="branch_2",
+                week_day="Monday",
+                use_task_execution_day=True,
+                dag=self.dag,
+            )
+        assert warning_message == str(warnings[0].message)

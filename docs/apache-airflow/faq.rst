@@ -41,13 +41,13 @@ There are very many reasons why your task might not be getting scheduled. Here a
   "airflow" and "DAG" in order to prevent the DagBag parsing from importing all python
   files collocated with user's DAGs.
 
-- Is your ``start_date`` set properly? The Airflow scheduler triggers the
-  task soon after the ``start_date + schedule_interval`` is passed.
+- Is your ``start_date`` set properly? For time-based DAGs, the task won't be triggered until the
+  the first schedule interval following the start date has passed.
 
-- Is your ``schedule_interval`` set properly? The default ``schedule_interval``
-  is one day (``datetime.timedelta(1)``). You must specify a different ``schedule_interval``
+- Is your ``schedule`` argument set properly? The default
+  is one day (``datetime.timedelta(1)``). You must specify a different ``schedule``
   directly to the DAG object you instantiate, not as a ``default_param``, as task instances
-  do not override their parent DAG's ``schedule_interval``.
+  do not override their parent DAG's ``schedule``.
 
 - Is your ``start_date`` beyond where you can see it in the UI? If you
   set your ``start_date`` to some time say 3 months ago, you won't be able to see
@@ -100,7 +100,7 @@ DAGs have configurations that improves efficiency:
 
 Operators or tasks also have configurations that improves efficiency and scheduling priority:
 
-- ``task_concurrency``: This parameter controls the number of concurrent running task instances across ``dag_runs``
+- ``max_active_tis_per_dag``: This parameter controls the number of concurrent running task instances across ``dag_runs``
   per task.
 - ``pool``: See :ref:`concepts:pool`.
 - ``priority_weight``: See :ref:`concepts:priority-weight`.
@@ -118,6 +118,35 @@ How do I trigger tasks based on another task's failure?
 -------------------------------------------------------
 
 You can achieve this with :ref:`concepts:trigger-rules`.
+
+How to control DAG file parsing timeout for different DAG files?
+----------------------------------------------------------------
+
+(only valid for Airflow >= 2.3.0)
+
+You can add a ``get_dagbag_import_timeout`` function in your ``airflow_local_settings.py`` which gets
+called right before a DAG file is parsed. You can return different timeout value based on the DAG file.
+When the return value is less than or equal to 0, it means no timeout during the DAG parsing.
+
+.. code-block:: python
+   :caption: airflow_local_settings.py
+   :name: airflow_local_settings.py
+
+    def get_dagbag_import_timeout(dag_file_path: str) -> Union[int, float]:
+        """
+        This setting allows to dynamically control the DAG file parsing timeout.
+
+        It is useful when there are a few DAG files requiring longer parsing times, while others do not.
+        You can control them separately instead of having one value for all DAG files.
+
+        If the return value is less than or equal to 0, it means no timeout during the DAG parsing.
+        """
+        if "slow" in dag_file_path:
+            return 90
+        if "no-timeout" in dag_file_path:
+            return 0
+        return conf.getfloat("core", "DAGBAG_IMPORT_TIMEOUT")
+
 
 When there are a lot (>1000) of dags files, how to speed up parsing of new files?
 ---------------------------------------------------------------------------------
@@ -148,19 +177,27 @@ until ``min_file_process_interval`` is reached since DAG Parser will look for mo
    :name: dag_loader.py
 
     from airflow import DAG
-    from airflow.operators.python_operator import PythonOperator
-    from datetime import datetime
+    from airflow.decorators import task
+
+    import pendulum
 
 
     def create_dag(dag_id, schedule, dag_number, default_args):
-        def hello_world_py(*args):
-            print("Hello World")
-            print("This is DAG: {}".format(str(dag_number)))
-
-        dag = DAG(dag_id, schedule_interval=schedule, default_args=default_args)
+        dag = DAG(
+            dag_id,
+            schedule=schedule,
+            default_args=default_args,
+            pendulum.datetime(2021, 9, 13, tz="UTC"),
+        )
 
         with dag:
-            t1 = PythonOperator(task_id="hello_world", python_callable=hello_world_py)
+
+            @task()
+            def hello_world():
+                print("Hello World")
+                print(f"This is DAG: {dag_number}")
+
+            hello_world()
 
         return dag
 
@@ -173,10 +210,11 @@ What's the deal with ``start_date``?
 
 ``start_date`` is partly legacy from the pre-DagRun era, but it is still
 relevant in many ways. When creating a new DAG, you probably want to set
-a global ``start_date`` for your tasks using ``default_args``. The first
+a global ``start_date`` for your tasks. This can be done by declaring your
+``start_date`` directly in the ``DAG()`` object. The first
 DagRun to be created will be based on the ``min(start_date)`` for all your
 tasks. From that point on, the scheduler creates new DagRuns based on
-your ``schedule_interval`` and the corresponding task instances run as your
+your ``schedule`` and the corresponding task instances run as your
 dependencies are met. When introducing new tasks to your DAG, you need to
 pay special attention to ``start_date``, and may want to reactivate
 inactive DagRuns to get the new task onboarded properly.
@@ -188,15 +226,15 @@ an hour after now as ``now()`` moves along.
 
 
 Previously, we also recommended using rounded ``start_date`` in relation to your
-``schedule_interval``. This meant an ``@hourly`` would be at ``00:00``
+DAG's ``schedule``. This meant an ``@hourly`` would be at ``00:00``
 minutes:seconds, a ``@daily`` job at midnight, a ``@monthly`` job on the
 first of the month. This is no longer required. Airflow will now auto align
-the ``start_date`` and the ``schedule_interval``, by using the ``start_date``
+the ``start_date`` and the ``schedule``, by using the ``start_date``
 as the moment to start looking.
 
 You can use any sensor or a ``TimeDeltaSensor`` to delay
 the execution of tasks within the schedule interval.
-While ``schedule_interval`` does allow specifying a ``datetime.timedelta``
+While ``schedule`` does allow specifying a ``datetime.timedelta``
 object, we recommend using the macros or cron expressions instead, as
 it enforces this idea of rounded schedules.
 
@@ -212,16 +250,37 @@ backfill CLI command, gets overridden by the backfill's ``start_date`` commands.
 This allows for a backfill on tasks that have ``depends_on_past=True`` to
 actually start. If this were not the case, the backfill just would not start.
 
+Using time zones
+----------------
+
+Creating a time zone aware datetime (e.g. DAG's ``start_date``) is quite simple. Just make sure to supply
+a time zone aware dates using ``pendulum``. Don't try to use standard library
+`timezone <https://docs.python.org/3/library/datetime.html#timezone-objects>`_ as they are known to
+have limitations and we deliberately disallow using them in DAGs.
+
+
+.. _faq:what-does-execution-date-mean:
 
 What does ``execution_date`` mean?
 ----------------------------------
 
-Airflow was developed as a solution for ETL needs. In the ETL world, you typically summarize data. So, if you want to
-summarize data for 2016-02-19, You would do it at 2016-02-20 midnight UTC, which would be right after all data for
-2016-02-19 becomes available.
+*Execution date* or ``execution_date`` is a historical name for what is called a
+*logical date*, and also usually the start of the data interval represented by a
+DAG run.
 
-This datetime value is available to you as :ref:`Template variables<templates:variables>` with various formats in Jinja templated
-fields. They are also included in the context dictionary given to an Operator's execute function.
+Airflow was developed as a solution for ETL needs. In the ETL world, you
+typically summarize data. So, if you want to summarize data for ``2016-02-19``,
+you would do it at ``2016-02-20`` midnight UTC, which would be right after all
+data for ``2016-02-19`` becomes available. This interval between midnights of
+``2016-02-19`` and ``2016-02-20`` is called the *data interval*, and since it
+represents data in the date of ``2016-02-19``, this date is also called the
+run's *logical date*, or the date that this DAG run is executed for, thus
+*execution date*.
+
+For backward compatibility, a datetime value ``execution_date`` is still
+as :ref:`Template variables<templates:variables>` with various formats in Jinja
+templated fields, and in Airflow's Python API. It is also included in the
+context dictionary given to an Operator's execute function.
 
 .. code-block:: python
 
@@ -229,7 +288,17 @@ fields. They are also included in the context dictionary given to an Operator's 
             def execute(self, context):
                 logging.info(context["execution_date"])
 
-Note that ``ds`` refers to date_string, not date start as may be confusing to some.
+However, you should always use ``data_interval_start`` or ``data_interval_end``
+if possible, since those names are semantically more correct and less prone to
+misunderstandings.
+
+Note that ``ds`` (the YYYY-MM-DD form of ``data_interval_start``) refers to
+*date* ***string***, not *date* ***start*** as may be confusing to some.
+
+.. tip::
+
+    For more information on ``logical date``, see :ref:`data-interval` and
+    :ref:`concepts:dag-run`.
 
 
 How to create DAGs dynamically?
@@ -295,7 +364,8 @@ commonly attempted in ``user_defined_macros``.
 
         bo = BashOperator(task_id="my_task", bash_command="echo {{ my_custom_macro }}", dag=dag)
 
-This will echo "day={{ ds }}" instead of "day=2020-01-01" for a dagrun with the execution date 2020-01-01 00:00:00.
+This will echo "day={{ ds }}" instead of "day=2020-01-01" for a DAG run with a
+``data_interval_start`` of 2020-01-01 00:00:00.
 
 .. code-block:: python
 
@@ -308,9 +378,9 @@ Why ``next_ds`` or ``prev_ds`` might not contain expected values?
 ------------------------------------------------------------------
 
 - When scheduling DAG, the ``next_ds`` ``next_ds_nodash`` ``prev_ds`` ``prev_ds_nodash`` are calculated using
-  ``execution_date`` and ``schedule_interval``. If you set ``schedule_interval`` as ``None`` or ``@once``,
+  ``logical_date`` and the DAG's schedule (if applicable). If you set ``schedule`` as ``None`` or ``@once``,
   the ``next_ds``, ``next_ds_nodash``, ``prev_ds``, ``prev_ds_nodash`` values will be set to ``None``.
-- When manually triggering DAG, the schedule will be ignored, and ``prev_ds == next_ds == ds``
+- When manually triggering DAG, the schedule will be ignored, and ``prev_ds == next_ds == ds``.
 
 
 Task execution interactions
@@ -335,14 +405,14 @@ upstream task.
 
 .. code-block:: python
 
+    import pendulum
+
     from airflow.decorators import dag, task
     from airflow.exceptions import AirflowException
     from airflow.utils.trigger_rule import TriggerRule
 
-    from datetime import datetime
 
-
-    @task
+    @task()
     def a_func():
         raise AirflowException
 
@@ -354,7 +424,7 @@ upstream task.
         pass
 
 
-    @dag(schedule_interval="@once", start_date=datetime(2021, 1, 1))
+    @dag(schedule="@once", start_date=pendulum.datetime(2021, 1, 1, tz="UTC"))
     def my_dag():
         a = a_func()
         b = b_func()

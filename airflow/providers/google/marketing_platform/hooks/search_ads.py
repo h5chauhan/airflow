@@ -16,7 +16,9 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains Google Search Ads 360 hook."""
-from typing import Any, Dict, Optional, Sequence, Union
+from __future__ import annotations
+
+from typing import Any, Optional, Sequence
 
 from googleapiclient.discovery import build
 
@@ -32,8 +34,8 @@ class GoogleSearchAdsHook(GoogleBaseHook):
         self,
         api_version: str = "v2",
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
@@ -54,12 +56,11 @@ class GoogleSearchAdsHook(GoogleBaseHook):
             )
         return self._conn
 
-    def insert_report(self, report: Dict[str, Any]) -> Any:
+    def insert_report(self, report: dict[str, Any]) -> Any:
         """
         Inserts a report request into the reporting system.
 
         :param report: Report to be generated.
-        :type report: Dict[str, Any]
         """
         response = self.get_conn().reports().request(body=report).execute(num_retries=self.num_retries)
         return response
@@ -69,7 +70,6 @@ class GoogleSearchAdsHook(GoogleBaseHook):
         Polls for the status of a report request.
 
         :param report_id: ID of the report request being polled.
-        :type report_id: str
         """
         response = self.get_conn().reports().get(reportId=report_id).execute(num_retries=self.num_retries)
         return response
@@ -79,9 +79,7 @@ class GoogleSearchAdsHook(GoogleBaseHook):
         Downloads a report file encoded in UTF-8.
 
         :param report_fragment: The index of the report fragment to download.
-        :type report_fragment: int
         :param report_id: ID of the report.
-        :type report_id: str
         """
         response = (
             self.get_conn()

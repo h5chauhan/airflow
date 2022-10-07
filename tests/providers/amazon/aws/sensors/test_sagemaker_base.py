@@ -15,13 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 
 import pytest
 
 from airflow.exceptions import AirflowException
-from airflow.providers.amazon.aws.sensors.sagemaker_base import SageMakerBaseSensor
+from airflow.providers.amazon.aws.sensors.sagemaker import SageMakerBaseSensor
 
 
 class TestSagemakerBaseSensor(unittest.TestCase):

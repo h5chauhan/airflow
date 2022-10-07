@@ -14,18 +14,20 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import logging
 import os
 import struct
 from datetime import datetime
-from typing import Iterable, List, Optional
+from typing import Iterable
 
 from sqlalchemy import BigInteger, Column, String, Text
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.sql.expression import literal
 
 from airflow.exceptions import AirflowException, DagCodeNotFound
 from airflow.models.base import Base
-from airflow.settings import STORE_DAG_CODE
 from airflow.utils import timezone
 from airflow.utils.file import correct_maybe_zipped, open_maybe_zipped
 from airflow.utils.session import provide_session
@@ -38,9 +40,6 @@ class DagCode(Base):
     """A table for DAGs code.
 
     dag_code table contains code of DAG files synchronized by scheduler.
-    This feature is controlled by:
-
-    * ``[core] store_dag_code = True``: enable this feature
 
     For details on dag serialization see SerializedDagModel
     """
@@ -51,9 +50,9 @@ class DagCode(Base):
     fileloc = Column(String(2000), nullable=False)
     # The max length of fileloc exceeds the limit of indexing.
     last_updated = Column(UtcDateTime, nullable=False)
-    source_code = Column(Text, nullable=False)
+    source_code = Column(Text().with_variant(MEDIUMTEXT(), 'mysql'), nullable=False)
 
-    def __init__(self, full_filepath: str, source_code: Optional[str] = None):
+    def __init__(self, full_filepath: str, source_code: str | None = None):
         self.fileloc = full_filepath
         self.fileloc_hash = DagCode.dag_fileloc_hash(self.fileloc)
         self.last_updated = timezone.utcnow()
@@ -98,10 +97,11 @@ class DagCode(Base):
             hashes_to_filelocs = {DagCode.dag_fileloc_hash(fileloc): fileloc for fileloc in filelocs}
             message = ""
             for fileloc in conflicting_filelocs:
+                filename = hashes_to_filelocs[DagCode.dag_fileloc_hash(fileloc)]
                 message += (
-                    "Filename '{}' causes a hash collision in the "
-                    + "database with '{}'. Please rename the file."
-                ).format(hashes_to_filelocs[DagCode.dag_fileloc_hash(fileloc)], fileloc)
+                    f"Filename '{filename}' causes a hash collision in the "
+                    f"database with '{fileloc}'. Please rename the file."
+                )
             raise AirflowException(message)
 
         existing_filelocs = {dag_code.fileloc for dag_code in existing_orm_dag_codes}
@@ -125,7 +125,7 @@ class DagCode(Base):
 
     @classmethod
     @provide_session
-    def remove_deleted_code(cls, alive_dag_filelocs: List[str], session=None):
+    def remove_deleted_code(cls, alive_dag_filelocs: list[str], session=None):
         """Deletes code not included in alive_dag_filelocs.
 
         :param alive_dag_filelocs: file paths of alive DAGs
@@ -165,10 +165,7 @@ class DagCode(Base):
 
         :return: source code as string
         """
-        if STORE_DAG_CODE:
-            return cls._get_code_from_db(fileloc)
-        else:
-            return cls._get_code_from_file(fileloc)
+        return cls._get_code_from_db(fileloc)
 
     @staticmethod
     def _get_code_from_file(fileloc):

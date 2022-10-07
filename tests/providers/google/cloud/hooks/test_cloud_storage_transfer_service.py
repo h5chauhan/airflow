@@ -15,7 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
+
 import json
 import re
 import unittest
@@ -500,9 +501,7 @@ class TestGCPTransferServiceHookWithPassedProjectId(unittest.TestCase):
 
         with pytest.raises(
             AirflowException,
-            match="An unexpected operation status was encountered. Expected: {}".format(
-                ", ".join(expected_statuses)
-            ),
+            match=f"An unexpected operation status was encountered. Expected: {', '.join(expected_statuses)}",
         ):
             CloudDataTransferServiceHook.operations_contain_expected_statuses(
                 operations, GcpTransferOperationStatus.IN_PROGRESS

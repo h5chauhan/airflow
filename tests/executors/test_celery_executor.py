@@ -15,8 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import contextlib
 import json
+import logging
 import os
 import signal
 import sys
@@ -32,6 +35,7 @@ from celery.backends.base import BaseBackend, BaseKeyValueStoreBackend
 from celery.backends.database import DatabaseBackend
 from celery.contrib.testing.worker import start_worker
 from celery.result import AsyncResult
+from freezegun import freeze_time
 from kombu.asynchronous import set_event_loop
 from parameterized import parameterized
 
@@ -94,12 +98,12 @@ def _prepare_app(broker_url=None, execute=None):
             set_event_loop(None)
 
 
-class TestCeleryExecutor(unittest.TestCase):
-    def setUp(self) -> None:
+class TestCeleryExecutor:
+    def setup_method(self) -> None:
         db.clear_db_runs()
         db.clear_db_jobs()
 
-    def tearDown(self) -> None:
+    def teardown_method(self) -> None:
         db.clear_db_runs()
         db.clear_db_jobs()
 
@@ -184,7 +188,7 @@ class TestCeleryExecutor(unittest.TestCase):
                 'command',
                 1,
                 None,
-                SimpleTaskInstance(ti=TaskInstance(task=task, execution_date=datetime.now())),
+                SimpleTaskInstance.from_ti(ti=TaskInstance(task=task, run_id=None)),
             )
             key = ('fail', 'fake_simple_ti', when, 0)
             executor.queued_tasks[key] = value_tuple
@@ -196,10 +200,10 @@ class TestCeleryExecutor(unittest.TestCase):
     @pytest.mark.integration("redis")
     @pytest.mark.integration("rabbitmq")
     @pytest.mark.backend("mysql", "postgres")
-    def test_retry_on_error_sending_task(self):
+    def test_retry_on_error_sending_task(self, caplog):
         """Test that Airflow retries publishing tasks to Celery Broker at least 3 times"""
 
-        with _prepare_app(), self.assertLogs(celery_executor.log) as cm, mock.patch.object(
+        with _prepare_app(), caplog.at_level(logging.INFO), mock.patch.object(
             # Mock `with timeout()` to _instantly_ fail.
             celery_executor.timeout,
             "__enter__",
@@ -217,38 +221,29 @@ class TestCeleryExecutor(unittest.TestCase):
                 'command',
                 1,
                 None,
-                SimpleTaskInstance(ti=TaskInstance(task=task, execution_date=datetime.now())),
+                SimpleTaskInstance.from_ti(ti=TaskInstance(task=task, run_id=None)),
             )
             key = ('fail', 'fake_simple_ti', when, 0)
             executor.queued_tasks[key] = value_tuple
 
             # Test that when heartbeat is called again, task is published again to Celery Queue
             executor.heartbeat()
+            assert dict(executor.task_publish_retries) == {key: 1}
+            assert 1 == len(executor.queued_tasks), "Task should remain in queue"
+            assert executor.event_buffer == {}
+            assert f"[Try 1 of 3] Task Timeout Error for Task: ({key})." in caplog.text
+
+            executor.heartbeat()
             assert dict(executor.task_publish_retries) == {key: 2}
             assert 1 == len(executor.queued_tasks), "Task should remain in queue"
             assert executor.event_buffer == {}
-            assert (
-                "INFO:airflow.executors.celery_executor.CeleryExecutor:"
-                f"[Try 1 of 3] Task Timeout Error for Task: ({key})." in cm.output
-            )
+            assert f"[Try 2 of 3] Task Timeout Error for Task: ({key})." in caplog.text
 
             executor.heartbeat()
             assert dict(executor.task_publish_retries) == {key: 3}
             assert 1 == len(executor.queued_tasks), "Task should remain in queue"
             assert executor.event_buffer == {}
-            assert (
-                "INFO:airflow.executors.celery_executor.CeleryExecutor:"
-                f"[Try 2 of 3] Task Timeout Error for Task: ({key})." in cm.output
-            )
-
-            executor.heartbeat()
-            assert dict(executor.task_publish_retries) == {key: 4}
-            assert 1 == len(executor.queued_tasks), "Task should remain in queue"
-            assert executor.event_buffer == {}
-            assert (
-                "INFO:airflow.executors.celery_executor.CeleryExecutor:"
-                f"[Try 3 of 3] Task Timeout Error for Task: ({key})." in cm.output
-            )
+            assert f"[Try 3 of 3] Task Timeout Error for Task: ({key})." in caplog.text
 
             executor.heartbeat()
             assert dict(executor.task_publish_retries) == {}
@@ -287,7 +282,12 @@ class TestCeleryExecutor(unittest.TestCase):
         # Check that we validate _on the receiving_ side, not just sending side
         with mock.patch(
             'airflow.executors.celery_executor._execute_in_subprocess'
-        ) as mock_subproc, mock.patch('airflow.executors.celery_executor._execute_in_fork') as mock_fork:
+        ) as mock_subproc, mock.patch(
+            'airflow.executors.celery_executor._execute_in_fork'
+        ) as mock_fork, mock.patch(
+            "celery.app.task.Task.request"
+        ) as mock_task:
+            mock_task.id = "abcdef-124215-abcdef"
             if expected_exception:
                 with pytest.raises(expected_exception):
                     celery_executor.execute_command(command)
@@ -296,27 +296,27 @@ class TestCeleryExecutor(unittest.TestCase):
             else:
                 celery_executor.execute_command(command)
                 # One of these should be called.
-                assert mock_subproc.call_args == ((command,),) or mock_fork.call_args == ((command,),)
+                assert mock_subproc.call_args == (
+                    (command, "abcdef-124215-abcdef"),
+                ) or mock_fork.call_args == ((command, "abcdef-124215-abcdef"),)
 
     @pytest.mark.backend("mysql", "postgres")
     def test_try_adopt_task_instances_none(self):
-        date = datetime.utcnow()
         start_date = datetime.utcnow() - timedelta(days=2)
 
         with DAG("test_try_adopt_task_instances_none"):
             task_1 = BaseOperator(task_id="task_1", start_date=start_date)
 
-        key1 = TaskInstance(task=task_1, execution_date=date)
+        key1 = TaskInstance(task=task_1, run_id=None)
         tis = [key1]
         executor = celery_executor.CeleryExecutor()
 
         assert executor.try_adopt_task_instances(tis) == tis
 
     @pytest.mark.backend("mysql", "postgres")
+    @freeze_time("2020-01-01")
     def test_try_adopt_task_instances(self):
-        exec_date = timezone.utcnow() - timedelta(minutes=2)
         start_date = timezone.utcnow() - timedelta(days=2)
-        queued_dttm = timezone.utcnow() - timedelta(minutes=1)
 
         try_number = 1
 
@@ -324,60 +324,157 @@ class TestCeleryExecutor(unittest.TestCase):
             task_1 = BaseOperator(task_id="task_1", start_date=start_date)
             task_2 = BaseOperator(task_id="task_2", start_date=start_date)
 
-        ti1 = TaskInstance(task=task_1, execution_date=exec_date)
+        ti1 = TaskInstance(task=task_1, run_id=None)
         ti1.external_executor_id = '231'
-        ti1.queued_dttm = queued_dttm
         ti1.state = State.QUEUED
-        ti2 = TaskInstance(task=task_2, execution_date=exec_date)
+        ti2 = TaskInstance(task=task_2, run_id=None)
         ti2.external_executor_id = '232'
-        ti2.queued_dttm = queued_dttm
         ti2.state = State.QUEUED
 
         tis = [ti1, ti2]
         executor = celery_executor.CeleryExecutor()
         assert executor.running == set()
         assert executor.adopted_task_timeouts == {}
+        assert executor.stalled_task_timeouts == {}
         assert executor.tasks == {}
 
         not_adopted_tis = executor.try_adopt_task_instances(tis)
 
-        key_1 = TaskInstanceKey(dag.dag_id, task_1.task_id, exec_date, try_number)
-        key_2 = TaskInstanceKey(dag.dag_id, task_2.task_id, exec_date, try_number)
+        key_1 = TaskInstanceKey(dag.dag_id, task_1.task_id, None, try_number)
+        key_2 = TaskInstanceKey(dag.dag_id, task_2.task_id, None, try_number)
         assert executor.running == {key_1, key_2}
-        assert dict(executor.adopted_task_timeouts) == {
-            key_1: queued_dttm + executor.task_adoption_timeout,
-            key_2: queued_dttm + executor.task_adoption_timeout,
+        assert executor.adopted_task_timeouts == {
+            key_1: timezone.utcnow() + executor.task_adoption_timeout,
+            key_2: timezone.utcnow() + executor.task_adoption_timeout,
         }
+        assert executor.stalled_task_timeouts == {}
         assert executor.tasks == {key_1: AsyncResult("231"), key_2: AsyncResult("232")}
         assert not_adopted_tis == []
 
+    @pytest.fixture
+    def mock_celery_revoke(self):
+        with _prepare_app() as app:
+            app.control.revoke = mock.MagicMock()
+            yield app.control.revoke
+
     @pytest.mark.backend("mysql", "postgres")
-    def test_check_for_stalled_adopted_tasks(self):
-        exec_date = timezone.utcnow() - timedelta(minutes=40)
-        start_date = timezone.utcnow() - timedelta(days=2)
-        queued_dttm = timezone.utcnow() - timedelta(minutes=30)
+    def test_check_for_timedout_adopted_tasks(self, create_dummy_dag, dag_maker, session, mock_celery_revoke):
+        create_dummy_dag(dag_id="test_clear_stalled", task_id="task1", with_dagrun_type=None)
+        dag_run = dag_maker.create_dagrun()
 
-        try_number = 1
-
-        with DAG("test_check_for_stalled_adopted_tasks") as dag:
-            task_1 = BaseOperator(task_id="task_1", start_date=start_date)
-            task_2 = BaseOperator(task_id="task_2", start_date=start_date)
-
-        key_1 = TaskInstanceKey(dag.dag_id, task_1.task_id, exec_date, try_number)
-        key_2 = TaskInstanceKey(dag.dag_id, task_2.task_id, exec_date, try_number)
+        ti = dag_run.task_instances[0]
+        ti.state = State.QUEUED
+        ti.queued_dttm = timezone.utcnow()
+        ti.queued_by_job_id = 1
+        ti.external_executor_id = '231'
+        session.flush()
 
         executor = celery_executor.CeleryExecutor()
+        executor.job_id = 1
         executor.adopted_task_timeouts = {
-            key_1: queued_dttm + executor.task_adoption_timeout,
-            key_2: queued_dttm + executor.task_adoption_timeout,
+            ti.key: timezone.utcnow() - timedelta(days=1),
         }
-        executor.running = {key_1, key_2}
-        executor.tasks = {key_1: AsyncResult("231"), key_2: AsyncResult("232")}
+        executor.running = {ti.key}
+        executor.tasks = {ti.key: AsyncResult("231")}
         executor.sync()
-        assert executor.event_buffer == {key_1: (State.FAILED, None), key_2: (State.FAILED, None)}
+        assert executor.event_buffer == {}
         assert executor.tasks == {}
         assert executor.running == set()
         assert executor.adopted_task_timeouts == {}
+        assert mock_celery_revoke.called_with("231")
+
+        ti.refresh_from_db()
+        assert ti.state == State.SCHEDULED
+        assert ti.queued_by_job_id is None
+        assert ti.queued_dttm is None
+        assert ti.external_executor_id is None
+
+    @pytest.mark.backend("mysql", "postgres")
+    def test_check_for_stalled_tasks(self, create_dummy_dag, dag_maker, session, mock_celery_revoke):
+        create_dummy_dag(dag_id="test_clear_stalled", task_id="task1", with_dagrun_type=None)
+        dag_run = dag_maker.create_dagrun()
+
+        ti = dag_run.task_instances[0]
+        ti.state = State.QUEUED
+        ti.queued_dttm = timezone.utcnow()
+        ti.queued_by_job_id = 1
+        ti.external_executor_id = '231'
+        session.flush()
+
+        executor = celery_executor.CeleryExecutor()
+        executor.job_id = 1
+        executor.stalled_task_timeouts = {
+            ti.key: timezone.utcnow() - timedelta(days=1),
+        }
+        executor.running = {ti.key}
+        executor.tasks = {ti.key: AsyncResult("231")}
+        executor.sync()
+        assert executor.event_buffer == {}
+        assert executor.tasks == {}
+        assert executor.running == set()
+        assert executor.stalled_task_timeouts == {}
+        assert mock_celery_revoke.called_with("231")
+
+        ti.refresh_from_db()
+        assert ti.state == State.SCHEDULED
+        assert ti.queued_by_job_id is None
+        assert ti.queued_dttm is None
+        assert ti.external_executor_id is None
+
+    @pytest.mark.backend("mysql", "postgres")
+    @freeze_time("2020-01-01")
+    def test_pending_tasks_timeout_with_appropriate_config_setting(self):
+        start_date = timezone.utcnow() - timedelta(days=2)
+
+        with DAG("test_check_for_stalled_tasks_are_ordered"):
+            task_1 = BaseOperator(task_id="task_1", start_date=start_date)
+            task_2 = BaseOperator(task_id="task_2", start_date=start_date)
+
+        ti1 = TaskInstance(task=task_1, run_id=None)
+        ti1.external_executor_id = '231'
+        ti1.state = State.QUEUED
+        ti2 = TaskInstance(task=task_2, run_id=None)
+        ti2.external_executor_id = '232'
+        ti2.state = State.QUEUED
+
+        executor = celery_executor.CeleryExecutor()
+        executor.stalled_task_timeout = timedelta(seconds=30)
+        executor.queued_tasks[ti2.key] = (None, None, None, None)
+        executor.try_adopt_task_instances([ti1])
+        with mock.patch('airflow.executors.celery_executor.send_task_to_executor') as mock_send_task:
+            mock_send_task.return_value = (ti2.key, None, mock.MagicMock())
+            executor._process_tasks([(ti2.key, None, None, mock.MagicMock())])
+        assert executor.stalled_task_timeouts == {
+            ti2.key: timezone.utcnow() + timedelta(seconds=30),
+        }
+        assert executor.adopted_task_timeouts == {
+            ti1.key: timezone.utcnow() + timedelta(seconds=600),
+        }
+
+    @pytest.mark.backend("mysql", "postgres")
+    def test_no_pending_task_timeouts_when_configured(self):
+        start_date = timezone.utcnow() - timedelta(days=2)
+
+        with DAG("test_check_for_stalled_tasks_are_ordered"):
+            task_1 = BaseOperator(task_id="task_1", start_date=start_date)
+            task_2 = BaseOperator(task_id="task_2", start_date=start_date)
+
+        ti1 = TaskInstance(task=task_1, run_id=None)
+        ti1.external_executor_id = '231'
+        ti1.state = State.QUEUED
+        ti2 = TaskInstance(task=task_2, run_id=None)
+        ti2.external_executor_id = '232'
+        ti2.state = State.QUEUED
+
+        executor = celery_executor.CeleryExecutor()
+        executor.task_adoption_timeout = timedelta(0)
+        executor.queued_tasks[ti2.key] = (None, None, None, None)
+        executor.try_adopt_task_instances([ti1])
+        with mock.patch('airflow.executors.celery_executor.send_task_to_executor') as mock_send_task:
+            mock_send_task.return_value = (ti2.key, None, mock.MagicMock())
+            executor._process_tasks([(ti2.key, None, None, mock.MagicMock())])
+        assert executor.adopted_task_timeouts == {}
+        assert executor.stalled_task_timeouts == {}
 
 
 def test_operation_timeout_config():
@@ -415,9 +512,9 @@ class TestBulkStateFetcher(unittest.TestCase):
     def test_should_support_kv_backend(self, mock_mget):
         with _prepare_app():
             mock_backend = BaseKeyValueStoreBackend(app=celery_executor.app)
-            with mock.patch.object(celery_executor.app, 'backend', mock_backend), self.assertLogs(
-                "airflow.executors.celery_executor.BulkStateFetcher", level="DEBUG"
-            ) as cm:
+            with mock.patch(
+                'airflow.executors.celery_executor.Celery.backend', mock_backend
+            ), self.assertLogs("airflow.executors.celery_executor.BulkStateFetcher", level="DEBUG") as cm:
                 fetcher = BulkStateFetcher()
                 result = fetcher.get_many(
                     [
@@ -444,9 +541,9 @@ class TestBulkStateFetcher(unittest.TestCase):
         with _prepare_app():
             mock_backend = DatabaseBackend(app=celery_executor.app, url="sqlite3://")
 
-            with mock.patch.object(celery_executor.app, 'backend', mock_backend), self.assertLogs(
-                "airflow.executors.celery_executor.BulkStateFetcher", level="DEBUG"
-            ) as cm:
+            with mock.patch(
+                'airflow.executors.celery_executor.Celery.backend', mock_backend
+            ), self.assertLogs("airflow.executors.celery_executor.BulkStateFetcher", level="DEBUG") as cm:
                 mock_session = mock_backend.ResultSession.return_value
                 mock_session.query.return_value.filter.return_value.all.return_value = [
                     mock.MagicMock(**{"to_dict.return_value": {"status": "SUCCESS", "task_id": "123"}})
@@ -472,9 +569,9 @@ class TestBulkStateFetcher(unittest.TestCase):
         with _prepare_app():
             mock_backend = mock.MagicMock(autospec=BaseBackend)
 
-            with mock.patch.object(celery_executor.app, 'backend', mock_backend), self.assertLogs(
-                "airflow.executors.celery_executor.BulkStateFetcher", level="DEBUG"
-            ) as cm:
+            with mock.patch(
+                'airflow.executors.celery_executor.Celery.backend', mock_backend
+            ), self.assertLogs("airflow.executors.celery_executor.BulkStateFetcher", level="DEBUG") as cm:
                 fetcher = BulkStateFetcher(1)
                 result = fetcher.get_many(
                     [
@@ -532,7 +629,7 @@ def test_send_tasks_to_celery_hang(register_signals):
     executor = celery_executor.CeleryExecutor()
 
     task = MockTask()
-    task_tuples_to_send = [(None, None, None, None, task) for _ in range(26)]
+    task_tuples_to_send = [(None, None, None, task) for _ in range(26)]
 
     for _ in range(500):
         # This loop can hang on Linux if celery_executor does something wrong with

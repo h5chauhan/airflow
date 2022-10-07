@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import unittest
 from unittest import mock
 
@@ -39,4 +41,4 @@ class TestTriggererCommand(unittest.TestCase):
         """Ensure that the capacity argument is passed correctly"""
         args = self.parser.parse_args(['triggerer', '--capacity=42'])
         triggerer_command.triggerer(args)
-        mock_scheduler_job.assert_called_once_with(capacity="42")
+        mock_scheduler_job.assert_called_once_with(capacity=42)

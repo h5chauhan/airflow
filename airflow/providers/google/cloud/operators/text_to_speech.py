@@ -16,10 +16,12 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Google Text to Speech operator."""
+from __future__ import annotations
 
 from tempfile import NamedTemporaryFile
-from typing import Dict, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Sequence
 
+from google.api_core.gapic_v1.method import DEFAULT, _MethodDefault
 from google.api_core.retry import Retry
 from google.cloud.texttospeech_v1.types import AudioConfig, SynthesisInput, VoiceSelectionParams
 
@@ -27,6 +29,10 @@ from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.providers.google.cloud.hooks.text_to_speech import CloudTextToSpeechHook
+from airflow.providers.google.common.links.storage import FileDetailsLink
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class CloudTextToSpeechSynthesizeOperator(BaseOperator):
@@ -39,30 +45,21 @@ class CloudTextToSpeechSynthesizeOperator(BaseOperator):
 
     :param input_data: text input to be synthesized. See more:
         https://googleapis.github.io/google-cloud-python/latest/texttospeech/gapic/v1/types.html#google.cloud.texttospeech_v1.types.SynthesisInput
-    :type input_data: dict or google.cloud.texttospeech_v1.types.SynthesisInput
     :param voice: configuration of voice to be used in synthesis. See more:
         https://googleapis.github.io/google-cloud-python/latest/texttospeech/gapic/v1/types.html#google.cloud.texttospeech_v1.types.VoiceSelectionParams
-    :type voice: dict or google.cloud.texttospeech_v1.types.VoiceSelectionParams
     :param audio_config: configuration of the synthesized audio. See more:
         https://googleapis.github.io/google-cloud-python/latest/texttospeech/gapic/v1/types.html#google.cloud.texttospeech_v1.types.AudioConfig
-    :type audio_config: dict or google.cloud.texttospeech_v1.types.AudioConfig
     :param target_bucket_name: name of the GCS bucket in which output file should be stored
-    :type target_bucket_name: str
     :param target_filename: filename of the output file.
-    :type target_filename: str
     :param project_id: Optional, Google Cloud Project ID where the Compute
         Engine Instance exists. If set to None or missing, the default project_id from the Google Cloud
         connection is used.
-    :type project_id: str
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud.
         Defaults to 'google_cloud_default'.
-    :type gcp_conn_id: str
     :param retry: (Optional) A retry object used to retry requests. If None is specified,
             requests will not be retried.
-    :type retry: google.api_core.retry.Retry
     :param timeout: (Optional) The amount of time, in seconds, to wait for the request to complete.
         Note that if retry is specified, the timeout applies to each individual attempt.
-    :type timeout: float
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -71,11 +68,10 @@ class CloudTextToSpeechSynthesizeOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_text_to_speech_synthesize_template_fields]
-    template_fields = (
+    template_fields: Sequence[str] = (
         "input_data",
         "voice",
         "audio_config",
@@ -86,20 +82,21 @@ class CloudTextToSpeechSynthesizeOperator(BaseOperator):
         "impersonation_chain",
     )
     # [END gcp_text_to_speech_synthesize_template_fields]
+    operator_extra_links = (FileDetailsLink(),)
 
     def __init__(
         self,
         *,
-        input_data: Union[Dict, SynthesisInput],
-        voice: Union[Dict, VoiceSelectionParams],
-        audio_config: Union[Dict, AudioConfig],
+        input_data: dict | SynthesisInput,
+        voice: dict | VoiceSelectionParams,
+        audio_config: dict | AudioConfig,
         target_bucket_name: str,
         target_filename: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         gcp_conn_id: str = "google_cloud_default",
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         self.input_data = input_data
@@ -126,7 +123,7 @@ class CloudTextToSpeechSynthesizeOperator(BaseOperator):
             if getattr(self, parameter) == "":
                 raise AirflowException(f"The required parameter '{parameter}' is empty")
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = CloudTextToSpeechHook(
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.impersonation_chain,
@@ -146,4 +143,10 @@ class CloudTextToSpeechSynthesizeOperator(BaseOperator):
             )
             cloud_storage_hook.upload(
                 bucket_name=self.target_bucket_name, object_name=self.target_filename, filename=temp_file.name
+            )
+            FileDetailsLink.persist(
+                context=context,
+                task_instance=self,
+                uri=f"{self.target_bucket_name}/{self.target_filename}",
+                project_id=cloud_storage_hook.project_id,
             )

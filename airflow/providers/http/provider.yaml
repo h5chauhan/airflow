@@ -22,13 +22,24 @@ description: |
     `Hypertext Transfer Protocol (HTTP) <https://www.w3.org/Protocols/>`__
 
 versions:
+  - 4.0.0
+  - 3.0.0
+  - 2.1.2
+  - 2.1.1
+  - 2.1.0
+  - 2.0.3
+  - 2.0.2
+  - 2.0.1
   - 2.0.0
   - 1.1.1
   - 1.1.0
   - 1.0.0
 
-additional-dependencies:
-  - apache-airflow>=2.1.0
+dependencies:
+  # The 2.26.0 release of requests got rid of the chardet LGPL mandatory dependency, allowing us to
+  # release it as a requirement for airflow
+  - requests>=2.26.0
+  - requests_toolbelt
 
 integrations:
   - integration-name: Hypertext Transfer Protocol (HTTP)
@@ -52,5 +63,6 @@ hooks:
     python-modules:
       - airflow.providers.http.hooks.http
 
-hook-class-names:
-  - airflow.providers.http.hooks.http.HttpHook
+connection-types:
+  - hook-class-name: airflow.providers.http.hooks.http.HttpHook
+    connection-type: http

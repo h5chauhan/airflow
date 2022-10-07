@@ -15,11 +15,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
-from typing import Any, Dict, List
+from typing import Any
 from unittest import mock
 
+from google.api_core.gapic_v1.method import DEFAULT
 from google.cloud.pubsub_v1.types import ReceivedMessage
 
 from airflow.providers.google.cloud.operators.pubsub import (
@@ -49,7 +51,8 @@ class TestPubSubTopicCreateOperator(unittest.TestCase):
             task_id=TASK_ID, project_id=TEST_PROJECT, topic=TEST_TOPIC, fail_if_exists=True
         )
 
-        operator.execute(None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.return_value.create_topic.assert_called_once_with(
             project_id=TEST_PROJECT,
             topic=TEST_TOPIC,
@@ -57,9 +60,9 @@ class TestPubSubTopicCreateOperator(unittest.TestCase):
             labels=None,
             message_storage_policy=None,
             kms_key_name=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch('airflow.providers.google.cloud.operators.pubsub.PubSubHook')
@@ -68,7 +71,8 @@ class TestPubSubTopicCreateOperator(unittest.TestCase):
             task_id=TASK_ID, project_id=TEST_PROJECT, topic=TEST_TOPIC, fail_if_exists=False
         )
 
-        operator.execute(None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.return_value.create_topic.assert_called_once_with(
             project_id=TEST_PROJECT,
             topic=TEST_TOPIC,
@@ -76,9 +80,9 @@ class TestPubSubTopicCreateOperator(unittest.TestCase):
             labels=None,
             message_storage_policy=None,
             kms_key_name=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
 
@@ -92,9 +96,9 @@ class TestPubSubTopicDeleteOperator(unittest.TestCase):
             project_id=TEST_PROJECT,
             topic=TEST_TOPIC,
             fail_if_not_exists=False,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
 
@@ -105,7 +109,8 @@ class TestPubSubSubscriptionCreateOperator(unittest.TestCase):
             task_id=TASK_ID, project_id=TEST_PROJECT, topic=TEST_TOPIC, subscription=TEST_SUBSCRIPTION
         )
         mock_hook.return_value.create_subscription.return_value = TEST_SUBSCRIPTION
-        response = operator.execute(None)
+        context = mock.MagicMock()
+        response = operator.execute(context=context)
         mock_hook.return_value.create_subscription.assert_called_once_with(
             project_id=TEST_PROJECT,
             topic=TEST_TOPIC,
@@ -122,9 +127,9 @@ class TestPubSubSubscriptionCreateOperator(unittest.TestCase):
             filter_=None,
             dead_letter_policy=None,
             retry_policy=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
         assert response == TEST_SUBSCRIPTION
 
@@ -139,7 +144,8 @@ class TestPubSubSubscriptionCreateOperator(unittest.TestCase):
             task_id=TASK_ID,
         )
         mock_hook.return_value.create_subscription.return_value = TEST_SUBSCRIPTION
-        response = operator.execute(None)
+        context = mock.MagicMock()
+        response = operator.execute(context=context)
         mock_hook.return_value.create_subscription.assert_called_once_with(
             project_id=TEST_PROJECT,
             topic=TEST_TOPIC,
@@ -156,9 +162,9 @@ class TestPubSubSubscriptionCreateOperator(unittest.TestCase):
             filter_=None,
             dead_letter_policy=None,
             retry_policy=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
         assert response == TEST_SUBSCRIPTION
 
@@ -168,7 +174,8 @@ class TestPubSubSubscriptionCreateOperator(unittest.TestCase):
             task_id=TASK_ID, project_id=TEST_PROJECT, topic=TEST_TOPIC
         )
         mock_hook.return_value.create_subscription.return_value = TEST_SUBSCRIPTION
-        response = operator.execute(None)
+        context = mock.MagicMock()
+        response = operator.execute(context=context)
         mock_hook.return_value.create_subscription.assert_called_once_with(
             project_id=TEST_PROJECT,
             topic=TEST_TOPIC,
@@ -185,9 +192,9 @@ class TestPubSubSubscriptionCreateOperator(unittest.TestCase):
             filter_=None,
             dead_letter_policy=None,
             retry_policy=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
         assert response == TEST_SUBSCRIPTION
 
@@ -204,9 +211,9 @@ class TestPubSubSubscriptionDeleteOperator(unittest.TestCase):
             project_id=TEST_PROJECT,
             subscription=TEST_SUBSCRIPTION,
             fail_if_not_exists=False,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
 
@@ -279,8 +286,8 @@ class TestPubSubPullOperator(unittest.TestCase):
         messages_callback_return_value = 'asdfg'
 
         def messages_callback(
-            pulled_messages: List[ReceivedMessage],
-            context: Dict[str, Any],
+            pulled_messages: list[ReceivedMessage],
+            context: dict[str, Any],
         ):
             assert pulled_messages == generated_messages
 

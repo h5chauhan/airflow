@@ -14,8 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import List, NamedTuple
+from typing import NamedTuple
 
 from marshmallow import Schema, fields
 from marshmallow_sqlalchemy import SQLAlchemySchema, auto_field
@@ -36,7 +37,9 @@ class PoolSchema(SQLAlchemySchema):
     occupied_slots = fields.Method("get_occupied_slots", dump_only=True)
     running_slots = fields.Method("get_running_slots", dump_only=True)
     queued_slots = fields.Method("get_queued_slots", dump_only=True)
+    scheduled_slots = fields.Method("get_scheduled_slots", dump_only=True)
     open_slots = fields.Method("get_open_slots", dump_only=True)
+    description = auto_field()
 
     @staticmethod
     def get_occupied_slots(obj: Pool) -> int:
@@ -54,6 +57,11 @@ class PoolSchema(SQLAlchemySchema):
         return obj.queued_slots()
 
     @staticmethod
+    def get_scheduled_slots(obj: Pool) -> int:
+        """Returns the scheduled slots of the pool."""
+        return obj.scheduled_slots()
+
+    @staticmethod
     def get_open_slots(obj: Pool) -> float:
         """Returns the open slots of the pool."""
         return obj.open_slots()
@@ -62,7 +70,7 @@ class PoolSchema(SQLAlchemySchema):
 class PoolCollection(NamedTuple):
     """List of Pools with metadata"""
 
-    pools: List[Pool]
+    pools: list[Pool]
     total_entries: int
 
 

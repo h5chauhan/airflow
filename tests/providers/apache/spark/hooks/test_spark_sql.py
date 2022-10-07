@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import io
 import unittest
@@ -127,6 +128,7 @@ class TestSparkSqlHook(unittest.TestCase):
             ],
             stderr=-2,
             stdout=-1,
+            universal_newlines=True,
         )
 
     @patch('airflow.providers.apache.spark.hooks.spark_sql.subprocess.Popen')
@@ -156,6 +158,7 @@ class TestSparkSqlHook(unittest.TestCase):
             ],
             stderr=-2,
             stdout=-1,
+            universal_newlines=True,
         )
 
     @patch('airflow.providers.apache.spark.hooks.spark_sql.subprocess.Popen')
@@ -185,6 +188,7 @@ class TestSparkSqlHook(unittest.TestCase):
             ],
             stderr=-2,
             stdout=-1,
+            universal_newlines=True,
         )
 
     @patch('airflow.providers.apache.spark.hooks.spark_sql.subprocess.Popen')
@@ -206,8 +210,7 @@ class TestSparkSqlHook(unittest.TestCase):
             hook.run_query(params)
 
         # Then
-        assert str(
-            ctx.value
-        ) == "Cannot execute '{}' on {} (additional parameters: '{}'). Process exit code: {}.".format(
-            sql, master, params, status
+        assert str(ctx.value) == (
+            f"Cannot execute '{sql}' on {master} (additional parameters: '{params}'). "
+            f"Process exit code: {status}."
         )

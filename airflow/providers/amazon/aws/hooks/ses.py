@@ -15,13 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains AWS SES Hook"""
-from typing import Any, Dict, Iterable, List, Optional, Union
+from __future__ import annotations
+
+from typing import Any, Iterable
 
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 from airflow.utils.email import build_mime_message
 
 
-class SESHook(AwsBaseHook):
+class SesHook(AwsBaseHook):
     """
     Interact with Amazon Simple Email Service.
 
@@ -39,17 +41,17 @@ class SESHook(AwsBaseHook):
     def send_email(
         self,
         mail_from: str,
-        to: Union[str, Iterable[str]],
+        to: str | Iterable[str],
         subject: str,
         html_content: str,
-        files: Optional[List[str]] = None,
-        cc: Optional[Union[str, Iterable[str]]] = None,
-        bcc: Optional[Union[str, Iterable[str]]] = None,
+        files: list[str] | None = None,
+        cc: str | Iterable[str] | None = None,
+        bcc: str | Iterable[str] | None = None,
         mime_subtype: str = 'mixed',
         mime_charset: str = 'utf-8',
-        reply_to: Optional[str] = None,
-        return_path: Optional[str] = None,
-        custom_headers: Optional[Dict[str, Any]] = None,
+        reply_to: str | None = None,
+        return_path: str | None = None,
+        custom_headers: dict[str, Any] | None = None,
     ) -> dict:
         """
         Send email using Amazon Simple Email Service
@@ -66,7 +68,7 @@ class SESHook(AwsBaseHook):
         :param return_path: The email address to which replies will be sent. By default, replies
             are sent to the original sender's email address.
         :param reply_to: The email address to which message bounces and complaints should be sent.
-            "Return-Path" is sometimes called "envelope from," "envelope sender," or "MAIL FROM."
+            "Return-Path" is sometimes called "envelope from", "envelope sender", or "MAIL FROM".
         :param custom_headers: Additional headers to add to the MIME message.
             No validations are run on these values and they should be able to be encoded.
         :return: Response from Amazon SES service with unique message identifier.

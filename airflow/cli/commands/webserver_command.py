@@ -14,8 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """Webserver command"""
+from __future__ import annotations
+
 import hashlib
 import logging
 import os
@@ -26,7 +27,7 @@ import textwrap
 import time
 from contextlib import suppress
 from time import sleep
-from typing import Dict, List, NoReturn
+from typing import NoReturn
 
 import daemon
 import psutil
@@ -40,7 +41,6 @@ from airflow.utils import cli as cli_utils
 from airflow.utils.cli import setup_locations, setup_logging
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.process_utils import check_if_pidfile_process_is_running
-from airflow.www.app import cached_app, create_app
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class GunicornMonitor(LoggingMixin):
         self._last_plugin_state = self._generate_plugin_state() if reload_on_plugin_change else None
         self._restart_on_next_plugin_check = False
 
-    def _generate_plugin_state(self) -> Dict[str, float]:
+    def _generate_plugin_state(self) -> dict[str, float]:
         """
         Generate dict of filenames and last modification time of all files in settings.PLUGINS_FOLDER
         directory.
@@ -111,7 +111,7 @@ class GunicornMonitor(LoggingMixin):
         if not settings.PLUGINS_FOLDER:
             return {}
 
-        all_filenames: List[str] = []
+        all_filenames: list[str] = []
         for (root, _, filenames) in os.walk(settings.PLUGINS_FOLDER):
             all_filenames.extend(os.path.join(root, f) for f in filenames)
         plugin_state = {f: self._get_file_hash(f) for f in sorted(all_filenames)}
@@ -313,7 +313,7 @@ class GunicornMonitor(LoggingMixin):
                 self._reload_gunicorn()
 
 
-@cli_utils.action_logging
+@cli_utils.action_cli
 def webserver(args):
     """Starts Airflow Webserver"""
     print(settings.HEADER)
@@ -343,6 +343,8 @@ def webserver(args):
     if ssl_cert and not ssl_key:
         raise AirflowException('An SSL key must also be provided for use with ' + ssl_cert)
 
+    from airflow.www.app import create_app
+
     if args.debug:
         print(f"Starting the web server on port {args.port} and host {args.hostname}.")
         app = create_app(testing=conf.getboolean('core', 'unit_test_mode'))
@@ -354,11 +356,6 @@ def webserver(args):
             ssl_context=(ssl_cert, ssl_key) if ssl_cert and ssl_key else None,
         )
     else:
-        # This pre-warms the cache, and makes possible errors
-        # get reported earlier (i.e. before demonization)
-        os.environ['SKIP_DAGS_PARSING'] = 'True'
-        app = cached_app(None)
-        os.environ.pop('SKIP_DAGS_PARSING')
 
         pid_file, stdout, stderr, log_file = setup_locations(
             "webserver", args.pid, args.stdout, args.stderr, args.log_file
@@ -369,28 +366,20 @@ def webserver(args):
 
         print(
             textwrap.dedent(
-                '''\
+                f'''\
                 Running the Gunicorn Server with:
-                Workers: {num_workers} {workerclass}
-                Host: {hostname}:{port}
+                Workers: {num_workers} {args.workerclass}
+                Host: {args.hostname}:{args.port}
                 Timeout: {worker_timeout}
                 Logfiles: {access_logfile} {error_logfile}
                 Access Logformat: {access_logformat}
-                =================================================================\
-            '''.format(
-                    num_workers=num_workers,
-                    workerclass=args.workerclass,
-                    hostname=args.hostname,
-                    port=args.port,
-                    worker_timeout=worker_timeout,
-                    access_logfile=access_logfile,
-                    error_logfile=error_logfile,
-                    access_logformat=access_logformat,
-                )
+                ================================================================='''
             )
         )
 
         run_args = [
+            sys.executable,
+            '-m',
             'gunicorn',
             '--workers',
             str(num_workers),
@@ -454,15 +443,24 @@ def webserver(args):
             ).start()
 
         if args.daemon:
+            # This makes possible errors get reported before daemonization
+            os.environ['SKIP_DAGS_PARSING'] = 'True'
+            app = create_app(None)
+            os.environ.pop('SKIP_DAGS_PARSING')
+
             handle = setup_logging(log_file)
 
             base, ext = os.path.splitext(pid_file)
-            with open(stdout, 'w+') as stdout, open(stderr, 'w+') as stderr:
+            with open(stdout, 'a') as stdout, open(stderr, 'a') as stderr:
+                stdout.truncate(0)
+                stderr.truncate(0)
+
                 ctx = daemon.DaemonContext(
                     pidfile=TimeoutPIDLockFile(f"{base}-monitor{ext}", -1),
                     files_preserve=[handle],
                     stdout=stdout,
                     stderr=stderr,
+                    umask=int(settings.DAEMON_UMASK, 8),
                 )
                 with ctx:
                     subprocess.Popen(run_args, close_fds=True)

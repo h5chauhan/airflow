@@ -15,13 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """This module allows to connect to a MySQL database."""
-import json
-from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union
+from __future__ import annotations
 
-from airflow.hooks.dbapi import DbApiHook
+import json
+from typing import TYPE_CHECKING, Union
+
 from airflow.models import Connection
+from airflow.providers.common.sql.hooks.sql import DbApiHook
 
 if TYPE_CHECKING:
     from mysql.connector.abstracts import MySQLConnectionAbstract
@@ -45,9 +46,7 @@ class MySqlHook(DbApiHook):
     extras example: ``{"iam":true, "aws_conn_id":"my_aws_conn"}``
 
     :param schema: The MySQL database schema to connect to.
-    :type schema: Optional[str]
     :param connection: The :ref:`MySQL connection id <howto/connection:mysql>` used for MySQL credentials.
-    :type connection: Optional[Dict]
     """
 
     conn_name_attr = 'mysql_conn_id'
@@ -63,13 +62,13 @@ class MySqlHook(DbApiHook):
 
     def set_autocommit(self, conn: MySQLConnectionTypes, autocommit: bool) -> None:
         """
-        The MySQLdb (mysqlclient) client uses an `autocommit` method rather
-        than an `autocommit` property to set the autocommit setting
+        Set *autocommit*.
+
+        *mysqlclient* uses an *autocommit* method rather than an *autocommit*
+        property, so we need to override this to support it.
 
         :param conn: connection to set autocommit setting
-        :type MySQLConnectionTypes: connection object.
         :param autocommit: autocommit setting
-        :type bool: True to enable autocommit, False to disable autocommit
         :rtype: None
         """
         if hasattr(conn.__class__, 'autocommit') and isinstance(conn.__class__.autocommit, property):
@@ -79,11 +78,12 @@ class MySqlHook(DbApiHook):
 
     def get_autocommit(self, conn: MySQLConnectionTypes) -> bool:
         """
-        The MySQLdb (mysqlclient) client uses a `get_autocommit` method
-        rather than an `autocommit` property to get the autocommit setting
+        Whether *autocommit* is active.
+
+        *mysqlclient* uses an *get_autocommit* method rather than an *autocommit*
+        property, so we need to override this to support it.
 
         :param conn: connection to get autocommit setting from.
-        :type MySQLConnectionTypes: connection object.
         :return: connection autocommit setting
         :rtype: bool
         """
@@ -92,7 +92,7 @@ class MySqlHook(DbApiHook):
         else:
             return conn.get_autocommit()
 
-    def _get_conn_config_mysql_client(self, conn: Connection) -> Dict:
+    def _get_conn_config_mysql_client(self, conn: Connection) -> dict:
         conn_config = {
             "user": conn.login,
             "passwd": conn.password or '',
@@ -135,7 +135,7 @@ class MySqlHook(DbApiHook):
             conn_config["local_infile"] = 1
         return conn_config
 
-    def _get_conn_config_mysql_connector_python(self, conn: Connection) -> Dict:
+    def _get_conn_config_mysql_connector_python(self, conn: Connection) -> dict:
         conn_config = {
             'user': conn.login,
             'password': conn.password or '',
@@ -151,6 +151,8 @@ class MySqlHook(DbApiHook):
 
     def get_conn(self) -> MySQLConnectionTypes:
         """
+        Connection to a MySQL database.
+
         Establishes a connection to a mysql database
         by extracting the connection configuration from the Airflow connection.
 
@@ -178,16 +180,8 @@ class MySqlHook(DbApiHook):
 
         raise ValueError('Unknown MySQL client name provided!')
 
-    def get_uri(self) -> str:
-        conn = self.get_connection(getattr(self, self.conn_name_attr))
-        uri = super().get_uri()
-        if conn.extra_dejson.get('charset', False):
-            charset = conn.extra_dejson["charset"]
-            return f"{uri}?charset={charset}"
-        return uri
-
     def bulk_load(self, table: str, tmp_file: str) -> None:
-        """Loads a tab-delimited file into a database table"""
+        """Load a tab-delimited file into a database table."""
         conn = self.get_conn()
         cur = conn.cursor()
         cur.execute(
@@ -197,9 +191,10 @@ class MySqlHook(DbApiHook):
             """
         )
         conn.commit()
+        conn.close()
 
     def bulk_dump(self, table: str, tmp_file: str) -> None:
-        """Dumps a database table into a tab-delimited file"""
+        """Dump a database table into a tab-delimited file."""
         conn = self.get_conn()
         cur = conn.cursor()
         cur.execute(
@@ -209,24 +204,27 @@ class MySqlHook(DbApiHook):
             """
         )
         conn.commit()
+        conn.close()
 
     @staticmethod
-    def _serialize_cell(cell: object, conn: Optional[Connection] = None) -> object:
+    def _serialize_cell(cell: object, conn: Connection | None = None) -> object:
         """
+        Convert argument to a literal.
+
         The package MySQLdb converts an argument to a literal
         when passing those separately to execute. Hence, this method does nothing.
 
         :param cell: The cell to insert into the table
-        :type cell: object
         :param conn: The database connection
-        :type conn: connection object
         :return: The same cell
         :rtype: object
         """
         return cell
 
-    def get_iam_token(self, conn: Connection) -> Tuple[str, int]:
+    def get_iam_token(self, conn: Connection) -> tuple[str, int]:
         """
+        Retrieve a temporary password to connect to MySQL.
+
         Uses AWSHook to retrieve a temporary password to connect to MySQL
         Port is required. If none is provided, default 3306 is used
         """
@@ -254,19 +252,15 @@ class MySqlHook(DbApiHook):
             This depends on the mysql client library used.
 
         :param table: The table were the file will be loaded into.
-        :type table: str
         :param tmp_file: The file (name) that contains the data.
-        :type tmp_file: str
         :param duplicate_key_handling: Specify what should happen to duplicate data.
             You can choose either `IGNORE` or `REPLACE`.
 
             .. seealso::
                 https://dev.mysql.com/doc/refman/8.0/en/load-data.html#load-data-duplicate-key-handling
-        :type duplicate_key_handling: str
         :param extra_options: More sql options to specify exactly how to load the data.
 
             .. seealso:: https://dev.mysql.com/doc/refman/8.0/en/load-data.html
-        :type extra_options: str
         """
         conn = self.get_conn()
         cursor = conn.cursor()
@@ -282,3 +276,4 @@ class MySqlHook(DbApiHook):
 
         cursor.close()
         conn.commit()
+        conn.close()

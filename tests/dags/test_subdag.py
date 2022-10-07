@@ -15,16 +15,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
-
 """
 A DAG with subdag for testing purpose.
 """
+from __future__ import annotations
 
+import warnings
 from datetime import datetime, timedelta
 
 from airflow.models.dag import DAG
-from airflow.operators.dummy import DummyOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.operators.subdag import SubDagOperator
 
 DAG_NAME = 'test_subdag_operator'
@@ -43,11 +43,11 @@ def subdag(parent_dag_name, child_dag_name, args):
     dag_subdag = DAG(
         dag_id=f'{parent_dag_name}.{child_dag_name}',
         default_args=args,
-        schedule_interval="@daily",
+        schedule="@daily",
     )
 
     for i in range(2):
-        DummyOperator(
+        EmptyOperator(
             task_id=f'{child_dag_name}-task-{i + 1}',
             default_args=args,
             dag=dag_subdag,
@@ -61,20 +61,21 @@ with DAG(
     start_date=datetime(2019, 1, 1),
     max_active_runs=1,
     default_args=DEFAULT_TASK_ARGS,
-    schedule_interval=timedelta(minutes=1),
-) as dag:
+    schedule=timedelta(minutes=1),
+):
 
-    start = DummyOperator(
+    start = EmptyOperator(
         task_id='start',
     )
 
-    section_1 = SubDagOperator(
-        task_id='section-1',
-        subdag=subdag(DAG_NAME, 'section-1', DEFAULT_TASK_ARGS),
-        default_args=DEFAULT_TASK_ARGS,
-    )
+    with warnings.catch_warnings(record=True):
+        section_1 = SubDagOperator(
+            task_id='section-1',
+            subdag=subdag(DAG_NAME, 'section-1', DEFAULT_TASK_ARGS),
+            default_args=DEFAULT_TASK_ARGS,
+        )
 
-    some_other_task = DummyOperator(
+    some_other_task = EmptyOperator(
         task_id='some-other-task',
     )
 

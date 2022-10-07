@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 #
 # The MIT License (MIT)
@@ -42,7 +43,7 @@ from functools import wraps
 from typing import Dict
 from unittest.mock import patch
 
-from elasticsearch.client import _normalize_hosts
+from elasticsearch.client.utils import _normalize_hosts
 
 from .fake_elasticsearch import FakeElasticsearch
 

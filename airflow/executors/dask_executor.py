@@ -22,8 +22,10 @@ DaskExecutor
     For more information on how the DaskExecutor works, take a look at the guide:
     :ref:`executor:DaskExecutor`
 """
+from __future__ import annotations
+
 import subprocess
-from typing import Any, Dict, Optional
+from typing import Any
 
 from distributed import Client, Future, as_completed
 from distributed.security import Security
@@ -32,6 +34,10 @@ from airflow.configuration import conf
 from airflow.exceptions import AirflowException
 from airflow.executors.base_executor import NOT_STARTED_MESSAGE, BaseExecutor, CommandType
 from airflow.models.taskinstance import TaskInstanceKey
+
+# queue="default" is a special case since this is the base config default queue name,
+# with respect to DaskExecutor, treat it as if no queue is provided
+_UNDEFINED_QUEUES = {None, 'default'}
 
 
 class DaskExecutor(BaseExecutor):
@@ -48,8 +54,8 @@ class DaskExecutor(BaseExecutor):
         self.tls_ca = conf.get('dask', 'tls_ca')
         self.tls_key = conf.get('dask', 'tls_key')
         self.tls_cert = conf.get('dask', 'tls_cert')
-        self.client: Optional[Client] = None
-        self.futures: Optional[Dict[Future, TaskInstanceKey]] = None
+        self.client: Client | None = None
+        self.futures: dict[Future, TaskInstanceKey] | None = None
 
     def start(self) -> None:
         if self.tls_ca or self.tls_key or self.tls_cert:
@@ -69,11 +75,11 @@ class DaskExecutor(BaseExecutor):
         self,
         key: TaskInstanceKey,
         command: CommandType,
-        queue: Optional[str] = None,
-        executor_config: Optional[Any] = None,
+        queue: str | None = None,
+        executor_config: Any | None = None,
     ) -> None:
 
-        self.validate_command(command)
+        self.validate_airflow_tasks_run_command(command)
 
         def airflow_run():
             return subprocess.check_call(command, close_fds=True)
@@ -81,7 +87,18 @@ class DaskExecutor(BaseExecutor):
         if not self.client:
             raise AirflowException(NOT_STARTED_MESSAGE)
 
-        future = self.client.submit(airflow_run, pure=False)
+        resources = None
+        if queue not in _UNDEFINED_QUEUES:
+            scheduler_info = self.client.scheduler_info()
+            avail_queues = {
+                resource for d in scheduler_info['workers'].values() for resource in d['resources']
+            }
+
+            if queue not in avail_queues:
+                raise AirflowException(f"Attempted to submit task to an unavailable queue: '{queue}'")
+            resources = {queue: 1}
+
+        future = self.client.submit(subprocess.check_call, command, pure=False, resources=resources)
         self.futures[future] = key  # type: ignore
 
     def _process_future(self, future: Future) -> None:

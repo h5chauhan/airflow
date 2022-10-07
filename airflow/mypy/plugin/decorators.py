@@ -15,18 +15,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import copy
 import functools
-from typing import List
 
 from mypy.nodes import ARG_NAMED_OPT
 from mypy.plugin import FunctionContext, Plugin
 from mypy.types import CallableType, NoneType, UnionType
 
 TYPED_DECORATORS = {
-    "fallback_to_default_project_id of GoogleBaseHook": ["project_id"],
+    "airflow.utils.session.provide_session": [],
     "airflow.providers.google.cloud.hooks.dataflow._fallback_to_project_id_from_variables": ["project_id"],
+    "fallback_to_default_project_id of GoogleBaseHook": ["project_id"],
     "provide_gcp_credential_file of GoogleBaseHook": [],
 }
 
@@ -44,7 +45,7 @@ class TypedDecoratorPlugin(Plugin):
         return None
 
 
-def _analyze_decorator(function_ctx: FunctionContext, provided_arguments: List[str]):
+def _analyze_decorator(function_ctx: FunctionContext, provided_arguments: list[str]):
     if not isinstance(function_ctx.arg_types[0][0], CallableType):
         return function_ctx.default_return_type
     if not isinstance(function_ctx.default_return_type, CallableType):
@@ -59,7 +60,7 @@ def _analyze_decorator(function_ctx: FunctionContext, provided_arguments: List[s
 def _change_decorator_function_type(
     decorated: CallableType,
     decorator: CallableType,
-    provided_arguments: List[str],
+    provided_arguments: list[str],
 ) -> CallableType:
     decorator.arg_kinds = decorated.arg_kinds
     decorator.arg_names = decorated.arg_names
@@ -67,7 +68,10 @@ def _change_decorator_function_type(
     # Mark provided arguments as optional
     decorator.arg_types = copy.copy(decorated.arg_types)
     for argument in provided_arguments:
-        index = decorated.arg_names.index(argument)
+        try:
+            index = decorated.arg_names.index(argument)
+        except ValueError:
+            continue
         decorated_type = decorated.arg_types[index]
         decorator.arg_types[index] = UnionType.make_union([decorated_type, NoneType()])
         decorated.arg_kinds[index] = ARG_NAMED_OPT

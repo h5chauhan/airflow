@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 from unittest import mock
 from unittest.case import TestCase
@@ -176,7 +177,6 @@ class TestVaultHook(TestCase):
         kwargs = {
             "vault_conn_id": "vault_conn_id",
             "auth_type": "approle",
-            "role_id": "role",
             "kv_engine_version": 2,
         }
 
@@ -184,7 +184,7 @@ class TestVaultHook(TestCase):
         mock_get_connection.assert_called_with("vault_conn_id")
         test_client = test_hook.get_conn()
         mock_hvac.Client.assert_called_with(url=expected_url)
-        test_client.auth.approle.login.assert_called_with(role_id="role", secret_id="pass")
+        test_client.auth.approle.login.assert_called_with(role_id="user", secret_id="pass")
         test_client.is_authenticated.assert_called_with()
         assert 2 == test_hook.vault_client.kv_engine_version
 
@@ -202,7 +202,6 @@ class TestVaultHook(TestCase):
         kwargs = {
             "vault_conn_id": "vault_conn_id",
             "auth_type": "approle",
-            "role_id": "role",
             "kv_engine_version": 2,
         }
 
@@ -210,7 +209,7 @@ class TestVaultHook(TestCase):
         mock_get_connection.assert_called_with("vault_conn_id")
         test_client = test_hook.get_conn()
         mock_hvac.Client.assert_called_with(url='http://localhost:8180')
-        test_client.auth.approle.login.assert_called_with(role_id="role", secret_id="pass")
+        test_client.auth.approle.login.assert_called_with(role_id="user", secret_id="pass")
         test_client.is_authenticated.assert_called_with()
         assert 2 == test_hook.vault_client.kv_engine_version
 
@@ -222,10 +221,7 @@ class TestVaultHook(TestCase):
         mock_connection = self.get_mock_connection()
         mock_get_connection.return_value = mock_connection
 
-        connection_dict = {
-            "auth_type": "approle",
-            'role_id': "role",
-        }
+        connection_dict = {"auth_type": "approle"}
 
         mock_connection.extra_dejson.get.side_effect = connection_dict.get
         kwargs = {
@@ -236,7 +232,20 @@ class TestVaultHook(TestCase):
         mock_get_connection.assert_called_with("vault_conn_id")
         test_client = test_hook.get_conn()
         mock_hvac.Client.assert_called_with(url='http://localhost:8180')
-        test_client.auth.approle.login.assert_called_with(role_id="role", secret_id="pass")
+        test_client.auth.approle.login.assert_called_with(role_id="user", secret_id="pass")
+        test_client.is_authenticated.assert_called_with()
+        assert 2 == test_hook.vault_client.kv_engine_version
+
+    @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.hvac")
+    @mock.patch.dict(
+        'os.environ',
+        AIRFLOW_CONN_VAULT_CONN_ID='https://role:secret@vault.example.com?auth_type=approle',
+    )
+    def test_approle_uri(self, mock_hvac):
+        test_hook = VaultHook(vault_conn_id='vault_conn_id')
+        test_client = test_hook.get_conn()
+        mock_hvac.Client.assert_called_with(url='https://vault.example.com')
+        test_client.auth.approle.login.assert_called_with(role_id="role", secret_id="secret")
         test_client.is_authenticated.assert_called_with()
         assert 2 == test_hook.vault_client.kv_engine_version
 
@@ -289,6 +298,23 @@ class TestVaultHook(TestCase):
             secret_key='pass',
             role="role",
         )
+
+    @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.hvac")
+    @mock.patch.dict(
+        'os.environ',
+        AIRFLOW_CONN_VAULT_CONN_ID='https://login:pass@vault.example.com?auth_type=aws_iam&role_id=role',
+    )
+    def test_aws_uri(self, mock_hvac):
+        test_hook = VaultHook(vault_conn_id='vault_conn_id')
+        test_client = test_hook.get_conn()
+        mock_hvac.Client.assert_called_with(url='https://vault.example.com')
+        test_client.auth_aws_iam.assert_called_with(
+            access_key='login',
+            secret_key='pass',
+            role="role",
+        )
+        test_client.is_authenticated.assert_called_with()
+        assert 2 == test_hook.vault_client.kv_engine_version
 
     @mock.patch("airflow.providers.hashicorp.hooks.vault.VaultHook.get_connection")
     @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.hvac")
@@ -514,7 +540,8 @@ class TestVaultHook(TestCase):
 
     @mock.patch("airflow.providers.hashicorp.hooks.vault.VaultHook.get_connection")
     @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.hvac")
-    def test_kubernetes_default_path(self, mock_hvac, mock_get_connection):
+    @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.Kubernetes")
+    def test_kubernetes_default_path(self, mock_kubernetes, mock_hvac, mock_get_connection):
         mock_client = mock.MagicMock()
         mock_hvac.Client.return_value = mock_client
         mock_connection = self.get_mock_connection()
@@ -535,13 +562,15 @@ class TestVaultHook(TestCase):
         mock_get_connection.assert_called_with("vault_conn_id")
         mock_file.assert_called_with("/var/run/secrets/kubernetes.io/serviceaccount/token")
         mock_hvac.Client.assert_called_with(url='http://localhost:8180')
-        test_client.auth_kubernetes.assert_called_with(role="kube_role", jwt="data")
+        mock_kubernetes.assert_called_with(mock_client.adapter)
+        mock_kubernetes.return_value.login.assert_called_with(role="kube_role", jwt="data")
         test_client.is_authenticated.assert_called_with()
         assert 2 == test_hook.vault_client.kv_engine_version
 
     @mock.patch("airflow.providers.hashicorp.hooks.vault.VaultHook.get_connection")
     @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.hvac")
-    def test_kubernetes_init_params(self, mock_hvac, mock_get_connection):
+    @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.Kubernetes")
+    def test_kubernetes_init_params(self, mock_kubernetes, mock_hvac, mock_get_connection):
         mock_client = mock.MagicMock()
         mock_hvac.Client.return_value = mock_client
         mock_connection = self.get_mock_connection()
@@ -563,13 +592,15 @@ class TestVaultHook(TestCase):
         mock_get_connection.assert_called_with("vault_conn_id")
         mock_file.assert_called_with("path")
         mock_hvac.Client.assert_called_with(url='http://localhost:8180')
-        test_client.auth_kubernetes.assert_called_with(role="kube_role", jwt="data")
+        mock_kubernetes.assert_called_with(mock_client.adapter)
+        mock_kubernetes.return_value.login.assert_called_with(role="kube_role", jwt="data")
         test_client.is_authenticated.assert_called_with()
         assert 2 == test_hook.vault_client.kv_engine_version
 
     @mock.patch("airflow.providers.hashicorp.hooks.vault.VaultHook.get_connection")
     @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.hvac")
-    def test_kubernetes_dejson(self, mock_hvac, mock_get_connection):
+    @mock.patch("airflow.providers.hashicorp._internal_client.vault_client.Kubernetes")
+    def test_kubernetes_dejson(self, mock_kubernetes, mock_hvac, mock_get_connection):
         mock_client = mock.MagicMock()
         mock_hvac.Client.return_value = mock_client
         mock_connection = self.get_mock_connection()
@@ -590,7 +621,8 @@ class TestVaultHook(TestCase):
         mock_get_connection.assert_called_with("vault_conn_id")
         mock_file.assert_called_with("path")
         mock_hvac.Client.assert_called_with(url='http://localhost:8180')
-        test_client.auth_kubernetes.assert_called_with(role="kube_role", jwt="data")
+        mock_kubernetes.assert_called_with(mock_client.adapter)
+        mock_kubernetes.return_value.login.assert_called_with(role="kube_role", jwt="data")
         test_client.is_authenticated.assert_called_with()
         assert 2 == test_hook.vault_client.kv_engine_version
 

@@ -15,8 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """Enums for DAG serialization."""
+from __future__ import annotations
 
 from enum import Enum, unique
 
@@ -47,3 +47,6 @@ class DagAttributeTypes(str, Enum):
     POD = 'k8s.V1Pod'
     TASK_GROUP = 'taskgroup'
     EDGE_INFO = 'edgeinfo'
+    PARAM = 'param'
+    XCOM_REF = 'xcomref'
+    DATASET = 'dataset'

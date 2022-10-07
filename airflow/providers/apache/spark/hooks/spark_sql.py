@@ -15,9 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
+
 import subprocess
-from typing import TYPE_CHECKING, Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from airflow.exceptions import AirflowException, AirflowNotFoundException
 from airflow.hooks.base import BaseHook
@@ -32,33 +33,21 @@ class SparkSqlHook(BaseHook):
     "spark-sql" binary is in the PATH.
 
     :param sql: The SQL query to execute
-    :type sql: str
     :param conf: arbitrary Spark configuration property
-    :type conf: str (format: PROP=VALUE)
     :param conn_id: connection_id string
-    :type conn_id: str
     :param total_executor_cores: (Standalone & Mesos only) Total cores for all executors
         (Default: all the available cores on the worker)
-    :type total_executor_cores: int
     :param executor_cores: (Standalone & YARN only) Number of cores per
         executor (Default: 2)
-    :type executor_cores: int
     :param executor_memory: Memory per executor (e.g. 1000M, 2G) (Default: 1G)
-    :type executor_memory: str
     :param keytab: Full path to the file that contains the keytab
-    :type keytab: str
     :param master: spark://host:port, mesos://host:port, yarn, or local
         (Default: The ``host`` and ``port`` set in the Connection, or ``"yarn"``)
-    :type master: str
     :param name: Name of the job.
-    :type name: str
     :param num_executors: Number of executors to launch
-    :type num_executors: int
     :param verbose: Whether to pass the verbose flag to spark-sql
-    :type verbose: bool
     :param yarn_queue: The YARN queue to submit to
         (Default: The ``queue`` value set in the Connection, or ``"default"``)
-    :type yarn_queue: str
     """
 
     conn_name_attr = 'conn_id'
@@ -69,27 +58,28 @@ class SparkSqlHook(BaseHook):
     def __init__(
         self,
         sql: str,
-        conf: Optional[str] = None,
+        conf: str | None = None,
         conn_id: str = default_conn_name,
-        total_executor_cores: Optional[int] = None,
-        executor_cores: Optional[int] = None,
-        executor_memory: Optional[str] = None,
-        keytab: Optional[str] = None,
-        principal: Optional[str] = None,
-        master: Optional[str] = None,
+        total_executor_cores: int | None = None,
+        executor_cores: int | None = None,
+        executor_memory: str | None = None,
+        keytab: str | None = None,
+        principal: str | None = None,
+        master: str | None = None,
         name: str = 'default-name',
-        num_executors: Optional[int] = None,
+        num_executors: int | None = None,
         verbose: bool = True,
-        yarn_queue: Optional[str] = None,
+        yarn_queue: str | None = None,
     ) -> None:
         super().__init__()
+        options: dict = {}
+        conn: Connection | None = None
 
         try:
-            conn: "Optional[Connection]" = self.get_connection(conn_id)
+            conn = self.get_connection(conn_id)
         except AirflowNotFoundException:
             conn = None
-            options = {}
-        else:
+        if conn:
             options = conn.extra_dejson
 
         # Set arguments to values set in Connection if not explicitly provided.
@@ -120,13 +110,12 @@ class SparkSqlHook(BaseHook):
     def get_conn(self) -> Any:
         pass
 
-    def _prepare_command(self, cmd: Union[str, List[str]]) -> List[str]:
+    def _prepare_command(self, cmd: str | list[str]) -> list[str]:
         """
         Construct the spark-sql command to execute. Verbose output is enabled
         as default.
 
         :param cmd: command to append to the spark-sql command
-        :type cmd: str or list[str]
         :return: full command to be executed
         """
         connection_cmd = ["spark-sql"]
@@ -176,13 +165,13 @@ class SparkSqlHook(BaseHook):
         Remote Popen (actually execute the Spark-sql query)
 
         :param cmd: command to append to the spark-sql command
-        :type cmd: str or list[str]
         :param kwargs: extra arguments to Popen (see subprocess.Popen)
-        :type kwargs: dict
         """
         spark_sql_cmd = self._prepare_command(cmd)
 
-        self._sp = subprocess.Popen(spark_sql_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs)
+        self._sp = subprocess.Popen(
+            spark_sql_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, **kwargs
+        )
 
         for line in iter(self._sp.stdout):  # type: ignore
             self.log.info(line)
@@ -191,9 +180,8 @@ class SparkSqlHook(BaseHook):
 
         if returncode:
             raise AirflowException(
-                "Cannot execute '{}' on {} (additional parameters: '{}'). Process exit code: {}.".format(
-                    self._sql, self._master, cmd, returncode
-                )
+                f"Cannot execute '{self._sql}' on {self._master} (additional parameters: '{cmd}'). "
+                f"Process exit code: {returncode}."
             )
 
     def kill(self) -> None:

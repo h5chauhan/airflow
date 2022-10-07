@@ -21,11 +21,6 @@ Upload data from Local Filesystem to Google Cloud Storage
 The `Google Cloud Storage <https://cloud.google.com/storage/>`__  (GCS) is used to store large data from various applications.
 This page shows how to upload data from local filesystem to GCS.
 
-.. contents::
-  :depth: 1
-  :local:
-
-
 Prerequisite Tasks
 ^^^^^^^^^^^^^^^^^^
 
@@ -43,7 +38,7 @@ When you use this operator, you can optionally compress the data being uploaded.
 
 Below is an example of using this operator to upload a file to GCS.
 
-.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_local_to_gcs.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/gcs/example_gcs_upload_download.py
     :language: python
     :dedent: 0
     :start-after: [START howto_operator_local_filesystem_to_gcs]

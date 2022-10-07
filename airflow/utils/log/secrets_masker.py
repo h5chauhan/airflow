@@ -15,21 +15,21 @@
 # specific language governing permissions and limitations
 # under the License.
 """Mask sensitive information from logs"""
+from __future__ import annotations
+
 import collections
 import logging
 import re
-from typing import TYPE_CHECKING, Iterable, Optional, Set, TypeVar, Union
+import sys
+from typing import Any, Dict, Iterable, List, TextIO, Tuple, TypeVar, Union
 
+from airflow import settings
 from airflow.compat.functools import cache, cached_property
 
-if TYPE_CHECKING:
-    from airflow.typing_compat import RePatternType
-
-    RedactableItem = TypeVar('RedactableItem')
-
+Redactable = TypeVar("Redactable", str, Dict[Any, Any], Tuple[Any, ...], List[Any])
+Redacted = Union[Redactable, str]
 
 log = logging.getLogger(__name__)
-
 
 DEFAULT_SENSITIVE_FIELDS = frozenset(
     {
@@ -43,9 +43,13 @@ DEFAULT_SENSITIVE_FIELDS = frozenset(
         'private_key',
         'secret',
         'token',
+        'keyfile_dict',
+        'service_account',
     }
 )
 """Names of fields (Connection extra, Variable key name etc.) that are deemed sensitive"""
+
+SECRETS_TO_SKIP_MASKING_FOR_TESTS = {'airflow'}
 
 
 @cache
@@ -70,7 +74,7 @@ def should_hide_value_for_key(name):
     return False
 
 
-def mask_secret(secret: Union[str, dict, Iterable], name: str = None) -> None:
+def mask_secret(secret: str | dict | Iterable, name: str | None = None) -> None:
     """
     Mask a secret from appearing in the task logs.
 
@@ -80,25 +84,21 @@ def mask_secret(secret: Union[str, dict, Iterable], name: str = None) -> None:
     If ``secret`` is a dict or a iterable (excluding str) then it will be
     recursively walked and keys with sensitive names will be hidden.
     """
-    # Delay import
-    from airflow import settings
-
     # Filtering all log messages is not a free process, so we only do it when
     # running tasks
-    if not settings.MASK_SECRETS_IN_LOGS or not secret:
+    if not secret:
         return
 
     _secrets_masker().add_mask(secret, name)
 
 
-def redact(value: "RedactableItem", name: str = None) -> "RedactableItem":
+def redact(value: Redactable, name: str | None = None) -> Redacted:
     """Redact any secrets found in ``value``."""
     return _secrets_masker().redact(value, name)
 
 
 @cache
-def _secrets_masker() -> "SecretsMasker":
-
+def _secrets_masker() -> SecretsMasker:
     for flt in logging.getLogger('airflow.task').filters:
         if isinstance(flt, SecretsMasker):
             return flt
@@ -113,8 +113,8 @@ def _secrets_masker() -> "SecretsMasker":
 class SecretsMasker(logging.Filter):
     """Redact secrets from logs"""
 
-    replacer: Optional["RePatternType"] = None
-    patterns: Set[str]
+    replacer: re.Pattern | None = None
+    patterns: set[str]
 
     ALREADY_FILTERED_FLAG = "__SecretsMasker_filtered"
     MAX_RECURSION_DEPTH = 5
@@ -144,7 +144,22 @@ class SecretsMasker(logging.Filter):
         )
         return frozenset(record.__dict__).difference({'msg', 'args'})
 
+    def _redact_exception_with_context(self, exception):
+        # Exception class may not be modifiable (e.g. declared by an
+        # extension module such as JDBC).
+        try:
+            exception.args = (self.redact(v) for v in exception.args)
+        except AttributeError:
+            pass
+        if exception.__context__:
+            self._redact_exception_with_context(exception.__context__)
+        if exception.__cause__ and exception.__cause__ is not exception.__context__:
+            self._redact_exception_with_context(exception.__cause__)
+
     def filter(self, record) -> bool:
+        if settings.MASK_SECRETS_IN_LOGS is not True:
+            return True
+
         if self.ALREADY_FILTERED_FLAG in record.__dict__:
             # Filters are attached to multiple handlers and logs, keep a
             # "private" flag that stops us needing to process it more than once
@@ -157,13 +172,12 @@ class SecretsMasker(logging.Filter):
                 record.__dict__[k] = self.redact(v)
             if record.exc_info and record.exc_info[1] is not None:
                 exc = record.exc_info[1]
-                # I'm not sure if this is a good idea!
-                exc.args = (self.redact(v) for v in exc.args)
+                self._redact_exception_with_context(exc)
         record.__dict__[self.ALREADY_FILTERED_FLAG] = True
 
         return True
 
-    def _redact_all(self, item: "RedactableItem", depth: int) -> "RedactableItem":
+    def _redact_all(self, item: Redactable, depth: int) -> Redacted:
         if depth > self.MAX_RECURSION_DEPTH or isinstance(item, str):
             return '***'
         if isinstance(item, dict):
@@ -176,7 +190,7 @@ class SecretsMasker(logging.Filter):
         else:
             return item
 
-    def _redact(self, item: "RedactableItem", name: Optional[str], depth: int) -> "RedactableItem":
+    def _redact(self, item: Redactable, name: str | None, depth: int) -> Redacted:
         # Avoid spending too much effort on redacting on deeply nested
         # structures. This also avoid infinite recursion if a structure has
         # reference to self.
@@ -205,17 +219,19 @@ class SecretsMasker(logging.Filter):
             else:
                 return item
         # I think this should never happen, but it does not hurt to leave it just in case
+        # Well. It happened (see https://github.com/apache/airflow/issues/19816#issuecomment-983311373)
+        # but it caused infinite recursion, so we need to cast it to str first.
         except Exception as e:
             log.warning(
-                "Unable to redact %r, please report this via <https://github.com/apache/airflow/issues>. "
+                "Unable to redact %s, please report this via <https://github.com/apache/airflow/issues>. "
                 "Error was: %s: %s",
-                item,
+                repr(item),
                 type(e).__name__,
                 str(e),
             )
             return item
 
-    def redact(self, item: "RedactableItem", name: Optional[str] = None) -> "RedactableItem":
+    def redact(self, item: Redactable, name: str | None = None) -> Redacted:
         """Redact an any secrets found in ``item``, if it is a string.
 
         If ``name`` is given, and it's a "sensitive" name (see
@@ -224,13 +240,16 @@ class SecretsMasker(logging.Filter):
         """
         return self._redact(item, name, depth=0)
 
-    def add_mask(self, secret: Union[str, dict, Iterable], name: str = None):
+    def add_mask(self, secret: str | dict | Iterable, name: str | None = None):
         """Add a new secret to be masked to this filter instance."""
+        from airflow.configuration import conf
+
+        test_mode: bool = conf.getboolean('core', 'unit_test_mode')
         if isinstance(secret, dict):
             for k, v in secret.items():
                 self.add_mask(v, k)
         elif isinstance(secret, str):
-            if not secret:
+            if not secret or (test_mode and secret in SECRETS_TO_SKIP_MASKING_FOR_TESTS):
                 return
             pattern = re.escape(secret)
             if pattern not in self.patterns and (not name or should_hide_value_for_key(name)):
@@ -239,3 +258,24 @@ class SecretsMasker(logging.Filter):
         elif isinstance(secret, collections.abc.Iterable):
             for v in secret:
                 self.add_mask(v, name)
+
+
+class RedactedIO(TextIO):
+    """IO class that redacts values going into stdout.
+
+    Expected usage::
+
+        with contextlib.redirect_stdout(RedactedIO()):
+            ...  # Writes to stdout will be redacted.
+    """
+
+    def __init__(self):
+        self.target = sys.stdout
+        self.fileno = sys.stdout.fileno
+
+    def write(self, s: str) -> int:
+        s = redact(s)
+        return self.target.write(s)
+
+    def flush(self) -> None:
+        return self.target.flush()

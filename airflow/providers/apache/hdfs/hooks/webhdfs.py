@@ -16,16 +16,18 @@
 # specific language governing permissions and limitations
 # under the License.
 """Hook for Web HDFS"""
+from __future__ import annotations
+
 import logging
 import socket
-from typing import Any, Optional
+from typing import Any
 
+import requests
 from hdfs import HdfsError, InsecureClient
 
 from airflow.configuration import conf
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
-from airflow.models.connection import Connection
 
 log = logging.getLogger(__name__)
 
@@ -47,12 +49,10 @@ class WebHDFSHook(BaseHook):
     Interact with HDFS. This class is a wrapper around the hdfscli library.
 
     :param webhdfs_conn_id: The connection id for the webhdfs client to connect to.
-    :type webhdfs_conn_id: str
     :param proxy_user: The user used to authenticate.
-    :type proxy_user: str
     """
 
-    def __init__(self, webhdfs_conn_id: str = 'webhdfs_default', proxy_user: Optional[str] = None):
+    def __init__(self, webhdfs_conn_id: str = 'webhdfs_default', proxy_user: str | None = None):
         super().__init__()
         self.webhdfs_conn_id = webhdfs_conn_id
         self.proxy_user = proxy_user
@@ -69,45 +69,61 @@ class WebHDFSHook(BaseHook):
         return connection
 
     def _find_valid_server(self) -> Any:
-        connections = self.get_connections(self.webhdfs_conn_id)
-        for connection in connections:
+        connection = self.get_connection(self.webhdfs_conn_id)
+        namenodes = connection.host.split(',')
+        for namenode in namenodes:
             host_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.log.info("Trying to connect to %s:%s", connection.host, connection.port)
+            self.log.info("Trying to connect to %s:%s", namenode, connection.port)
             try:
-                conn_check = host_socket.connect_ex((connection.host, connection.port))
+                conn_check = host_socket.connect_ex((namenode, connection.port))
                 if conn_check == 0:
-                    self.log.info('Trying namenode %s', connection.host)
-                    client = self._get_client(connection)
+                    self.log.info('Trying namenode %s', namenode)
+                    client = self._get_client(
+                        namenode,
+                        connection.port,
+                        connection.login,
+                        connection.get_password(),
+                        connection.schema,
+                        connection.extra_dejson,
+                    )
                     client.status('/')
-                    self.log.info('Using namenode %s for hook', connection.host)
+                    self.log.info('Using namenode %s for hook', namenode)
                     host_socket.close()
                     return client
                 else:
-                    self.log.error("Could not connect to %s:%s", connection.host, connection.port)
-                host_socket.close()
+                    self.log.warning("Could not connect to %s:%s", namenode, connection.port)
             except HdfsError as hdfs_error:
-                self.log.error(
-                    'Read operation on namenode %s failed with error: %s', connection.host, hdfs_error
-                )
+                self.log.info('Read operation on namenode %s failed with error: %s', namenode, hdfs_error)
         return None
 
-    def _get_client(self, connection: Connection) -> Any:
-        connection_str = f'http://{connection.host}:{connection.port}'
+    def _get_client(
+        self, namenode: str, port: int, login: str, password: str | None, schema: str, extra_dejson: dict
+    ) -> Any:
+        connection_str = f'http://{namenode}'
+        session = requests.Session()
+        if password is not None:
+            session.auth = (login, password)
+
+        if extra_dejson.get('use_ssl', 'False') == 'True' or extra_dejson.get('use_ssl', False):
+            connection_str = f'https://{namenode}'
+            session.verify = extra_dejson.get('verify', False)
+
+        if port is not None:
+            connection_str += f':{port}'
+
+        if schema is not None:
+            connection_str += f'/{schema}'
 
         if _kerberos_security_mode:
-            client = KerberosClient(connection_str)
-        else:
-            proxy_user = self.proxy_user or connection.login
-            client = InsecureClient(connection_str, user=proxy_user)
-
-        return client
+            return KerberosClient(connection_str, session=session)
+        proxy_user = self.proxy_user or login
+        return InsecureClient(connection_str, user=proxy_user, session=session)
 
     def check_for_path(self, hdfs_path: str) -> bool:
         """
         Check for the existence of a path in HDFS by querying FileStatus.
 
         :param hdfs_path: The path to check.
-        :type hdfs_path: str
         :return: True if the path exists and False if not.
         :rtype: bool
         """
@@ -126,15 +142,11 @@ class WebHDFSHook(BaseHook):
             If it's a folder, all the files inside of it will be uploaded.
             .. note:: This implies that folders empty of files will not be created remotely.
 
-        :type source: str
         :param destination: PTarget HDFS path.
             If it already exists and is a directory, files will be uploaded inside.
-        :type destination: str
         :param overwrite: Overwrite any existing file or directory.
-        :type overwrite: bool
         :param parallelism: Number of threads to use for parallelization.
             A value of `0` (or negative) uses as many threads as there are files.
-        :type parallelism: int
         :param kwargs: Keyword arguments forwarded to :meth:`hdfs.client.Client.upload`.
         """
         conn = self.get_conn()

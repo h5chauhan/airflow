@@ -15,10 +15,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Iterable, List, Mapping, Optional, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
 
 from airflow.models import BaseOperator
+from airflow.providers.common.sql.hooks.sql import fetch_all_handler
 from airflow.providers.jdbc.hooks.jdbc import JdbcHook
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class JdbcOperator(BaseOperator):
@@ -31,30 +37,28 @@ class JdbcOperator(BaseOperator):
         For more information on how to use this operator, take a look at the guide:
         :ref:`howto/operator:JdbcOperator`
 
-    :param sql: the sql code to be executed. (templated)
-    :type sql: Can receive a str representing a sql statement,
-        a list of str (sql statements), or reference to a template file.
-        Template reference are recognized by str ending in '.sql'
+    :param sql: the SQL code to be executed as a single string, or
+        a list of str (sql statements), or a reference to a template file.
+        Template references are recognized by str ending in '.sql'
     :param jdbc_conn_id: reference to a predefined database
-    :type jdbc_conn_id: str
     :param autocommit: if True, each command is automatically committed.
         (default value: False)
-    :type autocommit: bool
     :param parameters: (optional) the parameters to render the SQL query with.
-    :type parameters: dict or iterable
     """
 
-    template_fields = ('sql',)
-    template_ext = ('.sql',)
+    template_fields: Sequence[str] = ('sql',)
+    template_ext: Sequence[str] = ('.sql',)
+    template_fields_renderers = {'sql': 'sql'}
     ui_color = '#ededed'
 
     def __init__(
         self,
         *,
-        sql: Union[str, List[str]],
+        sql: str | Iterable[str],
         jdbc_conn_id: str = 'jdbc_default',
         autocommit: bool = False,
-        parameters: Optional[Union[Mapping, Iterable]] = None,
+        parameters: Iterable | Mapping | None = None,
+        handler: Callable[[Any], Any] = fetch_all_handler,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -62,9 +66,13 @@ class JdbcOperator(BaseOperator):
         self.sql = sql
         self.jdbc_conn_id = jdbc_conn_id
         self.autocommit = autocommit
+        self.handler = handler
         self.hook = None
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context):
         self.log.info('Executing: %s', self.sql)
         hook = JdbcHook(jdbc_conn_id=self.jdbc_conn_id)
-        hook.run(self.sql, self.autocommit, parameters=self.parameters)
+        if self.do_xcom_push:
+            return hook.run(self.sql, self.autocommit, parameters=self.parameters, handler=self.handler)
+        else:
+            return hook.run(self.sql, self.autocommit, parameters=self.parameters)

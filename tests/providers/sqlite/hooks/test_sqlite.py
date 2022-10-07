@@ -15,11 +15,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import unittest
 from unittest import mock
 from unittest.mock import patch
+
+import sqlalchemy
 
 from airflow.models import Connection
 from airflow.providers.sqlite.hooks.sqlite import SqliteHook
@@ -106,3 +108,33 @@ class TestSqliteHook(unittest.TestCase):
         statement = 'SQL'
         self.db_hook.run(statement)
         assert self.db_hook.log.info.call_count == 2
+
+    def test_generate_insert_sql_replace_false(self):
+        expected_sql = "INSERT INTO Customer (first_name, last_name) VALUES (?,?)"
+        rows = ('James', '1')
+        target_fields = ['first_name', 'last_name']
+        sql = self.db_hook._generate_insert_sql(
+            table='Customer', values=rows, target_fields=target_fields, replace=False
+        )
+
+        assert sql == expected_sql
+
+    def test_generate_insert_sql_replace_true(self):
+        expected_sql = "REPLACE INTO Customer (first_name, last_name) VALUES (?,?)"
+        rows = ('James', '1')
+        target_fields = ['first_name', 'last_name']
+        sql = self.db_hook._generate_insert_sql(
+            table='Customer', values=rows, target_fields=target_fields, replace=True
+        )
+
+        assert sql == expected_sql
+
+    def test_sqlalchemy_engine(self):
+        """Test that the sqlalchemy engine is initialized"""
+        conn_id = 'sqlite_default'
+        hook = SqliteHook(sqlite_conn_id=conn_id)
+        engine = hook.get_sqlalchemy_engine()
+        assert isinstance(engine, sqlalchemy.engine.Engine)
+        assert engine.name == 'sqlite'
+        # Assert filepath of the sqliate DB is correct
+        assert engine.url.database == hook.get_connection(conn_id).host

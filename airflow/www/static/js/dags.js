@@ -17,9 +17,13 @@
  * under the License.
  */
 
-/* global document, window, $, d3, STATE_COLOR, isoDateToTimeEl, */
+/* global document, window, $, d3, STATE_COLOR, isoDateToTimeEl, autoRefreshInterval,
+ localStorage */
 
-import getMetaValue from './meta_value';
+import { getMetaValue } from './utils';
+import tiTooltip from './task_instances';
+import { approxTimeFromNow, formatDateTime } from './datetime_utils';
+import { openDatasetModal, getDatasetTooltipInfo } from './datasetUtils';
 
 const DAGS_INDEX = getMetaValue('dags_index');
 const ENTER_KEY_CODE = 13;
@@ -34,6 +38,14 @@ const csrfToken = getMetaValue('csrf_token');
 const lastDagRunsUrl = getMetaValue('last_dag_runs_url');
 const dagStatsUrl = getMetaValue('dag_stats_url');
 const taskStatsUrl = getMetaValue('task_stats_url');
+const gridUrl = getMetaValue('grid_url');
+
+const nextDatasets = {};
+let nextDatasetsError;
+
+// auto refresh interval in milliseconds
+// (x2 the interval in tree/graph view since this page can take longer to refresh )
+const refreshIntervalMs = 2000;
 
 $('#tags_filter').select2({
   placeholder: 'Filter DAGs by tag',
@@ -81,17 +93,16 @@ $('#page_size').on('change', function onPageSizeChange() {
   window.location = `${DAGS_INDEX}?page_size=${pSize}`;
 });
 
-const encodedDagIds = new URLSearchParams();
-
 $.each($('[id^=toggle]'), function toggleId() {
   const $input = $(this);
   const dagId = $input.data('dag-id');
-  encodedDagIds.append('dagIds', dagId);
 
   $input.on('change', () => {
     const isPaused = $input.is(':checked');
     const url = `${pausedUrl}?is_paused=${isPaused}&dag_id=${encodeURIComponent(dagId)}`;
     $input.removeClass('switch-input--error');
+    // Remove focus on element so the tooltip will go away
+    $input.trigger('blur');
     $.post(url).fail(() => {
       setTimeout(() => {
         $input.prop('checked', !isPaused);
@@ -103,22 +114,26 @@ $.each($('[id^=toggle]'), function toggleId() {
 
 $('.typeahead').typeahead({
   source(query, callback) {
-    return $.ajax(autocompleteUrl,
+    return $.ajax(
+      autocompleteUrl,
       {
         data: {
           query: encodeURIComponent(query),
           status: statusFilter,
         },
         success: callback,
-      });
+      },
+    );
   },
   autoSelect: false,
   afterSelect(value) {
-    const searchQuery = value.trim();
-    if (searchQuery) {
-      const query = new URLSearchParams(window.location.search);
-      query.set('search', searchQuery);
+    const query = new URLSearchParams(window.location.search);
+    query.set('search', value.name);
+    if (value.type === 'owner') {
       window.location = `${DAGS_INDEX}?${query}`;
+    }
+    if (value.type === 'dag') {
+      window.location = `${gridUrl.replace('__DAG_ID__', value.name)}?${query}`;
     }
   },
 });
@@ -147,27 +162,36 @@ function blockedHandler(error, json) {
 }
 
 function lastDagRunsHandler(error, json) {
+  $('.js-loading-last-run').remove();
   Object.keys(json).forEach((safeDagId) => {
     const dagId = json[safeDagId].dag_id;
     const executionDate = json[safeDagId].execution_date;
-    const startDate = json[safeDagId].start_date;
     const g = d3.select(`#last-run-${safeDagId}`);
+
+    // Show last run as a link to the graph view
     g.selectAll('a')
       .attr('href', `${graphUrl}?dag_id=${encodeURIComponent(dagId)}&execution_date=${encodeURIComponent(executionDate)}`)
+      .html('')
       .insert(isoDateToTimeEl.bind(null, executionDate, { title: false }));
+
+    // Only show the tooltip when we have a last run and add the json to a custom data- attribute
     g.selectAll('span')
-    // We don't translate the timezone in the tooltip, that stays in UTC.
-      .attr('data-original-title', `Start Date: ${startDate}`)
-      .style('display', null);
-    g.selectAll('.js-loading-last-run').remove();
-    $('.js-loading-last-run').remove();
+      .style('display', null)
+      .attr('data-lastrun', JSON.stringify(json[safeDagId]));
   });
 }
+
+// Load data-lastrun attribute data to populate the tooltip on hover
+d3.selectAll('.js-last-run-tooltip')
+  .on('mouseover', function mouseoverLastRun() {
+    const lastRunData = JSON.parse(d3.select(this).attr('data-lastrun'));
+    d3.select(this).attr('data-original-title', tiTooltip(lastRunData));
+  });
 
 function drawDagStatsForDag(dagId, states) {
   const g = d3.select(`svg#dag-run-${dagId.replace(/\./g, '__dot__')}`)
     .attr('height', diameter + (strokeWidthHover * 2))
-    .attr('width', '110px')
+    .attr('width', '120px')
     .selectAll('g')
     .data(states)
     .enter()
@@ -221,7 +245,7 @@ function drawDagStatsForDag(dagId, states) {
     .attr('fill', '#51504f')
     .attr('text-anchor', 'middle')
     .attr('vertical-align', 'middle')
-    .attr('font-size', 8)
+    .attr('font-size', 9)
     .attr('y', 3)
     .style('pointer-events', 'none')
     .text((d) => (d.count > 0 ? d.count : ''));
@@ -285,13 +309,14 @@ function drawTaskStatsForDag(dagId, states) {
     .duration(300)
     .delay((d, i) => i * 50)
     .style('opacity', 1);
+
   d3.select('.js-loading-task-stats').remove();
 
   g.append('text')
     .attr('fill', '#51504f')
     .attr('text-anchor', 'middle')
     .attr('vertical-align', 'middle')
-    .attr('font-size', 8)
+    .attr('font-size', 9)
     .attr('y', 3)
     .style('pointer-events', 'none')
     .text((d) => (d.count > 0 ? d.count : ''));
@@ -304,24 +329,41 @@ function taskStatsHandler(error, json) {
   });
 }
 
-if (encodedDagIds.has('dagIds')) {
-  // dags on page fetch stats
-  d3.json(blockedUrl)
-    .header('X-CSRFToken', csrfToken)
-    .post(encodedDagIds, blockedHandler);
-  d3.json(lastDagRunsUrl)
-    .header('X-CSRFToken', csrfToken)
-    .post(encodedDagIds, lastDagRunsHandler);
-  d3.json(dagStatsUrl)
-    .header('X-CSRFToken', csrfToken)
-    .post(encodedDagIds, dagStatsHandler);
-  d3.json(taskStatsUrl)
-    .header('X-CSRFToken', csrfToken)
-    .post(encodedDagIds, taskStatsHandler);
-} else {
-  // no dags, hide the loading dots
-  $('.js-loading-task-stats').remove();
-  $('.js-loading-dag-stats').remove();
+function getDagIds({ activeDagsOnly = false } = {}) {
+  let dagIds = $('[id^=toggle]');
+  if (activeDagsOnly) {
+    dagIds = dagIds.filter(':checked');
+  }
+  dagIds = dagIds.map(function () {
+    return $(this).data('dag-id');
+  }).get();
+  return dagIds;
+}
+
+function getDagStats() {
+  const dagIds = getDagIds();
+  const params = new URLSearchParams();
+  dagIds.forEach((dagId) => {
+    params.append('dag_ids', dagId);
+  });
+  if (params.has('dag_ids')) {
+    d3.json(blockedUrl)
+      .header('X-CSRFToken', csrfToken)
+      .post(params, blockedHandler);
+    d3.json(lastDagRunsUrl)
+      .header('X-CSRFToken', csrfToken)
+      .post(params, lastDagRunsHandler);
+    d3.json(dagStatsUrl)
+      .header('X-CSRFToken', csrfToken)
+      .post(params, dagStatsHandler);
+    d3.json(taskStatsUrl)
+      .header('X-CSRFToken', csrfToken)
+      .post(params, taskStatsHandler);
+  } else {
+    // no dags, hide the loading dots
+    $('.js-loading-task-stats').remove();
+    $('.js-loading-dag-stats').remove();
+  }
 }
 
 function showSvgTooltip(text, circ) {
@@ -339,7 +381,125 @@ function hideSvgTooltip() {
   $('#svg-tooltip').css('display', 'none');
 }
 
+function refreshDagRunsAndTasks(selector, dagId, states) {
+  d3.select(`svg#${selector}-${dagId.replace(/\./g, '__dot__')}`)
+    .selectAll('circle')
+    .data(states)
+    .attr('stroke-width', (d) => {
+      if (d.count > 0) return strokeWidth;
+      return 1;
+    })
+    .attr('stroke', (d) => {
+      if (d.count > 0) return STATE_COLOR[d.state];
+
+      return 'gainsboro';
+    })
+    .attr('fill', '#fff')
+    .attr('r', diameter / 2)
+    .attr('title', (d) => d.state)
+    .on('mouseover', (d) => {
+      if (d.count > 0) {
+        d3.select(this).transition().duration(400)
+          .attr('fill', '#e2e2e2')
+          .style('stroke-width', strokeWidthHover);
+      }
+    });
+  d3.select(`svg#${selector}-${dagId.replace(/\./g, '__dot__')}`)
+    .selectAll('text')
+    .data(states)
+    .text((d) => {
+      if (d.count > 0) {
+        return d.count;
+      }
+      return '';
+    });
+}
+
+function refreshTaskStateHandler(error, ts) {
+  Object.keys(ts).forEach((dagId) => {
+    const states = ts[dagId];
+    refreshDagRunsAndTasks('task-run', dagId, states);
+  });
+}
+
+let refreshInterval;
+
+function checkActiveRuns(json) {
+  // filter latest dag runs and check if there are still running dags
+  const activeRuns = Object.keys(json).filter((dagId) => {
+    const dagRuns = json[dagId].filter(({ state }) => state === 'running' || state === 'queued').filter((r) => r.count > 0);
+    return (dagRuns.length > 0);
+  });
+  if (activeRuns.length === 0) {
+    // in case there are no active runs increase the interval for auto refresh
+    $('#auto_refresh').prop('checked', false);
+    clearInterval(refreshInterval);
+  }
+}
+
+function refreshDagRuns(error, json) {
+  checkActiveRuns(json);
+  Object.keys(json).forEach((dagId) => {
+    const states = json[dagId];
+    drawDagStatsForDag(dagId, states);
+    refreshDagRunsAndTasks('dag-run', dagId, states);
+  });
+}
+
+function handleRefresh({ activeDagsOnly = false } = {}) {
+  const dagIds = getDagIds({ activeDagsOnly });
+  const params = new URLSearchParams();
+  dagIds.forEach((dagId) => {
+    params.append('dag_ids', dagId);
+  });
+  $('#loading-dots').css('display', 'inline-block');
+  if (params.has('dag_ids')) {
+    d3.json(lastDagRunsUrl)
+      .header('X-CSRFToken', csrfToken)
+      .post(params, lastDagRunsHandler);
+    d3.json(dagStatsUrl)
+      .header('X-CSRFToken', csrfToken)
+      .post(params, refreshDagRuns);
+    d3.json(taskStatsUrl)
+      .header('X-CSRFToken', csrfToken)
+      .post(params, refreshTaskStateHandler);
+  }
+  setTimeout(() => {
+    $('#loading-dots').css('display', 'none');
+  }, refreshIntervalMs);
+}
+
+function startOrStopRefresh() {
+  if ($('#auto_refresh').is(':checked')) {
+    refreshInterval = setInterval(() => {
+      handleRefresh({ activeDagsOnly: true });
+    }, autoRefreshInterval * refreshIntervalMs);
+  } else {
+    clearInterval(refreshInterval);
+  }
+}
+
+function initAutoRefresh() {
+  const isDisabled = localStorage.getItem('dagsDisableAutoRefresh');
+  $('#auto_refresh').prop('checked', !(isDisabled));
+  startOrStopRefresh();
+  d3.select('#refresh_button').on('click', () => handleRefresh());
+}
+
+// pause autorefresh when the page is not active
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    clearInterval(refreshInterval);
+  } else {
+    initAutoRefresh();
+  }
+};
+
+document.addEventListener('visibilitychange', handleVisibilityChange);
+
 $(window).on('load', () => {
+  initAutoRefresh();
+
   $('body').on('mouseover', '.has-svg-tooltip', (e) => {
     const elem = e.target;
     const text = elem.getAttribute('title');
@@ -349,5 +509,53 @@ $(window).on('load', () => {
 
   $('body').on('mouseout', '.has-svg-tooltip', () => {
     hideSvgTooltip();
+  });
+
+  getDagStats();
+});
+
+$('.js-next-run-tooltip').each((i, run) => {
+  $(run).on('mouseover', () => {
+    $(run).attr('data-original-title', () => {
+      const nextRunData = $(run).attr('data-nextrun');
+      const [createAfter, intervalStart, intervalEnd] = nextRunData.split(',');
+      let newTitle = '';
+      newTitle += `<strong>Run After:</strong> ${formatDateTime(createAfter)}<br>`;
+      newTitle += `Next Run: ${approxTimeFromNow(createAfter)}<br><br>`;
+      newTitle += '<strong>Data Interval</strong><br>';
+      newTitle += `Start: ${formatDateTime(intervalStart)}<br>`;
+      newTitle += `End: ${formatDateTime(intervalEnd)}`;
+      return newTitle;
+    });
+  });
+});
+
+$('#auto_refresh').change(() => {
+  if ($('#auto_refresh').is(':checked')) {
+    // Run an initial refresh before starting interval if manually turned on
+    handleRefresh({ activeDagsOnly: true });
+    localStorage.removeItem('dagsDisableAutoRefresh');
+  } else {
+    localStorage.setItem('dagsDisableAutoRefresh', 'true');
+    $('#loading-dots').css('display', 'none');
+  }
+  startOrStopRefresh();
+});
+
+$('.next-dataset-triggered').on('click', (e) => {
+  const dagId = $(e.target).data('dag-id');
+  const summary = $(e.target).data('summary');
+  if (dagId) openDatasetModal(dagId, summary, nextDatasets[dagId], nextDatasetsError);
+});
+
+$('.js-dataset-triggered').each((i, cell) => {
+  $(cell).on('mouseover', () => {
+    const run = $(cell).children();
+    const dagId = $(run).data('dag-id');
+    const setNextDatasets = (datasets, error) => {
+      nextDatasets[dagId] = datasets;
+      nextDatasetsError = error;
+    };
+    getDatasetTooltipInfo(dagId, run, setNextDatasets);
   });
 });

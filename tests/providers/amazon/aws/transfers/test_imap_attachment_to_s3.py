@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest.mock import patch
@@ -26,6 +27,7 @@ class TestImapAttachmentToS3Operator(unittest.TestCase):
     def setUp(self):
         self.kwargs = dict(
             imap_attachment_name='test_file',
+            s3_bucket='test_bucket',
             s3_key='test_file',
             imap_check_regex=False,
             imap_mail_folder='INBOX',
@@ -52,6 +54,7 @@ class TestImapAttachmentToS3Operator(unittest.TestCase):
         )
         mock_s3_hook.return_value.load_bytes.assert_called_once_with(
             bytes_data=mock_imap_hook.return_value.retrieve_mail_attachments.return_value[0][1],
+            bucket_name=self.kwargs['s3_bucket'],
             key=self.kwargs['s3_key'],
             replace=self.kwargs['s3_overwrite'],
         )

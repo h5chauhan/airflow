@@ -32,12 +32,12 @@ There are two methods that you need to override in a derived class:
   You can specify the ``default_args`` in the dag file. See :ref:`Default args <concepts:default-arguments>` for more details.
 
 * Execute - The code to execute when the runner calls the operator. The method contains the
-  airflow context as a parameter that can be used to read config values.
+  Airflow context as a parameter that can be used to read config values.
 
 .. note::
 
     When implementing custom operators, do not make any expensive operations in the ``__init__`` method. The operators
-    will instantiated once per scheduler cycle per task using them, and making database calls can significantly slow
+    will be instantiated once per scheduler cycle per task using them, and making database calls can significantly slow
     down scheduling and waste resources.
 
 Let's implement an example ``HelloOperator`` in a new file ``hello_operator.py``:
@@ -135,12 +135,14 @@ User interface
 Airflow also allows the developer to control how the operator shows up in the DAG UI.
 Override ``ui_color`` to change the background color of the operator in UI.
 Override ``ui_fgcolor`` to change the color of the label.
+Override ``custom_operator_name`` to change the displayed name to something other than the classname.
 
 .. code-block:: python
 
         class HelloOperator(BaseOperator):
             ui_color = "#ff0000"
             ui_fgcolor = "#000000"
+            custom_operator_name = "Howdy"
             # ...
 
 Templating
@@ -153,7 +155,7 @@ the operator.
 
         class HelloOperator(BaseOperator):
 
-            template_fields = ["name"]
+            template_fields: Sequence[str] = ("name",)
 
             def __init__(self, name: str, **kwargs) -> None:
                 super().__init__(**kwargs)
@@ -169,9 +171,7 @@ You can use the template as follows:
 .. code-block:: python
 
         with dag:
-            hello_task = HelloOperator(
-                task_id="task_id_1", dag=dag, name="{{ task_instance.task_id }}"
-            )
+            hello_task = HelloOperator(task_id="task_id_1", dag=dag, name="{{ task_instance.task_id }}")
 
 In this example, Jinja looks for the ``name`` parameter and substitutes ``{{ task_instance.task_id }}`` with
 ``task_id_1``.
@@ -186,8 +186,8 @@ with actual value. Note that Jinja substitutes the operator attributes and not t
 
         class HelloOperator(BaseOperator):
 
-            template_fields = ["guest_name"]
-            template_ext = [".sql"]
+            template_fields: Sequence[str] = ("guest_name",)
+            template_ext = ".sql"
 
             def __init__(self, name: str, **kwargs) -> None:
                 super().__init__(**kwargs)
@@ -201,7 +201,7 @@ from template field renders in Web UI. For example:
 .. code-block:: python
 
         class MyRequestOperator(BaseOperator):
-            template_fields = ["request_body"]
+            template_fields: Sequence[str] = ("request_body",)
             template_fields_renderers = {"request_body": "json"}
 
             def __init__(self, request_body: str, **kwargs) -> None:
@@ -214,7 +214,7 @@ dot-separated key path to extract and render individual elements appropriately. 
 .. code-block:: python
 
         class MyConfigOperator(BaseOperator):
-            template_fields = ["configuration"]
+            template_fields: Sequence[str] = ("configuration",)
             template_fields_renderers = {
                 "configuration": "json",
                 "configuration.query.sql": "sql",
@@ -243,19 +243,29 @@ configuration at ``query.sql`` to be rendered with the SQL lexer.
 Currently available lexers:
 
   - bash
+  - bash_command
   - doc
+  - doc_json
+  - doc_md
+  - doc_rst
+  - doc_yaml
+  - doc_md
   - hql
   - html
   - jinja
   - json
   - md
+  - mysql
+  - postgresql
   - powershell
   - py
+  - python_callable
   - rst
   - sql
+  - tsql
   - yaml
 
-If you use a non existing lexer then the value of the template field will be rendered as a pretty printed object.
+If you use a non-existing lexer then the value of the template field will be rendered as a pretty-printed object.
 
 Define an operator extra link
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

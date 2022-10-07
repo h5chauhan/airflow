@@ -14,25 +14,27 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import functools
 import logging
 from inspect import signature
-from typing import Any, Optional
+from typing import Any
 
-import tenacity
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from airflow.configuration import conf
 
-MAX_DB_RETRIES = conf.getint('core', 'max_db_retries', fallback=3)
+MAX_DB_RETRIES = conf.getint('database', 'max_db_retries', fallback=3)
 
 
-def run_with_db_retries(max_retries: int = MAX_DB_RETRIES, logger: Optional[logging.Logger] = None, **kwargs):
+def run_with_db_retries(max_retries: int = MAX_DB_RETRIES, logger: logging.Logger | None = None, **kwargs):
     """Return Tenacity Retrying object with project specific default"""
+    import tenacity
+
     # Default kwargs
     retry_kwargs = dict(
-        retry=tenacity.retry_if_exception_type(exception_types=OperationalError),
+        retry=tenacity.retry_if_exception_type(exception_types=(OperationalError, DBAPIError)),
         wait=tenacity.wait_random_exponential(multiplier=0.5, max=5),
         stop=tenacity.stop_after_attempt(max_retries),
         reraise=True,

@@ -15,11 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import base64
 import json
-from typing import Union
 
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 
@@ -38,13 +37,12 @@ class SecretsManagerHook(AwsBaseHook):
     def __init__(self, *args, **kwargs):
         super().__init__(client_type='secretsmanager', *args, **kwargs)
 
-    def get_secret(self, secret_name: str) -> Union[str, bytes]:
+    def get_secret(self, secret_name: str) -> str | bytes:
         """
         Retrieve secret value from AWS Secrets Manager as a str or bytes
         reflecting format it stored in the AWS Secrets Manager
 
         :param secret_name: name of the secrets.
-        :type secret_name: str
         :return: Union[str, bytes] with the information about the secrets
         :rtype: Union[str, bytes]
         """
@@ -62,7 +60,6 @@ class SecretsManagerHook(AwsBaseHook):
         Retrieve secret value from AWS Secrets Manager in a dict representation
 
         :param secret_name: name of the secrets.
-        :type secret_name: str
         :return: dict with the information about the secrets
         :rtype: dict
         """

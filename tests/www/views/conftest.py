@@ -15,8 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, List, NamedTuple
+from typing import Any, Generator, NamedTuple
 
 import flask
 import jinja2
@@ -25,7 +27,7 @@ import pytest
 from airflow import settings
 from airflow.models import DagBag
 from airflow.www.app import create_app
-from tests.test_utils.api_connexion_utils import create_user, delete_roles
+from tests.test_utils.api_connexion_utils import delete_user
 from tests.test_utils.decorators import dont_initialize_flask_app_submodules
 from tests.test_utils.www import client_with_login
 
@@ -55,6 +57,8 @@ def app(examples_dag_bag):
             "init_flash_views",
             "init_jinja_globals",
             "init_plugins",
+            "init_airflow_session_interface",
+            "init_check_user_active",
         ]
     )
     def factory():
@@ -66,42 +70,47 @@ def app(examples_dag_bag):
     app.jinja_env.undefined = jinja2.StrictUndefined
 
     security_manager = app.appbuilder.sm
-    if not security_manager.find_user(username='test'):
-        security_manager.add_user(
-            username='test',
-            first_name='test',
-            last_name='test',
-            email='test@fab.org',
-            role=security_manager.find_role('Admin'),
-            password='test',
-        )
-    if not security_manager.find_user(username='test_user'):
-        security_manager.add_user(
-            username='test_user',
-            first_name='test_user',
-            last_name='test_user',
-            email='test_user@fab.org',
-            role=security_manager.find_role('User'),
-            password='test_user',
-        )
-    if not security_manager.find_user(username='test_viewer'):
-        security_manager.add_user(
-            username='test_viewer',
-            first_name='test_viewer',
-            last_name='test_viewer',
-            email='test_viewer@fab.org',
-            role=security_manager.find_role('Viewer'),
-            password='test_viewer',
-        )
+
+    test_users = [
+        {
+            'username': 'test_admin',
+            'first_name': 'test_admin_first_name',
+            'last_name': 'test_admin_last_name',
+            'email': 'test_admin@fab.org',
+            'role': security_manager.find_role('Admin'),
+            'password': 'test_admin_password',
+        },
+        {
+            'username': 'test_user',
+            'first_name': 'test_user_first_name',
+            'last_name': 'test_user_last_name',
+            'email': 'test_user@fab.org',
+            'role': security_manager.find_role('User'),
+            'password': 'test_user_password',
+        },
+        {
+            'username': 'test_viewer',
+            'first_name': 'test_viewer_first_name',
+            'last_name': 'test_viewer_last_name',
+            'email': 'test_viewer@fab.org',
+            'role': security_manager.find_role('Viewer'),
+            'password': 'test_viewer_password',
+        },
+    ]
+
+    for user_dict in test_users:
+        if not security_manager.find_user(username=user_dict['username']):
+            security_manager.add_user(**user_dict)
 
     yield app
 
-    delete_roles(app)
+    for user_dict in test_users:
+        delete_user(app, user_dict['username'])
 
 
 @pytest.fixture()
 def admin_client(app):
-    return client_with_login(app, username="test", password="test")
+    return client_with_login(app, username="test_admin", password="test_admin")
 
 
 @pytest.fixture()
@@ -114,21 +123,9 @@ def user_client(app):
     return client_with_login(app, username="test_user", password="test_user")
 
 
-@pytest.fixture(scope="module")
-def client_factory(app):
-    def factory(name, role_name, permissions):
-        create_user(app, name, role_name, permissions)
-        client = app.test_client()
-        resp = client.post("/login/", data={"username": name, "password": name})
-        assert resp.status_code == 302
-        return client
-
-    return factory
-
-
 class _TemplateWithContext(NamedTuple):
     template: jinja2.environment.Template
-    context: Dict[str, Any]
+    context: dict[str, Any]
 
     @property
     def name(self):
@@ -178,7 +175,7 @@ class _TemplateWithContext(NamedTuple):
 @pytest.fixture(scope="module")
 def capture_templates(app):
     @contextmanager
-    def manager() -> Generator[List[_TemplateWithContext], None, None]:
+    def manager() -> Generator[list[_TemplateWithContext], None, None]:
         recorded = []
 
         def record(sender, template, context, **extra):

@@ -15,10 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """This module contains AWS SNS hook"""
+from __future__ import annotations
+
 import json
-from typing import Dict, Optional, Union
 
 from airflow.providers.amazon.aws.hooks.base_aws import AwsBaseHook
 
@@ -37,7 +37,7 @@ def _get_message_attribute(o):
     )
 
 
-class AwsSnsHook(AwsBaseHook):
+class SnsHook(AwsBaseHook):
     """
     Interact with Amazon Simple Notification Service.
 
@@ -55,18 +55,16 @@ class AwsSnsHook(AwsBaseHook):
         self,
         target_arn: str,
         message: str,
-        subject: Optional[str] = None,
-        message_attributes: Optional[dict] = None,
+        subject: str | None = None,
+        message_attributes: dict | None = None,
     ):
         """
         Publish a message to a topic or an endpoint.
 
         :param target_arn: either a TopicArn or an EndpointArn
-        :type target_arn: str
         :param message: the default message you want to send
         :param message: str
         :param subject: subject of message
-        :type subject: str
         :param message_attributes: additional attributes to publish for message filtering. This should be
             a flat dict; the DataType to be sent depends on the type of the value:
 
@@ -75,9 +73,8 @@ class AwsSnsHook(AwsBaseHook):
             - int, float = Number
             - iterable = String.Array
 
-        :type message_attributes: dict
         """
-        publish_kwargs: Dict[str, Union[str, dict]] = {
+        publish_kwargs: dict[str, str | dict] = {
             'TargetArn': target_arn,
             'MessageStructure': 'json',
             'Message': json.dumps({'default': message}),

@@ -15,11 +15,17 @@
 # specific language governing permissions and limitations
 # under the License.
 """Base executor - this is the base class for all the implemented executors."""
-import sys
-from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Set, Tuple
+from __future__ import annotations
 
+import sys
+import warnings
+from collections import OrderedDict
+from typing import Any, Counter, List, Optional, Sequence, Tuple
+
+from airflow.callbacks.base_callback_sink import BaseCallbackSink
+from airflow.callbacks.callback_requests import CallbackRequest
 from airflow.configuration import conf
+from airflow.exceptions import RemovedInAirflow3Warning
 from airflow.models.taskinstance import TaskInstance, TaskInstanceKey
 from airflow.stats import Stats
 from airflow.utils.log.logging_mixin import LoggingMixin
@@ -28,6 +34,8 @@ from airflow.utils.state import State
 PARALLELISM: int = conf.getint('core', 'PARALLELISM')
 
 NOT_STARTED_MESSAGE = "The executor should be started first!"
+
+QUEUEING_ATTEMPTS = 5
 
 # Command to execute - list of strings
 # the first element is always "airflow".
@@ -45,6 +53,9 @@ QueuedTaskInstanceType = Tuple[CommandType, int, Optional[str], TaskInstance]
 # Tuple of: state, info
 EventBufferValueType = Tuple[Optional[str], Any]
 
+# Task tuple to send to be executed
+TaskTuple = Tuple[TaskInstanceKey, CommandType, Optional[str], Optional[Any]]
+
 
 class BaseExecutor(LoggingMixin):
     """
@@ -55,14 +66,16 @@ class BaseExecutor(LoggingMixin):
         ``0`` for infinity
     """
 
-    job_id: Optional[str] = None
+    job_id: None | int | str = None
+    callback_sink: BaseCallbackSink | None = None
 
     def __init__(self, parallelism: int = PARALLELISM):
         super().__init__()
         self.parallelism: int = parallelism
         self.queued_tasks: OrderedDict[TaskInstanceKey, QueuedTaskInstanceType] = OrderedDict()
-        self.running: Set[TaskInstanceKey] = set()
-        self.event_buffer: Dict[TaskInstanceKey, EventBufferValueType] = {}
+        self.running: set[TaskInstanceKey] = set()
+        self.event_buffer: dict[TaskInstanceKey, EventBufferValueType] = {}
+        self.attempts: Counter[TaskInstanceKey] = Counter()
 
     def __repr__(self):
         return f"{self.__class__.__name__}(parallelism={self.parallelism})"
@@ -75,10 +88,10 @@ class BaseExecutor(LoggingMixin):
         task_instance: TaskInstance,
         command: CommandType,
         priority: int = 1,
-        queue: Optional[str] = None,
+        queue: str | None = None,
     ):
         """Queues command to task"""
-        if task_instance.key not in self.queued_tasks and task_instance.key not in self.running:
+        if task_instance.key not in self.queued_tasks:
             self.log.info("Adding to queue: %s", command)
             self.queued_tasks[task_instance.key] = (command, priority, queue, task_instance)
         else:
@@ -88,13 +101,13 @@ class BaseExecutor(LoggingMixin):
         self,
         task_instance: TaskInstance,
         mark_success: bool = False,
-        pickle_id: Optional[str] = None,
+        pickle_id: str | None = None,
         ignore_all_deps: bool = False,
         ignore_depends_on_past: bool = False,
         ignore_task_deps: bool = False,
         ignore_ti_state: bool = False,
-        pool: Optional[str] = None,
-        cfg_path: Optional[str] = None,
+        pool: str | None = None,
+        cfg_path: str | None = None,
     ) -> None:
         """Queues task instance."""
         pool = pool or task_instance.pool
@@ -161,7 +174,7 @@ class BaseExecutor(LoggingMixin):
         self.log.debug("Calling the %s sync method", self.__class__)
         self.sync()
 
-    def order_queued_tasks_by_priority(self) -> List[Tuple[TaskInstanceKey, QueuedTaskInstanceType]]:
+    def order_queued_tasks_by_priority(self) -> list[tuple[TaskInstanceKey, QueuedTaskInstanceType]]:
         """
         Orders the queued tasks by priority.
 
@@ -175,17 +188,48 @@ class BaseExecutor(LoggingMixin):
 
     def trigger_tasks(self, open_slots: int) -> None:
         """
-        Triggers tasks
+        Initiates async execution of the queued tasks, up to the number of available slots.
 
         :param open_slots: Number of open slots
         """
         sorted_queue = self.order_queued_tasks_by_priority()
+        task_tuples = []
 
         for _ in range(min((open_slots, len(self.queued_tasks)))):
             key, (command, _, queue, ti) = sorted_queue.pop(0)
-            self.queued_tasks.pop(key)
+
+            # If a task makes it here but is still understood by the executor
+            # to be running, it generally means that the task has been killed
+            # externally and not yet been marked as failed.
+            #
+            # However, when a task is deferred, there is also a possibility of
+            # a race condition where a task might be scheduled again during
+            # trigger processing, even before we are able to register that the
+            # deferred task has completed. In this case and for this reason,
+            # we make a small number of attempts to see if the task has been
+            # removed from the running set in the meantime.
+            if key in self.running:
+                attempt = self.attempts[key]
+                if attempt < QUEUEING_ATTEMPTS - 1:
+                    self.attempts[key] = attempt + 1
+                    self.log.info("task %s is still running", key)
+                    continue
+
+                # We give up and remove the task from the queue.
+                self.log.error("could not queue task %s (still running after %d attempts)", key, attempt)
+                del self.attempts[key]
+                del self.queued_tasks[key]
+            else:
+                task_tuples.append((key, command, queue, ti.executor_config))
+
+        if task_tuples:
+            self._process_tasks(task_tuples)
+
+    def _process_tasks(self, task_tuples: list[TaskTuple]) -> None:
+        for key, command, queue, executor_config in task_tuples:
+            del self.queued_tasks[key]
+            self.execute_async(key=key, command=command, queue=queue, executor_config=executor_config)
             self.running.add(key)
-            self.execute_async(key=key, command=command, queue=queue, executor_config=ti.executor_config)
 
     def change_state(self, key: TaskInstanceKey, state: str, info=None) -> None:
         """
@@ -220,16 +264,16 @@ class BaseExecutor(LoggingMixin):
         """
         self.change_state(key, State.SUCCESS, info)
 
-    def get_event_buffer(self, dag_ids=None) -> Dict[TaskInstanceKey, EventBufferValueType]:
+    def get_event_buffer(self, dag_ids=None) -> dict[TaskInstanceKey, EventBufferValueType]:
         """
         Returns and flush the event buffer. In case dag_ids is specified
         it will only return and flush events for the given dag_ids. Otherwise
         it returns and flushes all events.
 
-        :param dag_ids: to dag_ids to return events for, if None returns all
+        :param dag_ids: the dag_ids to return events for; returns all if given ``None``.
         :return: a dict of events
         """
-        cleared_events: Dict[TaskInstanceKey, EventBufferValueType] = {}
+        cleared_events: dict[TaskInstanceKey, EventBufferValueType] = {}
         if dag_ids is None:
             cleared_events = self.event_buffer
             self.event_buffer = {}
@@ -244,8 +288,8 @@ class BaseExecutor(LoggingMixin):
         self,
         key: TaskInstanceKey,
         command: CommandType,
-        queue: Optional[str] = None,
-        executor_config: Optional[Any] = None,
+        queue: str | None = None,
+        executor_config: Any | None = None,
     ) -> None:  # pragma: no cover
         """
         This method will execute the command asynchronously.
@@ -269,7 +313,7 @@ class BaseExecutor(LoggingMixin):
         """This method is called when the daemon receives a SIGTERM"""
         raise NotImplementedError()
 
-    def try_adopt_task_instances(self, tis: List[TaskInstance]) -> List[TaskInstance]:
+    def try_adopt_task_instances(self, tis: Sequence[TaskInstance]) -> Sequence[TaskInstance]:
         """
         Try to adopt running task instances that have been abandoned by a SchedulerJob dying.
 
@@ -277,7 +321,7 @@ class BaseExecutor(LoggingMixin):
         re-scheduling)
 
         :return: any TaskInstances that were unable to be adopted
-        :rtype: list[airflow.models.TaskInstance]
+        :rtype: Sequence[airflow.models.TaskInstance]
         """
         # By default, assume Executors cannot adopt tasks, so just say we failed to adopt anything.
         # Subclasses can do better!
@@ -292,10 +336,43 @@ class BaseExecutor(LoggingMixin):
             return sys.maxsize
 
     @staticmethod
-    def validate_command(command: List[str]) -> None:
-        """Check if the command to execute is airflow command"""
+    def validate_command(command: list[str]) -> None:
+        """
+        Back-compat method to Check if the command to execute is airflow command
+
+        :param command: command to check
+        :return: None
+        """
+        warnings.warn(
+            """
+            The `validate_command` method is deprecated. Please use ``validate_airflow_tasks_run_command``
+            """,
+            RemovedInAirflow3Warning,
+            stacklevel=2,
+        )
+        BaseExecutor.validate_airflow_tasks_run_command(command)
+
+    @staticmethod
+    def validate_airflow_tasks_run_command(command: list[str]) -> tuple[str | None, str | None]:
+        """
+        Check if the command to execute is airflow command
+
+        Returns tuple (dag_id,task_id) retrieved from the command (replaced with None values if missing)
+        """
         if command[0:3] != ["airflow", "tasks", "run"]:
             raise ValueError('The command must start with ["airflow", "tasks", "run"].')
+        if len(command) > 3 and "--help" not in command:
+            dag_id: str | None = None
+            task_id: str | None = None
+            for arg in command[4:]:
+                if not arg.startswith("--"):
+                    if dag_id is None:
+                        dag_id = arg
+                    else:
+                        task_id = arg
+                        break
+            return dag_id, task_id
+        return None, None
 
     def debug_dump(self):
         """Called in response to SIGUSR2 by the scheduler"""
@@ -310,3 +387,14 @@ class BaseExecutor(LoggingMixin):
             len(self.event_buffer),
             "\n\t".join(map(repr, self.event_buffer.items())),
         )
+
+    def send_callback(self, request: CallbackRequest) -> None:
+        """Sends callback for execution.
+
+        Provides a default implementation which sends the callback to the `callback_sink` object.
+
+        :param request: Callback request to be executed.
+        """
+        if not self.callback_sink:
+            raise ValueError("Callback sink is not ready.")
+        self.callback_sink.send(request)

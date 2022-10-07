@@ -15,8 +15,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
+import time
 import unittest
 
 from airflow.providers.amazon.aws.hooks.logs import AwsLogsHook
@@ -49,7 +50,7 @@ class TestAwsLogsHook(unittest.TestCase):
         conn.create_log_group(logGroupName=log_group_name)
         conn.create_log_stream(logGroupName=log_group_name, logStreamName=log_stream_name)
 
-        input_events = [{'timestamp': 1, 'message': 'Test Message 1'}]
+        input_events = [{'timestamp': int(time.time()) * 1000, 'message': 'Test Message 1'}]
 
         conn.put_log_events(
             logGroupName=log_group_name, logStreamName=log_stream_name, logEvents=input_events

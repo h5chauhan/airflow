@@ -15,8 +15,764 @@
     specific language governing permissions and limitations
     under the License.
 
+.. NOTE TO CONTRIBUTORS:
+   Please, only add notes to the Changelog just below the "Changelog" header when there are some breaking changes
+   and you want to add an explanation to the users on how they are supposed to deal with them.
+   The changelog is updated and maintained semi-automatically by release manager.
+
 Changelog
 ---------
+
+8.4.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add BigQuery Column and Table Check Operators (#26368)``
+* ``Add deferrable big query operators and sensors (#26156)``
+* ``Add 'output' property to MappedOperator (#25604)``
+* ``Added append_job_name parameter to DataflowTemplatedJobStartOperator (#25746)``
+* ``Adding a parameter for exclusion of trashed files in GoogleDriveHook (#25675)``
+* ``Cloud Data Loss Prevention Operators assets (#26618)``
+* ``Cloud Storage Transfer Operators assets & system tests migration (AIP-47) (#26072)``
+* ``Merge deferrable BigQuery operators to exisitng one (#26433)``
+* ``specifying project id when calling wait_for_operation in delete/create cluster (#26418)``
+* ``Auto tail file logs in Web UI (#26169)``
+* ``Cloud Functions Operators assets & system tests migration (AIP-47) (#26073)``
+* ``GCSToBigQueryOperator Resolve 'max_id_key' job retrieval and xcom return (#26285)``
+* ``Allow for the overriding of 'stringify_dict' for json export format on BaseSQLToGCSOperator (#26277)``
+* ``Append GoogleLink base in the link class (#26057)``
+* ``Cloud Video Intelligence Operators assets & system tests migration (AIP-47) (#26132)``
+* ``Life Science assets & system tests migration (AIP-47) (#25548)``
+* ``GCSToBigQueryOperator allow for schema_object in alternate GCS Bucket (#26190)``
+* ``Use AsyncClient for Composer Operators in deferrable mode (#25951)``
+* ``Use project_id to get authenticated client (#25984)``
+* ``Cloud Build assets & system tests migration (AIP-47) (#25895)``
+* ``Dataproc submit job operator async (#25302)``
+* ``Support project_id argument in BigQueryGetDataOperator (#25782)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix JSONDecodeError in Datafusion operators (#26202)``
+* ``Fixed never ending loop to in CreateWorkflowInvocation (#25737)``
+* ``Update gcs.py (#26570)``
+* ``Don't throw an exception when a BQ cusor job has no schema (#26096)``
+* ``Google Cloud Tasks Sensor for queue being empty (#25622)``
+* ``Correcting the transfer config name. (#25719)``
+* ``Fix parsing of optional 'mode' field in BigQuery Result Schema (#26786)``
+* ``Fix MaxID logic for GCSToBigQueryOperator (#26768)``
+
+Misc
+~~~~
+
+* ``Sql to GSC operators update docs for parquet format (#25878)``
+* ``Limit Google Protobuf for compatibility with biggtable client (#25886)``
+* ``Make GoogleBaseHook credentials functions public (#25785)``
+* ``Consolidate to one 'schedule' param (#25410)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Migrate Data Loss Prevention system tests according to AIP-47 (#26060)``
+   * ``Google Drive to Google Cloud Storage Transfer Operator - system tests migration (AIP-47) (#26487)``
+   * ``Apply PEP-563 (Postponed Evaluation of Annotations) to core airflow (#26290)``
+   * ``Apply PEP-563 (Postponed Evaluation of Annotations) to non-core airflow (#26289)``
+   * ``Replace SQL with Common SQL in pre commit (#26058)``
+   * ``Hook into Mypy to get rid of those cast() (#26023)``
+   * ``Work around pyupgrade edge cases (#26384)``
+   * ``D400 first line should end with period batch02 (#25268)``
+   * ``Fix GCS sensor system tests failing with DebugExecutor (#26742)``
+   * ``Update docs for September Provider's release (#26731)``
+
+8.3.0
+.....
+
+Features
+~~~~~~~~
+
+* ``add description method in BigQueryCursor class (#25366)``
+* ``Add project_id as a templated variable in two BQ operators (#24768)``
+* ``Remove deprecated modules in Amazon provider (#25543)``
+* ``Move all "old" SQL operators to common.sql providers (#25350)``
+* ``Improve taskflow type hints with ParamSpec (#25173)``
+* ``Unify DbApiHook.run() method with the methods which override it (#23971)``
+* ``Bump typing-extensions and mypy for ParamSpec (#25088)``
+* ``Deprecate hql parameters and synchronize DBApiHook method APIs (#25299)``
+* ``Dataform operators (#25587)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix GCSListObjectsOperator docstring (#25614)``
+* ``Fix BigQueryInsertJobOperator cancel_on_kill (#25342)``
+* ``Fix BaseSQLToGCSOperator approx_max_file_size_bytes (#25469)``
+* ``Fix PostgresToGCSOperat bool dtype (#25475)``
+* ``Fix Vertex AI Custom Job training issue (#25367)``
+* ``Fix Flask Login user setting for Flask 2.2 and Flask-Login 0.6.2 (#25318)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Migrate Google example trino_to_gcs to new design AIP-47 (#25420)``
+   * ``Migrate Google example automl_nl_text_extraction to new design AIP-47 (#25418)``
+   * ``Memorystore assets & system tests migration (AIP-47) (#25361)``
+   * ``Translate system tests migration (AIP-47) (#25340)``
+   * ``Migrate Google example life_sciences to new design AIP-47 (#25264)``
+   * ``Migrate Google example natural_language to new design AIP-47 (#25262)``
+   * ``Delete redundant system test bigquery_to_bigquery (#25261)``
+   * ``Migrate Google example bigquery_to_mssql to new design AIP-47 (#25174)``
+   * ``Migrate Google example compute_igm to new design AIP-47 (#25132)``
+   * ``Migrate Google example automl_vision to new design AIP-47 (#25152)``
+   * ``Migrate Google example gcs_to_sftp to new design AIP-47 (#25107)``
+   * ``Migrate Google campaign manager example to new design AIP-47 (#25069)``
+   * ``Migrate Google analytics example to new design AIP-47 (#25006)``
+
+8.2.0
+.....
+
+Features
+~~~~~~~~
+
+* ``PubSub assets & system tests migration (AIP-47) (#24867)``
+* ``Add handling state of existing Dataproc batch (#24924)``
+* ``Add links for Google Kubernetes Engine operators (#24786)``
+* ``Add test_connection method to 'GoogleBaseHook' (#24682)``
+* ``Add gcp_conn_id argument to GoogleDriveToLocalOperator (#24622)``
+* ``Add DeprecationWarning for column_transformations parameter in AutoML (#24467)``
+* ``Modify BigQueryCreateExternalTableOperator to use updated hook function (#24363)``
+* ``Move all SQL classes to common-sql provider (#24836)``
+* ``Datacatalog assets & system tests migration (AIP-47) (#24600)``
+* ``Upgrade FAB to 4.1.1 (#24399)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``GCSDeleteObjectsOperator empty prefix bug fix (#24353)``
+* ``perf(BigQuery): pass table_id as str type (#23141)``
+* ``Update providers to use functools compat for ''cached_property'' (#24582)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Migrate Google sheets example to new design AIP-47 (#24975)``
+   * ``Migrate Google ads example to new design AIP-47 (#24941)``
+   * ``Migrate Google example gcs_to_gdrive to new design AIP-47 (#24949)``
+   * ``Migrate Google firestore example to new design AIP-47 (#24830)``
+   * ``Automatically detect if non-lazy logging interpolation is used (#24910)``
+   * ``Migrate Google example sql_to_sheets to new design AIP-47 (#24814)``
+   * ``Remove "bad characters" from our codebase (#24841)``
+   * ``Migrate Google example DAG mssql_to_gcs to new design AIP-47 (#24541)``
+   * ``Align Black and blacken-docs configs (#24785)``
+   * ``Move provider dependencies to inside provider folders (#24672)``
+   * ``Use our yaml util in all providers (#24720)``
+   * ``Remove 'hook-class-names' from provider.yaml (#24702)``
+   * ``Migrate Google example DAG s3_to_gcs to new design AIP-47 (#24641)``
+   * ``Migrate Google example DAG bigquery_transfer to new design AIP-47 (#24543)``
+   * ``Migrate Google example DAG oracle_to_gcs to new design AIP-47 (#24542)``
+   * ``Migrate Google example DAG mysql_to_gcs to new design AIP-47 (#24540)``
+   * ``Migrate Google search_ads DAG to new design AIP-47 (#24298)``
+   * ``Migrate Google gcs_to_sheets DAG to new design AIP-47 (#24501)``
+
+8.1.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Update Oracle library to latest version (#24311)``
+* ``Expose SQL to GCS Metadata (#24382)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``fix typo in google provider additional extras (#24431)``
+* ``Use insert_job in the BigQueryToGCPOpertor and adjust links (#24416)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Fix links to sources for examples (#24386)``
+   * ``Deprecate remaining occurrences of 'bigquery_conn_id' in favor of 'gcp_conn_id' (#24376)``
+   * ``Migrate Google calendar example DAG to new design AIP-47 (#24333)``
+   * ``Migrate Google azure_fileshare example DAG to new design AIP-47 (#24349)``
+   * ``Remove bigquery example already migrated to AIP-47 (#24379)``
+   * ``Migrate Google sheets example DAG to new design AIP-47 (#24351)``
+
+8.0.0
+.....
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+* This release of provider is only available for Airflow 2.2+ as explained in the Apache Airflow
+  providers support policy https://github.com/apache/airflow/blob/main/README.md#support-for-providers
+
+Features
+~~~~~~~~
+
+* ``Add key_secret_project_id parameter which specifies a project with KeyFile (#23930)``
+* ``Added impersonation_chain for DataflowStartFlexTemplateOperator and DataflowStartSqlJobOperator (#24046)``
+* ``Add fields to CLOUD_SQL_EXPORT_VALIDATION. (#23724)``
+* ``Update credentials when using ADC in Compute Engine (#23773)``
+* ``set color to operators in cloud_sql.py (#24000)``
+* ``Sql to gcs with exclude columns (#23695)``
+* ``[Issue#22846] allow option to encode or not encode UUID when uploading from Cassandra to GCS (#23766)``
+* ``Workflows assets & system tests migration (AIP-47) (#24105)``
+* ``Spanner assets & system tests migration (AIP-47) (#23957)``
+* ``Speech To Text assets & system tests migration (AIP-47) (#23643)``
+* ``Cloud SQL assets & system tests migration (AIP-47) (#23583)``
+* ``Cloud Storage assets & StorageLink update (#23865)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``fix BigQueryInsertJobOperator (#24165)``
+* ``Fix the link to google workplace (#24080)``
+* ``Fix DataprocJobBaseOperator not being compatible with dotted names (#23439). (#23791)``
+* ``Remove hack from BigQuery DTS hook (#23887)``
+* ``Fix GCSToGCSOperator cannot copy a single file/folder without copying other files/folders with that prefix (#24039)``
+* ``Workaround job race bug on biguery to gcs transfer (#24330)``
+
+Misc
+~~~~
+
+* ``Fix BigQuery system tests (#24013)``
+* ``Ensure @contextmanager decorates generator func (#23103)``
+* ``Migrate Dataproc to new system tests design (#22777)``
+* ``AIP-47 - Migrate google leveldb DAGs to new design ##22447 (#24233)``
+* ``Apply per-run log templates to log handlers (#24153)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Add explanatory note for contributors about updating Changelog (#24229)``
+   * ``Introduce 'flake8-implicit-str-concat' plugin to static checks (#23873)``
+   * ``Clean up f-strings in logging calls (#23597)``
+   * ``pydocstyle D202 added (#24221)``
+   * ``Prepare docs for May 2022 provider's release (#24231)``
+   * ``Update package description to remove double min-airflow specification (#24292)``
+
+7.0.0
+.....
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+* ``Remove deprecated parameters from PubSub operators: (#23261)``
+
+* ``Upgrade to support Google Ads v10 (#22965)``
+
+* ``'DataprocJobBaseOperator' changes (#23350)``
+
+  * ``'DataprocJobBaseOperator': order of parameters has changed.``
+  * ``'region' parameter has no default value affected functions/classes: 'DataprocHook.cancel_job' 'DataprocCreateClusterOperator' 'DataprocJobBaseOperator'``
+
+* ``'DatastoreHook': Remove 'datastore_conn_id'. Please use 'gcp_conn_id' (#23323)``
+* ``'CloudBuildCreateBuildOperator': Remove 'body'. Please use 'build' (#23263)``
+
+* ``Replica cluster id removal (#23251)``
+
+  * ``'BigtableCreateInstanceOperator' Remove 'replica_cluster_id', 'replica_cluster_zone'. Please use 'replica_clusters'``
+  * ``'BigtableHook.create_instance': Remove 'replica_cluster_id', 'replica_cluster_zone'. Please use 'replica_clusters'``
+
+* ``Remove params (#23230)``
+
+  * ``'GoogleDisplayVideo360CreateReportOperator': Remove 'params'. Please use 'parameters'``
+  * ``'FacebookAdsReportToGcsOperator': Remove 'params'. Please use 'parameters'``
+
+* ``'GoogleDriveToGCSOperator': Remove 'destination_bucket' and 'destination_object'. Please use 'bucket_name' and 'object_name' (#23072)``
+
+* ``'GCSObjectsWtihPrefixExistenceSensor' removed. Please use 'GCSObjectsWithPrefixExistenceSensor' (#23050)``
+
+* ``Remove 'project': (#23231)``
+
+  * ``'PubSubCreateTopicOperator': Remove 'project'. Please use 'project_id'``
+  * ``'PubSubCreateSubscriptionOperator': Remove 'topic_project'. Please use 'project_id'``
+  * ``'PubSubCreateSubscriptionOperator': Remove 'subscription_project'. Please use 'subscription_project_id'``
+  * ``'PubSubDeleteTopicOperator': Remove 'project'. Please use 'project_id'``
+  * ``'PubSubDeleteSubscriptionOperator': Remove 'project'. Please use 'project_id'``
+  * ``'PubSubPublishMessageOperator': Remove 'project'. Please use 'project_id'``
+  * ``'PubSubPullSensor': Remove 'project'. Please use 'project_id'``
+  * ``'PubSubPullSensor': Remove 'return_immediately'``
+
+* ``Remove 'location' - replaced with 'region' (#23250)``
+
+  * ``'DataprocJobSensor': Remove 'location'. Please use 'region'``
+  * ``'DataprocCreateWorkflowTemplateOperator': Remove 'location'. Please use 'region'``
+  * ``'DataprocCreateClusterOperator': Remove 'location'. Please use 'region'``
+  * ``'DataprocSubmitJobOperator': Remove 'location'. Please use 'region'``
+  * ``'DataprocHook': Remove 'location' parameter. Please use 'region'``
+  * ``Affected functions are:``
+
+    * ``'cancel_job'``
+    * ``'create_workflow_template'``
+    * ``'get_batch_client'``
+    * ``'get_cluster_client'``
+    * ``'get_job'``
+    * ``'get_job_client'``
+    * ``'get_template_client'``
+    * ``'instantiate_inline_workflow_template'``
+    * ``'instantiate_workflow_template'``
+    * ``'submit_job'``
+    * ``'update_cluster'``
+    * ``'wait_for_job'``
+
+  * ``'DataprocHook': Order of parameters in 'wait_for_job' function has changed``
+  * ``'DataprocSubmitJobOperator': order of parameters has changed.``
+
+* ``Removal of xcom_push (#23252)``
+
+  * ``'CloudDatastoreImportEntitiesOperator': Remove 'xcom_push'. Please use 'BaseOperator.do_xcom_push'``
+  * ``'CloudDatastoreExportEntitiesOperator': Remove 'xcom_push'. Please use 'BaseOperator.do_xcom_push'``
+
+* ``'bigquery_conn_id' and 'google_cloud_storage_conn_id' is removed. Please use 'gcp_conn_id' (#23326)``.
+
+  * ``Affected classes:``
+
+    * ``'BigQueryCheckOperator'``
+    * ``'BigQueryCreateEmptyDatasetOperator'``
+    * ``'BigQueryDeleteDatasetOperator'``
+    * ``'BigQueryDeleteTableOperator'``
+    * ``'BigQueryExecuteQueryOperator'``
+    * ``'BigQueryGetDataOperator'``
+    * ``'BigQueryHook'``
+    * ``'BigQueryIntervalCheckOperator'``
+    * ``'BigQueryTableExistenceSensor'``
+    * ``'BigQueryTablePartitionExistenceSensor'``
+    * ``'BigQueryToBigQueryOperator'``
+    * ``'BigQueryToGCSOperator'``
+    * ``'BigQueryUpdateTableSchemaOperator'``
+    * ``'BigQueryUpsertTableOperator'``
+    * ``'BigQueryValueCheckOperator'``
+    * ``'GCSToBigQueryOperator'``
+    * ``'ADLSToGCSOperator'``
+    * ``'BaseSQLToGCSOperator'``
+    * ``'CassandraToGCSOperator'``
+    * ``'GCSBucketCreateAclEntryOperator'``
+    * ``'GCSCreateBucketOperator'``
+    * ``'GCSDeleteObjectsOperator'``
+    * ``'GCSHook'``
+    * ``'GCSListObjectsOperator'``
+    * ``'GCSObjectCreateAclEntryOperator'``
+    * ``'GCSToBigQueryOperator'``
+    * ``'GCSToGCSOperator'``
+    * ``'GCSToLocalFilesystemOperator'``
+    * ``'LocalFilesystemToGCSOperator'``
+
+* ``'S3ToGCSOperator': Remove 'dest_gcs_conn_id'. Please use 'gcp_conn_id' (#23348)``
+
+* ``'BigQueryHook' changes (#23269)``
+
+  * ``'BigQueryHook.create_empty_table' Remove 'num_retries'. Please use 'retry'``
+  * ``'BigQueryHook.run_grant_dataset_view_access' Remove 'source_project'. Please use 'project_id'``
+
+* ``'DataprocHook': Remove deprecated function 'submit' (#23389)``
+
+
+Features
+~~~~~~~~
+
+* ``[FEATURE] google provider - BigQueryInsertJobOperator log query (#23648)``
+* ``[FEATURE] google provider - split GkeStartPodOperator execute (#23518)``
+* ``Add exportContext.offload flag to CLOUD_SQL_EXPORT_VALIDATION. (#23614)``
+* ``Create links for BiqTable operators (#23164)``
+* ``implements #22859 - Add .sql as templatable extension (#22920)``
+* ``'GCSFileTransformOperator': New templated fields 'source_object', 'destination_object' (#23328)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix 'PostgresToGCSOperator' does not allow nested JSON (#23063)``
+* ``Fix GCSToGCSOperator ignores replace parameter when there is no wildcard (#23340)``
+* ``update processor to fix broken download URLs (#23299)``
+* ``'LookerStartPdtBuildOperator', 'LookerCheckPdtBuildSensor' : fix empty materialization id handling (#23025)``
+* ``Change ComputeSSH to throw provider import error instead paramiko (#23035)``
+* ``Fix cancel_on_kill after execution timeout for DataprocSubmitJobOperator (#22955)``
+* ``Fix select * query xcom push for BigQueryGetDataOperator (#22936)``
+* ``MSSQLToGCSOperator fails: datetime is not JSON Serializable (#22882)``
+
+Misc
+~~~~
+
+* ``Add Stackdriver assets and migrate system tests to AIP-47 (#23320)``
+* ``CloudTasks assets & system tests migration (AIP-47) (#23282)``
+* ``TextToSpeech assets & system tests migration (AIP-47) (#23247)``
+* ``Fix code-snippets in google provider (#23438)``
+* ``Bigquery assets (#23165)``
+* ``Remove redundant docstring in 'BigQueryUpdateTableSchemaOperator' (#23349)``
+* ``Migrate gcs to new system tests design (#22778)``
+* ``add missing docstring in 'BigQueryHook.create_empty_table' (#23270)``
+* ``Cleanup Google provider CHANGELOG.rst (#23390)``
+* ``migrate system test gcs_to_bigquery into new design (#22753)``
+* ``Add example DAG for demonstrating usage of GCS sensors (#22808)``
+
+   * ``Clean up in-line f-string concatenation (#23591)``
+   * ``Bump pre-commit hook versions (#22887)``
+   * ``Use new Breese for building, pulling and verifying the images. (#23104)``
+   * ``Fix new MyPy errors in main (#22884)``
+
+6.8.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add autodetect arg in BQCreateExternalTable Operator (#22710)``
+* ``Add links for BigQuery Data Transfer (#22280)``
+* ``Modify transfer operators to handle more data (#22495)``
+* ``Create Endpoint and Model Service, Batch Prediction and Hyperparameter Tuning Jobs operators for Vertex AI service (#22088)``
+* ``PostgresToGoogleCloudStorageOperator - BigQuery schema type for time zone naive fields (#22536)``
+* ``Update secrets backends to use get_conn_value instead of get_conn_uri (#22348)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix the docstrings (#22497)``
+* ``Fix 'download_media' url in 'GoogleDisplayVideo360SDFtoGCSOperator' (#22479)``
+* ``Fix to 'CloudBuildRunBuildTriggerOperator' fails to find build id. (#22419)``
+* ``Fail ''LocalFilesystemToGCSOperator'' if src does not exist (#22772)``
+* ``Remove coerce_datetime usage from GCSTimeSpanFileTransformOperator (#22501)``
+
+Misc
+~~~~
+
+* ``Refactor: BigQuery to GCS Operator (#22506)``
+* ``Remove references to deprecated operators/params in PubSub operators (#22519)``
+* ``New design of system tests (#22311)``
+
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Update black precommit (#22521)``
+
+6.7.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add dataflow_default_options to templated_fields (#22367)``
+* ``Add 'LocalFilesystemToGoogleDriveOperator' (#22219)``
+* ``Add timeout and retry to the BigQueryInsertJobOperator (#22395)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix skipping non-GCS located jars (#22302)``
+* ``[FIX] typo doc of gcs operator (#22290)``
+* ``Fix mistakenly added install_requires for all providers (#22382)``
+
+6.6.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Support Uploading Bigger Files to Google Drive (#22179)``
+* ``Change the default 'chunk_size' to a clear representation & add documentation (#22222)``
+* ``Add guide for DataprocInstantiateInlineWorkflowTemplateOperator (#22062)``
+* ``Allow for uploading metadata with GCS Hook Upload (#22058)``
+* ``Add Dataplex operators (#20377)``
+
+Misc
+~~~~~
+
+* ``Add support for ARM platform (#22127)``
+* ``Add Trove classifiers in PyPI (Framework :: Apache Airflow :: Provider)``
+* ``Use yaml safe load (#22091)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Add map_index to XCom model and interface (#22112)``
+   * ``Fix spelling (#22107)``
+   * ``Use yaml safe load (#22085)``
+   * ``Update ''GKEDeleteClusterOperator', ''GKECreateClusterOperator'' docstrings (#22212)``
+   * ``Revert "Use yaml safe load (#22085)" (#22089)``
+   * ``Protect against accidental misuse of XCom.get_value() (#22244)``
+
+6.5.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add Looker PDT operators (#20882)``
+* ``Add autodetect arg to external table creation in GCSToBigQueryOperator (#21944)``
+* ``Add Dataproc assets/links (#21756)``
+* ``Add Auto ML operators for Vertex AI service (#21470)``
+* ``Add GoogleCalendarToGCSOperator (#20769)``
+* ``Make project_id argument optional in all dataproc operators (#21866)``
+* ``Allow templates in more DataprocUpdateClusterOperator fields (#21865)``
+* ``Dataflow Assets (#21639)``
+* ``Extract ClientInfo to module level (#21554)``
+* ``Datafusion assets (#21518)``
+* ``Dataproc metastore assets (#21267)``
+* ``Normalize *_conn_id parameters in BigQuery sensors (#21430)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix bigquery_dts parameter docstring typo (#21786)``
+* ``Fixed PostgresToGCSOperator fail on empty resultset for use_server_side_cursor=True (#21307)``
+* ``Fix multi query scenario in bigquery example DAG (#21575)``
+
+Misc
+~~~~
+
+* ``Support for Python 3.10``
+* ``Unpin 'google-cloud-memcache' (#21912)``
+* ``Unpin ''pandas-gbq'' and remove unused code (#21915)``
+* ``Suppress hook warnings from the Bigquery transfers (#20119)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Change BaseOperatorLink interface to take a ti_key, not a datetime (#21798)``
+
+6.4.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add hook for integrating with Google Calendar (#20542)``
+* ``Add encoding parameter to 'GCSToLocalFilesystemOperator' to fix #20901 (#20919)``
+* ``batch as templated field in DataprocCreateBatchOperator (#20905)``
+* ``Make timeout Optional for wait_for_operation (#20981)``
+* ``Add more SQL template fields renderers (#21237)``
+* ``Create CustomJob and Datasets operators for Vertex AI service (#21253)``
+* ``Support to upload file to Google Shared Drive (#21319)``
+* ``(providers_google) add a location check in bigquery (#19571)``
+* ``Add support for BeamGoPipelineOperator (#20386)``
+* ``Google Cloud Composer opearators (#21251)``
+* ``Enable asynchronous job submission in BigQuery hook (#21385)``
+* ``Optionally raise an error if source file does not exist in GCSToGCSOperator (#21391)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Cloudsql import links fix. (#21199)``
+* ``Fix BigQueryDataTransferServiceHook.get_transfer_run() request parameter (#21293)``
+* ``:bug: (BigQueryHook) fix compatibility with sqlalchemy engine (#19508)``
+
+Misc
+~~~~
+
+* ``Refactor operator links to not create ad hoc TaskInstances (#21285)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Fix last google provider MyPy errors (#21010)``
+   * ``Add optional features in providers. (#21074)``
+   * ``Revert "Create CustomJob and Datasets operators for Vertex AI service (#20077)" (#21203)``
+   * ``Create CustomJob and Datasets operators for Vertex AI service (#20077)``
+   * ``Extend dataproc example dag (#21091)``
+   * ``Squelch more deprecation warnings (#21003)``
+   * ``Remove a few stray ':type's in docs (#21014)``
+   * ``Remove ':type' lines now sphinx-autoapi supports typehints (#20951)``
+   * ``Fix BigQuery system test (#21320)``
+   * ``Add documentation for January 2021 providers release (#21257)``
+   * ``Never set DagRun.state to State.NONE (#21263)``
+   * ``Add pre-commit check for docstring param types (#21398)``
+   * ``Fixed changelog for January 2022 (delayed) provider's release (#21439)``
+
+6.3.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add optional location to bigquery data transfer service (#15088) (#20221)``
+* ``Add Google Cloud Tasks how-to documentation (#20145)``
+* ``Added example DAG for MSSQL to Google Cloud Storage (GCS) (#19873)``
+* ``Support regional GKE cluster (#18966)``
+* ``Delete pods by default in KubernetesPodOperator (#20575)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fixes docstring for PubSubCreateSubscriptionOperator (#20237)``
+* ``Fix missing get_backup method for Dataproc Metastore (#20326)``
+* ``BigQueryHook fix typo in run_load doc string (#19924)``
+* ``Fix passing the gzip compression parameter on sftp_to_gcs. (#20553)``
+* ``switch to follow_redirects on httpx.get call in CloudSQL provider (#20239)``
+* ``avoid deprecation warnings in BigQuery transfer operators (#20502)``
+* ``Change download_video parameter to resourceName (#20528)``
+* ``Fix big query to mssql/mysql transfer issues (#20001)``
+* ``Fix setting of project ID in ''provide_authorized_gcloud'' (#20428)``
+
+Misc
+~~~~
+
+* ``Move source_objects datatype check out of GCSToBigQueryOperator.__init__ (#20347)``
+* ``Organize S3 Classes in Amazon Provider (#20167)``
+* ``Providers facebook hook multiple account (#19377)``
+* ``Remove deprecated method call (blob.download_as_string) (#20091)``
+* ``Remove deprecated template_fields from GoogleDriveToGCSOperator (#19991)``
+
+Note! optional features of the ``apache-airflow-providers-facebook`` and ``apache-airflow-providers-amazon``
+require newer versions of the providers (as specified in the dependencies)
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Fix mypy errors for google.cloud_build (#20234)``
+   * ``Fix MyPy for Google Bigquery (#20329)``
+   * ``Fix remaining MyPy errors in Google Provider (#20358)``
+   * ``Fix MyPy Errors for dataproc package (#20327)``
+   * ``Fix MyPy errors for google.cloud.tasks (#20233)``
+   * ``Fix MyPy Errors for Apache Beam (and Dataflow) provider. (#20301)``
+   * ``Fix MyPy errors in leveldb (#20222)``
+   * ``Fix MyPy errors for google.cloud.transfers (#20229)``
+   * ``Fix MyPY errors for google.cloud.example_dags (#20232)``
+   * ``Fix MyPy errors for google/marketing_platform and suite (#20227)``
+   * ``Fix MyPy errors in google.cloud.sensors (#20228)``
+   * ``Fix cached_property MyPy declaration and related MyPy errors (#20226)``
+   * ``Finalised Datastore documentation (#20138)``
+   * ``Update Sphinx and Sphinx-AutoAPI (#20079)``
+   * ``Update doc reference links (#19909)``
+   * ``Use Python3.7+ syntax in pyupgrade (#20501)``
+   * ``Fix MyPy errors in Google Cloud (again) (#20469)``
+   * ``Use typed Context EVERYWHERE (#20565)``
+   * ``Fix Google mlengine MyPy errors (#20569)``
+   * ``Fix template_fields type to have MyPy friendly Sequence type (#20571)``
+   * ``Fix Google Mypy Dataproc errors (#20570)``
+   * ``Fix mypy errors in Google Cloud provider (#20611)``
+   * ``Even more typing in operators (template_fields/ext) (#20608)``
+   * ``Fix mypy errors in google/cloud/operators/stackdriver (#20601)``
+   * ``Update documentation for provider December 2021 release (#20523)``
+
+6.2.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Added wait mechanizm to the DataprocJobSensor to avoid 509 errors when Job is not available (#19740)``
+* ``Add support in GCP connection for reading key from Secret Manager (#19164)``
+* ``Add dataproc metastore operators (#18945)``
+* ``Add support of 'path' parameter for GCloud Storage Transfer Service operators (#17446)``
+* ``Move 'bucket_name' validation out of '__init__' in Google Marketing Platform operators (#19383)``
+* ``Create dataproc serverless spark batches operator (#19248)``
+* ``updates pipeline_timeout CloudDataFusionStartPipelineOperator (#18773)``
+* ``Support impersonation_chain parameter in the GKEStartPodOperator (#19518)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix badly merged impersonation in GKEPodOperator (#19696)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Fix typos in warnings, docstrings, exceptions (#19424)``
+   * ``Fix Cloud SQL system tests (#19014)``
+   * ``Fix GCS system tests (#19227)``
+   * ``Update 'default_args' value in example_functions DAG from str to int (#19865)``
+   * ``Clean up ''default_args'' usage in docs (#19803)``
+   * ``Clean-up of google cloud example dags - batch 3 (#19664)``
+   * ``Misc. documentation typos and language improvements (#19599)``
+   * ``Cleanup dynamic 'start_date' use for miscellaneous Google example DAGs (#19400)``
+   * ``Remove reference to deprecated operator in example_dataproc (#19619)``
+   * ``#16691 Providing more information in docs for DataprocCreateCluster operator migration (#19446)``
+   * ``Clean-up of google cloud example dags - batch 2 (#19527)``
+   * ``Update Azure modules to comply with AIP-21 (#19431)``
+   * ``Remove remaining 'pylint: disable' comments (#19541)``
+   * ``Clean-up of google cloud example dags (#19436)``
+
+6.1.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add value to 'namespaceId' of query (#19163)``
+* ``Add pre-commit hook for common misspelling check in files (#18964)``
+* ``Support query timeout as an argument in CassandraToGCSOperator (#18927)``
+* ``Update BigQueryCreateExternalTableOperator doc and parameters (#18676)``
+* ``Replacing non-attribute template_fields for BigQueryToMsSqlOperator (#19052)``
+* ``Upgrade the Dataproc package to 3.0.0 and migrate from v1beta2 to v1 api (#18879)``
+* ``Use google cloud credentials when executing beam command in subprocess (#18992)``
+* ``Replace default api_version of FacebookAdsReportToGcsOperator (#18996)``
+* ``Dataflow Operators - use project and location from job in on_kill method. (#18699)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix hard-coded /tmp directory in CloudSQL Hook (#19229)``
+* ``Fix bug in Dataflow hook when no jobs are returned (#18981)``
+* ``Fix BigQueryToMsSqlOperator documentation (#18995)``
+* ``Move validation of templated input params to run after the context init (#19048)``
+* ``Google provider catch invalid secret name (#18790)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Update dataflow.py (#19231)``
+   * ``More f-strings (#18855)``
+   * ``Simplify strings previously split across lines (#18679)``
+
+6.0.0
+.....
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+* ``Migrate Google Cloud Build from Discovery API to Python SDK (#18184)``
+
+Features
+~~~~~~~~
+
+* ``Add index to the dataset name to have separate dataset for each example DAG (#18459)``
+* ``Add missing __init__.py files for some test packages (#18142)``
+* ``Add possibility to run DAGs from system tests and see DAGs logs (#17868)``
+* ``Rename AzureDataLakeStorage to ADLS (#18493)``
+* ``Make next_dagrun_info take a data interval (#18088)``
+* ``Use parameters instead of params (#18143)``
+* ``New google operator: SQLToGoogleSheetsOperator (#17887)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``Fix part of Google system tests (#18494)``
+* ``Fix kubernetes engine system test (#18548)``
+* ``Fix BigQuery system test (#18373)``
+* ``Fix error when create external table using table resource (#17998)``
+* ``Fix ''BigQuery'' data extraction in ''BigQueryToMySqlOperator'' (#18073)``
+* ``Fix providers tests in main branch with eager upgrades (#18040)``
+* ``fix(CloudSqlProxyRunner): don't query connections from Airflow DB (#18006)``
+* ``Remove check for at least one schema in GCSToBigquery (#18150)``
+* ``deduplicate running jobs on BigQueryInsertJobOperator (#17496)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Updating miscellaneous provider DAGs to use TaskFlow API where applicable (#18278)``
+   * ``Inclusive Language (#18349)``
+   * ``Change TaskInstance and TaskReschedule PK from execution_date to run_id (#17719)``
+
+5.1.0
+.....
+
+Features
+~~~~~~~~
+
+* ``Add error check for config_file parameter in GKEStartPodOperator (#17700)``
+* ``Gcp ai hyperparameter tuning (#17790)``
+* ``Allow omission of 'initial_node_count' if 'node_pools' is specified (#17820)``
+* ``[Airflow 13779] use provided parameters in the wait_for_pipeline_state hook (#17137)``
+* ``Enable specifying dictionary paths in 'template_fields_renderers' (#17321)``
+* ``Don't cache Google Secret Manager client (#17539)``
+* ``[AIRFLOW-9300] Add DatafusionPipelineStateSensor and aync option to the CloudDataFusionStartPipelineOperator (#17787)``
+
+Bug Fixes
+~~~~~~~~~
+
+* ``GCP Secret Manager error handling for missing credentials (#17264)``
+
+Misc
+~~~~
+
+* ``Optimise connection importing for Airflow 2.2.0``
+* ``Adds secrets backend/logging/auth information to provider yaml (#17625)``
+
+.. Below changes are excluded from the changelog. Move them to
+   appropriate section above if needed. Do not delete the lines(!):
+   * ``Update description about the new ''connection-types'' provider meta-data (#17767)``
+   * ``Import Hooks lazily individually in providers manager (#17682)``
+   * ``Fix missing Data Fusion sensor integration (#17914)``
+   * ``Remove all deprecation warnings in providers (#17900)``
 
 5.0.0
 .....
@@ -55,7 +811,7 @@ Bug Fixes
    appropriate section above if needed. Do not delete the lines(!):
    * ``Removes pylint from our toolchain (#16682)``
    * ``Prepare documentation for July release of providers. (#17015)``
-   * ``Fixed wrongly escaped characters in amazon&#39;s changelog (#17020)``
+   * ``Fixed wrongly escaped characters in amazon's changelog (#17020)``
    * ``Fixes several failing tests after broken main (#17222)``
    * ``Fixes statich check failures (#17218)``
    * ``[CASSANDRA-16814] Fix cassandra to gcs type inconsistency. (#17183)``
@@ -290,8 +1046,7 @@ now the snake_case convention is used.
     set_acl_permission = GCSBucketCreateAclEntryOperator(
         task_id="gcs-set-acl-permission",
         bucket=BUCKET_NAME,
-        entity="user-{{ task_instance.xcom_pull('get-instance')['persistenceIamIdentity']"
-        ".split(':', 2)[1] }}",
+        entity="user-{{ task_instance.xcom_pull('get-instance')['persistenceIamIdentity'].split(':', 2)[1] }}",
         role="OWNER",
     )
 

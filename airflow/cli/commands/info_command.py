@@ -15,13 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 """Config sub-commands"""
+from __future__ import annotations
+
 import locale
 import logging
 import os
 import platform
 import subprocess
 import sys
-from typing import List, Optional
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -54,7 +55,7 @@ class Anonymizer(Protocol):
 class NullAnonymizer(Anonymizer):
     """Do nothing."""
 
-    def _identity(self, value):
+    def _identity(self, value) -> str:
         return value
 
     process_path = process_username = process_url = _identity
@@ -70,19 +71,19 @@ class PiiAnonymizer(Anonymizer):
         username = getuser()
         self._path_replacements = {home_path: "${HOME}", username: "${USER}"}
 
-    def process_path(self, value):
+    def process_path(self, value) -> str:
         if not value:
             return value
         for src, target in self._path_replacements.items():
             value = value.replace(src, target)
         return value
 
-    def process_username(self, value):
+    def process_username(self, value) -> str:
         if not value:
             return value
         return value[0] + "..." + value[-1]
 
-    def process_url(self, value):
+    def process_url(self, value) -> str:
         if not value:
             return value
 
@@ -132,7 +133,7 @@ class OperatingSystem:
     CYGWIN = "Cygwin"
 
     @staticmethod
-    def get_current() -> Optional[str]:
+    def get_current() -> str | None:
         """Get current operating system"""
         if os.name == "nt":
             return OperatingSystem.WINDOWS
@@ -185,7 +186,7 @@ class AirflowInfo:
         self.anonymizer = anonymizer
 
     @staticmethod
-    def _get_version(cmd: List[str], grep: Optional[bytes] = None):
+    def _get_version(cmd: list[str], grep: bytes | None = None):
         """Return tools version."""
         try:
             with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
@@ -221,7 +222,7 @@ class AirflowInfo:
     def _airflow_info(self):
         executor = configuration.conf.get("core", "executor")
         sql_alchemy_conn = self.anonymizer.process_url(
-            configuration.conf.get("core", "SQL_ALCHEMY_CONN", fallback="NOT AVAILABLE")
+            configuration.conf.get("database", "SQL_ALCHEMY_CONN", fallback="NOT AVAILABLE")
         )
         dags_folder = self.anonymizer.process_path(
             configuration.conf.get("core", "dags_folder", fallback="NOT AVAILABLE")
@@ -304,9 +305,9 @@ class AirflowInfo:
 
     @property
     def _providers_info(self):
-        return [(p.provider_info['package-name'], p.version) for p in ProvidersManager().providers.values()]
+        return [(p.data['package-name'], p.version) for p in ProvidersManager().providers.values()]
 
-    def show(self, output: str, console: Optional[AirflowConsole] = None) -> None:
+    def show(self, output: str, console: AirflowConsole | None = None) -> None:
         """Shows information about Airflow instance"""
         all_info = {
             "Apache Airflow": self._airflow_info,

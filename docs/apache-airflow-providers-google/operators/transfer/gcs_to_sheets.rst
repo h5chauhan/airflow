@@ -25,10 +25,6 @@ With `Google Sheets <https://www.google.pl/intl/en/sheets/about/>`__, everyone c
 spreadsheet at the same time. Use formulas functions, and formatting options to save time and simplify
 common spreadsheet tasks.
 
-.. contents::
-  :depth: 1
-  :local:
-
 Prerequisite Tasks
 ^^^^^^^^^^^^^^^^^^
 
@@ -42,7 +38,7 @@ Upload data from GCS to Google Sheets
 To upload data from Google Cloud Storage to Google Spreadsheet you can use the
 :class:`~airflow.providers.google.suite.transfers.gcs_to_sheets.GCSToGoogleSheetsOperator`.
 
-.. exampleinclude:: /../../airflow/providers/google/suite/example_dags/example_gcs_to_sheets.py
+.. exampleinclude:: /../../tests/system/providers/google/cloud/gcs/example_gcs_to_sheets.py
     :language: python
     :dedent: 4
     :start-after: [START upload_gcs_to_sheets]

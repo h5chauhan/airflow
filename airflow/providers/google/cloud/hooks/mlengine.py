@@ -16,10 +16,12 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Google ML Engine Hook."""
+from __future__ import annotations
+
 import logging
 import random
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 from googleapiclient.discovery import Resource, build
 from googleapiclient.errors import HttpError
@@ -41,15 +43,10 @@ def _poll_with_exponential_delay(request, execute_num_retries, max_n, is_done_fu
     lower level errors like `ConnectionError`/`socket.timeout`/`ssl.SSLError`.
 
     :param request: request to be executed.
-    :type request: googleapiclient.http.HttpRequest
     :param execute_num_retries: num_retries for `request.execute` method.
-    :type execute_num_retries: int
     :param max_n: number of times to retry request in this method.
-    :type max_n: int
     :param is_done_func: callable to determine if operation is done.
-    :type is_done_func: callable
     :param is_error_func: callable to determine if operation is failed.
-    :type is_error_func: callable
     :return: response
     :rtype: httplib2.Response
     """
@@ -62,13 +59,13 @@ def _poll_with_exponential_delay(request, execute_num_retries, max_n, is_done_fu
                 log.info('Operation is done: %s', response)
                 return response
 
-            time.sleep((2 ** i) + (random.randint(0, 1000) / 1000))
+            time.sleep((2**i) + (random.randint(0, 1000) / 1000))
         except HttpError as e:
             if e.resp.status != 429:
                 log.info('Something went wrong. Not retrying: %s', format(e))
                 raise
             else:
-                time.sleep((2 ** i) + (random.randint(0, 1000) / 1000))
+                time.sleep((2**i) + (random.randint(0, 1000) / 1000))
 
     raise ValueError(f'Connection could not be established after {max_n} retries.')
 
@@ -91,14 +88,13 @@ class MLEngineHook(GoogleBaseHook):
         return build('ml', 'v1', http=authed_http, cache_discovery=False)
 
     @GoogleBaseHook.fallback_to_default_project_id
-    def create_job(self, job: dict, project_id: str, use_existing_job_fn: Optional[Callable] = None) -> dict:
+    def create_job(self, job: dict, project_id: str, use_existing_job_fn: Callable | None = None) -> dict:
         """
         Launches a MLEngine job and wait for it to reach a terminal state.
 
         :param project_id: The Google Cloud project id within which MLEngine
             job will be launched. If set to None or missing, the default project_id from the Google Cloud
             connection is used.
-        :type project_id: str
         :param job: MLEngine Job object that should be provided to the MLEngine
             API, such as: ::
 
@@ -110,7 +106,6 @@ class MLEngineHook(GoogleBaseHook):
                   }
                 }
 
-        :type job: dict
         :param use_existing_job_fn: In case that a MLEngine job with the same
             job_id already exist, this method (if provided) will decide whether
             we should use this existing job, continue waiting for it to finish
@@ -118,7 +113,6 @@ class MLEngineHook(GoogleBaseHook):
             object, and returns a boolean value indicating whether it is OK to
             reuse the existing job. If 'use_existing_job_fn' is not provided,
             we by default reuse the existing MLEngine job.
-        :type use_existing_job_fn: function
         :return: The MLEngine job object if the job successfully reach a
             terminal state (which might be FAILED or CANCELLED state).
         :rtype: dict
@@ -164,9 +158,7 @@ class MLEngineHook(GoogleBaseHook):
         :param project_id: The Google Cloud project id within which MLEngine
             job will be cancelled. If set to None or missing, the default project_id from the Google Cloud
             connection is used.
-        :type project_id: str
         :param job_id: A unique id for the want-to-be cancelled Google MLEngine training job.
-        :type job_id: str
 
         :return: Empty dict if cancelled successfully
         :rtype: dict
@@ -195,9 +187,7 @@ class MLEngineHook(GoogleBaseHook):
 
         :param project_id: The project in which the Job is located. If set to None or missing, the default
             project_id from the Google Cloud connection is used. (templated)
-        :type project_id: str
         :param job_id: A unique id for the Google MLEngine job. (templated)
-        :type job_id: str
         :return: MLEngine job object if succeed.
         :rtype: dict
         :raises: googleapiclient.errors.HttpError
@@ -225,11 +215,8 @@ class MLEngineHook(GoogleBaseHook):
 
         :param project_id: The project in which the Job is located. If set to None or missing, the default
             project_id from the Google Cloud connection is used. (templated)
-        :type project_id: str
         :param job_id: A unique id for the Google MLEngine job. (templated)
-        :type job_id: str
         :param interval: Time expressed in seconds after which the job status is checked again. (templated)
-        :type interval: int
         :raises: googleapiclient.errors.HttpError
         """
         self.log.info("Waiting for job. job_id=%s", job_id)
@@ -246,21 +233,18 @@ class MLEngineHook(GoogleBaseHook):
     def create_version(
         self,
         model_name: str,
-        version_spec: Dict,
+        version_spec: dict,
         project_id: str,
     ) -> dict:
         """
         Creates the Version on Google Cloud ML Engine.
 
         :param version_spec: A dictionary containing the information about the version. (templated)
-        :type version_spec: dict
         :param model_name: The name of the Google Cloud ML Engine model that the version belongs to.
             (templated)
-        :type model_name: str
         :param project_id: The Google Cloud project name to which MLEngine model belongs.
             If set to None or missing, the default project_id from the Google Cloud connection is used.
             (templated)
-        :type project_id: str
         :return: If the version was created successfully, returns the operation.
             Otherwise raises an error .
         :rtype: dict
@@ -294,12 +278,9 @@ class MLEngineHook(GoogleBaseHook):
 
         :param model_name: The name of the Google Cloud ML Engine model that the version belongs to.
             (templated)
-        :type model_name: str
         :param version_name: A name to use for the version being operated upon. (templated)
-        :type version_name: str
         :param project_id: The Google Cloud project name to which MLEngine model belongs. If set to None
             or missing, the default project_id from the Google Cloud connection is used. (templated)
-        :type project_id: str
         :return: If successful, return an instance of Version.
             Otherwise raises an error.
         :rtype: dict
@@ -323,16 +304,14 @@ class MLEngineHook(GoogleBaseHook):
         self,
         model_name: str,
         project_id: str,
-    ) -> List[dict]:
+    ) -> list[dict]:
         """
         Lists all available versions of a model. Blocks until finished.
 
         :param model_name: The name of the Google Cloud ML Engine model that the version
             belongs to. (templated)
-        :type model_name: str
         :param project_id: The Google Cloud project name to which MLEngine model belongs. If set to None or
             missing, the default project_id from the Google Cloud connection is used. (templated)
-        :type project_id: str
         :return: return an list of instance of Version.
         :rtype: List[Dict]
         :raises: googleapiclient.errors.HttpError
@@ -368,10 +347,8 @@ class MLEngineHook(GoogleBaseHook):
 
         :param model_name: The name of the Google Cloud ML Engine model that the version
             belongs to. (templated)
-        :type model_name: str
         :param project_id: The Google Cloud project name to which MLEngine
             model belongs.
-        :type project_id: str
         :return: If the version was deleted successfully, returns the operation.
             Otherwise raises an error.
         :rtype: Dict
@@ -400,10 +377,8 @@ class MLEngineHook(GoogleBaseHook):
         Create a Model. Blocks until finished.
 
         :param model: A dictionary containing the information about the model.
-        :type model: dict
         :param project_id: The Google Cloud project name to which MLEngine model belongs. If set to None or
             missing, the default project_id from the Google Cloud connection is used. (templated)
-        :type project_id: str
         :return: If the version was created successfully, returns the instance of Model.
             Otherwise raises an error.
         :rtype: Dict
@@ -411,7 +386,7 @@ class MLEngineHook(GoogleBaseHook):
         """
         hook = self.get_conn()
         if 'name' not in model or not model['name']:
-            raise ValueError("Model name must be provided and " "could not be an empty string")
+            raise ValueError("Model name must be provided and could not be an empty string")
         project = f'projects/{project_id}'
 
         self._append_label(model)
@@ -447,15 +422,13 @@ class MLEngineHook(GoogleBaseHook):
         self,
         model_name: str,
         project_id: str,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """
         Gets a Model. Blocks until finished.
 
         :param model_name: The name of the model.
-        :type model_name: str
         :param project_id: The Google Cloud project name to which MLEngine model belongs. If set to None
             or missing, the default project_id from the Google Cloud connection is used. (templated)
-        :type project_id: str
         :return: If the model exists, returns the instance of Model.
             Otherwise return None.
         :rtype: Dict
@@ -463,7 +436,7 @@ class MLEngineHook(GoogleBaseHook):
         """
         hook = self.get_conn()
         if not model_name:
-            raise ValueError("Model name must be provided and " "it could not be an empty string")
+            raise ValueError("Model name must be provided and it could not be an empty string")
         full_model_name = f'projects/{project_id}/models/{model_name}'
         request = hook.projects().models().get(name=full_model_name)
         try:
@@ -485,14 +458,11 @@ class MLEngineHook(GoogleBaseHook):
         Delete a Model. Blocks until finished.
 
         :param model_name: The name of the model.
-        :type model_name: str
         :param delete_contents: Whether to force the deletion even if the models is not empty.
             Will delete all version (if any) in the dataset if set to True.
             The default value is False.
-        :type delete_contents: bool
         :param project_id: The Google Cloud project name to which MLEngine model belongs. If set to None
             or missing, the default project_id from the Google Cloud connection is used. (templated)
-        :type project_id: str
         :raises: googleapiclient.errors.HttpError
         """
         hook = self.get_conn()

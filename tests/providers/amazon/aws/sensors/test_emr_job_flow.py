@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import datetime
 import unittest
@@ -24,7 +25,7 @@ import pytest
 from dateutil.tz import tzlocal
 
 from airflow.exceptions import AirflowException
-from airflow.providers.amazon.aws.sensors.emr_job_flow import EmrJobFlowSensor
+from airflow.providers.amazon.aws.sensors.emr import EmrJobFlowSensor
 
 DESCRIBE_CLUSTER_STARTING_RETURN = {
     'Cluster': {

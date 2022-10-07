@@ -27,7 +27,7 @@ Before reading this document, you should be familiar with `Contributor's guide <
 Guidelines to become an Airflow Committer
 ------------------------------------------
 
-Committers are community members who have write access to the project’s
+Committers are community members who have write access to the project's
 repositories, i.e., they can modify the code, documentation, and website by themselves and also
 accept other contributions. There is no strict protocol for becoming a committer. Candidates for new
 committers are typically people that are active contributors and community members.
@@ -77,7 +77,7 @@ Community contributions
 
 1.  Was instrumental in triaging issues
 2.  Improved documentation of Airflow in significant way
-3.  Lead change and improvements introduction in the “community” processes and tools
+3.  Lead change and improvements introduction in the "community" processes and tools
 4.  Actively spreads the word about Airflow, for example organising Airflow summit, workshops for
     community members, giving and recording talks, writing blogs
 5.  Reporting bugs with detailed reproduction steps
@@ -158,7 +158,7 @@ can become the Mentor and guide the proposed candidates on how they can become a
 
     If the committee does not have enough information, requires more time, or requires more evidence of
     candidate's eligibility, a mentor, who is not the proposer, is selected to help mentor the candidate
-    The mentor should try to remain impartial -- his/her goal is to provide the missing evidence and to
+    The mentor should try to remain impartial -- their goal is to provide the missing evidence and to
     try to coach/mentor the candidate to success.
 
     In order to re-raise a candidate vote, both Proposer and Mentor must be in favor. Again,
@@ -175,3 +175,14 @@ become active again you can simply email the PMC and ask to be reinstated.
 
 The PMC also can mark committers as inactive after they have not been involved in the community for
 more than 12 months.
+
+GitHub configuration for committers
+-----------------------------------
+
+To be able to merge PRs, committers have to integrate their GitHub ID with Apache systems. To do that follow steps:
+
+1.  Verify you have a GitHub ID `enabled with 2FA <https://help.github.com/articles/securing-your-account-with-two-factor-authentication-2fa/>`__.
+2.  Enter your GitHub ID into your `Apache ID profile <https://id.apache.org/>`__.
+3.  Merge your Apache and GitHub accounts using `GitBox (Apache Account Linking utility) <https://gitbox.apache.org/setup/>`__. You should see 3 green checks in GitBox.
+4.  Wait at least 30  minutes for an email inviting you to Apache GitHub Organization and accept invitation.
+5.  After accepting the GitHub Invitation verify that you are a member of the `Airflow committers team on GitHub <https://github.com/orgs/apache/teams/airflow-committers>`__.

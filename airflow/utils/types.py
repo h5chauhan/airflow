@@ -14,10 +14,34 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import enum
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from airflow.typing_compat import TypedDict
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+
+class ArgNotSet:
+    """Sentinel type for annotations, useful when None is not viable.
+
+    Use like this::
+
+        def is_arg_passed(arg: Union[ArgNotSet, None] = NOTSET) -> bool:
+            if arg is NOTSET:
+                return False
+            return True
+
+        is_arg_passed()  # False.
+        is_arg_passed(None)  # True.
+    """
+
+
+NOTSET = ArgNotSet()
+"""Sentinel value for argument default. See ``ArgNotSet``."""
 
 
 class DagRunType(str, enum.Enum):
@@ -26,12 +50,16 @@ class DagRunType(str, enum.Enum):
     BACKFILL_JOB = "backfill"
     SCHEDULED = "scheduled"
     MANUAL = "manual"
+    DATASET_TRIGGERED = "dataset_triggered"
 
     def __str__(self) -> str:
         return self.value
 
+    def generate_run_id(self, logical_date: datetime) -> str:
+        return f"{self}__{logical_date.isoformat()}"
+
     @staticmethod
-    def from_run_id(run_id: str) -> "DagRunType":
+    def from_run_id(run_id: str) -> DagRunType:
         """Resolved DagRun type from run_id."""
         for run_type in DagRunType:
             if run_id and run_id.startswith(f"{run_type.value}__"):
@@ -45,4 +73,4 @@ class EdgeInfoType(TypedDict):
     usually generated from an EdgeModifier.
     """
 
-    label: Optional[str]
+    label: str | None

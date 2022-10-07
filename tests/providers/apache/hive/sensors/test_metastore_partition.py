@@ -15,14 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import os
 import unittest
 from unittest import mock
 
 from airflow.providers.apache.hive.sensors.metastore_partition import MetastorePartitionSensor
-from tests.providers.apache.hive import DEFAULT_DATE, DEFAULT_DATE_DS, TestHiveEnvironment
-from tests.test_utils.mock_process import MockDBConnection
+from tests.providers.apache.hive import DEFAULT_DATE, DEFAULT_DATE_DS, MockDBConnection, TestHiveEnvironment
 
 
 @unittest.skipIf('AIRFLOW_RUNALL_TESTS' not in os.environ, "Skipped because AIRFLOW_RUNALL_TESTS is not set")

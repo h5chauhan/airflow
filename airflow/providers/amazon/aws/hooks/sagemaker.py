@@ -15,14 +15,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import collections
 import os
 import tarfile
 import tempfile
 import time
-import warnings
+from datetime import datetime
 from functools import partial
-from typing import Any, Callable, Dict, Generator, List, Optional, Set
+from typing import Any, Callable, Generator, cast
 
 from botocore.exceptions import ClientError
 
@@ -51,7 +53,7 @@ class LogState:
 Position = collections.namedtuple('Position', ['timestamp', 'skip'])
 
 
-def argmin(arr, f: Callable) -> Optional[int]:
+def argmin(arr, f: Callable) -> int | None:
     """Return the index, i, in arr that minimizes f(arr[i])"""
     min_value = None
     min_idx = None
@@ -68,9 +70,7 @@ def secondary_training_status_changed(current_job_description: dict, prev_job_de
     Returns true if training job's secondary status message has changed.
 
     :param current_job_description: Current job description, returned from DescribeTrainingJob call.
-    :type current_job_description: dict
     :param prev_job_description: Previous job description, returned from DescribeTrainingJob call.
-    :type prev_job_description: dict
 
     :return: Whether the secondary status message of a training job changed or not.
     """
@@ -95,15 +95,13 @@ def secondary_training_status_changed(current_job_description: dict, prev_job_de
 
 
 def secondary_training_status_message(
-    job_description: Dict[str, List[dict]], prev_description: Optional[dict]
+    job_description: dict[str, list[Any]], prev_description: dict | None
 ) -> str:
     """
     Returns a string contains start time and the secondary training job status message.
 
     :param job_description: Returned response from DescribeTrainingJob call
-    :type job_description: dict
     :param prev_description: Previous job description from DescribeTrainingJob call
-    :type prev_description: dict
 
     :return: Job status string to be printed.
     """
@@ -125,7 +123,9 @@ def secondary_training_status_message(
     status_strs = []
     for transition in transitions_to_print:
         message = transition['StatusMessage']
-        time_str = timezone.convert_to_utc(job_description['LastModifiedTime']).strftime('%Y-%m-%d %H:%M:%S')
+        time_str = timezone.convert_to_utc(cast(datetime, job_description['LastModifiedTime'])).strftime(
+            '%Y-%m-%d %H:%M:%S'
+        )
         status_strs.append(f"{time_str} {transition['Status']} - {message}")
 
     return '\n'.join(status_strs)
@@ -156,11 +156,8 @@ class SageMakerHook(AwsBaseHook):
         Tar the local file or directory and upload to s3
 
         :param path: local file or directory
-        :type path: str
         :param key: s3 key
-        :type key: str
         :param bucket: s3 bucket
-        :type bucket: str
         :return: None
         """
         with tempfile.TemporaryFile() as temp_file:
@@ -179,7 +176,6 @@ class SageMakerHook(AwsBaseHook):
         Extract the S3 operations from the configuration and execute them.
 
         :param config: config of SageMaker operation
-        :type config: dict
         :rtype: dict
         """
         s3_operations = config.pop('S3Operations', None)
@@ -200,7 +196,6 @@ class SageMakerHook(AwsBaseHook):
         Check if an S3 URL exists
 
         :param s3url: S3 url
-        :type s3url: str
         :rtype: bool
         """
         bucket, key = S3Hook.parse_s3_url(s3url)
@@ -224,7 +219,6 @@ class SageMakerHook(AwsBaseHook):
         Check if a training configuration is valid
 
         :param training_config: training_config
-        :type training_config: dict
         :return: None
         """
         if "InputDataConfig" in training_config:
@@ -237,42 +231,11 @@ class SageMakerHook(AwsBaseHook):
         Check if a tuning configuration is valid
 
         :param tuning_config: tuning_config
-        :type tuning_config: dict
         :return: None
         """
         for channel in tuning_config['TrainingJobDefinition']['InputDataConfig']:
             if "S3DataSource" in channel['DataSource']:
                 self.check_s3_url(channel['DataSource']['S3DataSource']['S3Uri'])
-
-    def get_log_conn(self):
-        """
-        This method is deprecated.
-        Please use :py:meth:`airflow.providers.amazon.aws.hooks.logs.AwsLogsHook.get_conn` instead.
-        """
-        warnings.warn(
-            "Method `get_log_conn` has been deprecated. "
-            "Please use `airflow.providers.amazon.aws.hooks.logs.AwsLogsHook.get_conn` instead.",
-            category=DeprecationWarning,
-            stacklevel=2,
-        )
-
-        return self.logs_hook.get_conn()
-
-    def log_stream(self, log_group, stream_name, start_time=0, skip=0):
-        """
-        This method is deprecated.
-        Please use
-        :py:meth:`airflow.providers.amazon.aws.hooks.logs.AwsLogsHook.get_log_events` instead.
-        """
-        warnings.warn(
-            "Method `log_stream` has been deprecated. "
-            "Please use "
-            "`airflow.providers.amazon.aws.hooks.logs.AwsLogsHook.get_log_events` instead.",
-            category=DeprecationWarning,
-            stacklevel=2,
-        )
-
-        return self.logs_hook.get_log_events(log_group, stream_name, start_time, skip)
 
     def multi_stream_iter(self, log_group: str, streams: list, positions=None) -> Generator:
         """
@@ -280,13 +243,10 @@ class SageMakerHook(AwsBaseHook):
         interleaving the events from each stream so they're yielded in timestamp order.
 
         :param log_group: The name of the log group.
-        :type log_group: str
         :param streams: A list of the log stream names. The position of the stream in this list is
             the stream number.
-        :type streams: list
         :param positions: A list of pairs of (timestamp, skip) which represents the last record
             read from each stream.
-        :type positions: list
         :return: A tuple of (stream number, cloudwatch log event).
         """
         positions = positions or {s: Position(timestamp=0, skip=0) for s in streams}
@@ -294,7 +254,7 @@ class SageMakerHook(AwsBaseHook):
             self.logs_hook.get_log_events(log_group, s, positions[s].timestamp, positions[s].skip)
             for s in streams
         ]
-        events: List[Optional[Any]] = []
+        events: list[Any | None] = []
         for event_stream in event_iters:
             if not event_stream:
                 events.append(None)
@@ -318,22 +278,19 @@ class SageMakerHook(AwsBaseHook):
         wait_for_completion: bool = True,
         print_log: bool = True,
         check_interval: int = 30,
-        max_ingestion_time: Optional[int] = None,
+        max_ingestion_time: int | None = None,
     ):
         """
-        Create a training job
+        Starts a model training job. After training completes, Amazon SageMaker saves
+        the resulting model artifacts to an Amazon S3 location that you specify.
 
         :param config: the config for training
-        :type config: dict
         :param wait_for_completion: if the program should keep running until job finishes
-        :type wait_for_completion: bool
         :param check_interval: the time interval in seconds which the operator
             will check the status of any SageMaker job
-        :type check_interval: int
         :param max_ingestion_time: the maximum ingestion time in seconds. Any
             SageMaker jobs that run longer than this will fail. Setting this to
             None implies no timeout for any SageMaker job.
-        :type max_ingestion_time: int
         :return: A response to training job creation
         """
         self.check_training_config(config)
@@ -369,22 +326,22 @@ class SageMakerHook(AwsBaseHook):
         config: dict,
         wait_for_completion: bool = True,
         check_interval: int = 30,
-        max_ingestion_time: Optional[int] = None,
+        max_ingestion_time: int | None = None,
     ):
         """
-        Create a tuning job
+        Starts a hyperparameter tuning job. A hyperparameter tuning job finds the
+        best version of a model by running many training jobs on your dataset using
+        the algorithm you choose and values for hyperparameters within ranges that
+        you specify. It then chooses the hyperparameter values that result in a model
+        that performs the best, as measured by an objective metric that you choose.
 
         :param config: the config for tuning
-        :type config: dict
         :param wait_for_completion: if the program should keep running until job finishes
-        :type wait_for_completion: bool
         :param check_interval: the time interval in seconds which the operator
             will check the status of any SageMaker job
-        :type check_interval: int
         :param max_ingestion_time: the maximum ingestion time in seconds. Any
             SageMaker jobs that run longer than this will fail. Setting this to
             None implies no timeout for any SageMaker job.
-        :type max_ingestion_time: int
         :return: A response to tuning job creation
         """
         self.check_tuning_config(config)
@@ -405,22 +362,19 @@ class SageMakerHook(AwsBaseHook):
         config: dict,
         wait_for_completion: bool = True,
         check_interval: int = 30,
-        max_ingestion_time: Optional[int] = None,
+        max_ingestion_time: int | None = None,
     ):
         """
-        Create a transform job
+        Starts a transform job. A transform job uses a trained model to get inferences
+        on a dataset and saves these results to an Amazon S3 location that you specify.
 
         :param config: the config for transform job
-        :type config: dict
         :param wait_for_completion: if the program should keep running until job finishes
-        :type wait_for_completion: bool
         :param check_interval: the time interval in seconds which the operator
             will check the status of any SageMaker job
-        :type check_interval: int
         :param max_ingestion_time: the maximum ingestion time in seconds. Any
             SageMaker jobs that run longer than this will fail. Setting this to
             None implies no timeout for any SageMaker job.
-        :type max_ingestion_time: int
         :return: A response to transform job creation
         """
         if "S3DataSource" in config['TransformInput']['DataSource']:
@@ -442,22 +396,21 @@ class SageMakerHook(AwsBaseHook):
         config: dict,
         wait_for_completion: bool = True,
         check_interval: int = 30,
-        max_ingestion_time: Optional[int] = None,
+        max_ingestion_time: int | None = None,
     ):
         """
-        Create a processing job
+        Use Amazon SageMaker Processing to analyze data and evaluate machine learning
+        models on Amazon SageMaker. With Processing, you can use a simplified, managed
+        experience on SageMaker to run your data processing workloads, such as feature
+        engineering, data validation, model evaluation, and model interpretation.
 
         :param config: the config for processing job
-        :type config: dict
         :param wait_for_completion: if the program should keep running until job finishes
-        :type wait_for_completion: bool
         :param check_interval: the time interval in seconds which the operator
             will check the status of any SageMaker job
-        :type check_interval: int
         :param max_ingestion_time: the maximum ingestion time in seconds. Any
             SageMaker jobs that run longer than this will fail. Setting this to
             None implies no timeout for any SageMaker job.
-        :type max_ingestion_time: int
         :return: A response to transform job creation
         """
         response = self.get_conn().create_processing_job(**config)
@@ -473,20 +426,28 @@ class SageMakerHook(AwsBaseHook):
 
     def create_model(self, config: dict):
         """
-        Create a model job
+        Creates a model in Amazon SageMaker. In the request, you name the model and
+        describe a primary container. For the primary container, you specify the Docker
+        image that contains inference code, artifacts (from prior training), and a custom
+        environment map that the inference code uses when you deploy the model for predictions.
 
         :param config: the config for model
-        :type config: dict
         :return: A response to model creation
         """
         return self.get_conn().create_model(**config)
 
     def create_endpoint_config(self, config: dict):
         """
-        Create an endpoint config
+        Creates an endpoint configuration that Amazon SageMaker hosting
+        services uses to deploy models. In the configuration, you identify
+        one or more models, created using the CreateModel API, to deploy and
+        the resources that you want Amazon SageMaker to provision.
+
+        .. seealso::
+             :class:`~airflow.providers.amazon.aws.hooks.sagemaker.SageMakerHook.create_model`
+             :class:`~airflow.providers.amazon.aws.hooks.sagemaker.SageMakerHook.create_endpoint`
 
         :param config: the config for endpoint-config
-        :type config: dict
         :return: A response to endpoint config creation
         """
         return self.get_conn().create_endpoint_config(**config)
@@ -496,22 +457,26 @@ class SageMakerHook(AwsBaseHook):
         config: dict,
         wait_for_completion: bool = True,
         check_interval: int = 30,
-        max_ingestion_time: Optional[int] = None,
+        max_ingestion_time: int | None = None,
     ):
         """
-        Create an endpoint
+        When you create a serverless endpoint, SageMaker provisions and manages
+        the compute resources for you. Then, you can make inference requests to
+        the endpoint and receive model predictions in response. SageMaker scales
+        the compute resources up and down as needed to handle your request traffic.
+
+        Requires an Endpoint Config.
+         .. seealso::
+             :class:`~airflow.providers.amazon.aws.hooks.sagemaker.SageMakerHook.create_endpoint_config`
+
 
         :param config: the config for endpoint
-        :type config: dict
         :param wait_for_completion: if the program should keep running until job finishes
-        :type wait_for_completion: bool
         :param check_interval: the time interval in seconds which the operator
             will check the status of any SageMaker job
-        :type check_interval: int
         :param max_ingestion_time: the maximum ingestion time in seconds. Any
             SageMaker jobs that run longer than this will fail. Setting this to
             None implies no timeout for any SageMaker job.
-        :type max_ingestion_time: int
         :return: A response to endpoint creation
         """
         response = self.get_conn().create_endpoint(**config)
@@ -531,22 +496,20 @@ class SageMakerHook(AwsBaseHook):
         config: dict,
         wait_for_completion: bool = True,
         check_interval: int = 30,
-        max_ingestion_time: Optional[int] = None,
+        max_ingestion_time: int | None = None,
     ):
         """
-        Update an endpoint
+        Deploys the new EndpointConfig specified in the request, switches to using
+        newly created endpoint, and then deletes resources provisioned for the
+        endpoint using the previous EndpointConfig (there is no availability loss).
 
         :param config: the config for endpoint
-        :type config: dict
         :param wait_for_completion: if the program should keep running until job finishes
-        :type wait_for_completion: bool
         :param check_interval: the time interval in seconds which the operator
             will check the status of any SageMaker job
-        :type check_interval: int
         :param max_ingestion_time: the maximum ingestion time in seconds. Any
             SageMaker jobs that run longer than this will fail. Setting this to
             None implies no timeout for any SageMaker job.
-        :type max_ingestion_time: int
         :return: A response to endpoint update
         """
         response = self.get_conn().update_endpoint(**config)
@@ -566,7 +529,6 @@ class SageMakerHook(AwsBaseHook):
         Return the training job info associated with the name
 
         :param name: the name of the training job
-        :type name: str
         :return: A dict contains all the training job info
         """
         return self.get_conn().describe_training_job(TrainingJobName=name)
@@ -637,7 +599,6 @@ class SageMakerHook(AwsBaseHook):
         Return the tuning job info associated with the name
 
         :param name: the name of the tuning job
-        :type name: str
         :return: A dict contains all the tuning job info
         """
         return self.get_conn().describe_hyper_parameter_tuning_job(HyperParameterTuningJobName=name)
@@ -647,7 +608,6 @@ class SageMakerHook(AwsBaseHook):
         Return the SageMaker model info associated with the name
 
         :param name: the name of the SageMaker model
-        :type name: str
         :return: A dict contains all the model info
         """
         return self.get_conn().describe_model(ModelName=name)
@@ -657,7 +617,6 @@ class SageMakerHook(AwsBaseHook):
         Return the transform job info associated with the name
 
         :param name: the name of the transform job
-        :type name: str
         :return: A dict contains all the transform job info
         """
         return self.get_conn().describe_transform_job(TransformJobName=name)
@@ -667,7 +626,6 @@ class SageMakerHook(AwsBaseHook):
         Return the processing job info associated with the name
 
         :param name: the name of the processing job
-        :type name: str
         :return: A dict contains all the processing job info
         """
         return self.get_conn().describe_processing_job(ProcessingJobName=name)
@@ -677,7 +635,6 @@ class SageMakerHook(AwsBaseHook):
         Return the endpoint config info associated with the name
 
         :param name: the name of the endpoint config
-        :type name: str
         :return: A dict contains all the endpoint config info
         """
         return self.get_conn().describe_endpoint_config(EndpointConfigName=name)
@@ -685,7 +642,6 @@ class SageMakerHook(AwsBaseHook):
     def describe_endpoint(self, name: str) -> dict:
         """
         :param name: the name of the endpoint
-        :type name: str
         :return: A dict contains all the endpoint info
         """
         return self.get_conn().describe_endpoint(EndpointName=name)
@@ -696,29 +652,23 @@ class SageMakerHook(AwsBaseHook):
         key: str,
         describe_function: Callable,
         check_interval: int,
-        max_ingestion_time: Optional[int] = None,
-        non_terminal_states: Optional[Set] = None,
+        max_ingestion_time: int | None = None,
+        non_terminal_states: set | None = None,
     ):
         """
         Check status of a SageMaker job
 
         :param job_name: name of the job to check status
-        :type job_name: str
         :param key: the key of the response dict
             that points to the state
-        :type key: str
         :param describe_function: the function used to retrieve the status
-        :type describe_function: python callable
         :param args: the arguments for the function
         :param check_interval: the time interval in seconds which the operator
             will check the status of any SageMaker job
-        :type check_interval: int
         :param max_ingestion_time: the maximum ingestion time in seconds. Any
             SageMaker jobs that run longer than this will fail. Setting this to
             None implies no timeout for any SageMaker job.
-        :type max_ingestion_time: int
         :param non_terminal_states: the set of nonterminal states
-        :type non_terminal_states: set
         :return: response of describe call after job is done
         """
         if not non_terminal_states:
@@ -762,27 +712,21 @@ class SageMakerHook(AwsBaseHook):
         failed_states: set,
         wait_for_completion: bool,
         check_interval: int,
-        max_ingestion_time: Optional[int] = None,
+        max_ingestion_time: int | None = None,
     ):
         """
         Display the logs for a given training job, optionally tailing them until the
         job is complete.
 
         :param job_name: name of the training job to check status and display logs for
-        :type job_name: str
         :param non_terminal_states: the set of non_terminal states
-        :type non_terminal_states: set
         :param failed_states: the set of failed states
-        :type failed_states: set
         :param wait_for_completion: Whether to keep looking for new log entries
             until the job completes
-        :type wait_for_completion: bool
         :param check_interval: The interval in seconds between polling for new log entries and job completion
-        :type check_interval: int
         :param max_ingestion_time: the maximum ingestion time in seconds. Any
             SageMaker jobs that run longer than this will fail. Setting this to
             None implies no timeout for any SageMaker job.
-        :type max_ingestion_time: int
         :return: None
         """
         sec = 0
@@ -852,8 +796,8 @@ class SageMakerHook(AwsBaseHook):
             self.log.info('Billable seconds: %d', int(billable_time.total_seconds()) + 1)
 
     def list_training_jobs(
-        self, name_contains: Optional[str] = None, max_results: Optional[int] = None, **kwargs
-    ) -> List[Dict]:
+        self, name_contains: str | None = None, max_results: int | None = None, **kwargs
+    ) -> list[dict]:
         """
         This method wraps boto3's `list_training_jobs`. The training job name and max results are configurable
         via arguments. Other arguments are not, and should be provided via kwargs. Note boto3 expects these in
@@ -871,28 +815,42 @@ class SageMakerHook(AwsBaseHook):
         :param kwargs: (optional) kwargs to boto3's list_training_jobs method
         :return: results of the list_training_jobs request
         """
-        config = {}
-
-        if name_contains:
-            if "NameContains" in kwargs:
-                raise AirflowException("Either name_contains or NameContains can be provided, not both.")
-            config["NameContains"] = name_contains
-
-        if "MaxResults" in kwargs and kwargs["MaxResults"] is not None:
-            if max_results:
-                raise AirflowException("Either max_results or MaxResults can be provided, not both.")
-            # Unset MaxResults, we'll use the SageMakerHook's internal method for iteratively fetching results
-            max_results = kwargs["MaxResults"]
-            del kwargs["MaxResults"]
-
-        config.update(kwargs)
+        config, max_results = self._preprocess_list_request_args(name_contains, max_results, **kwargs)
         list_training_jobs_request = partial(self.get_conn().list_training_jobs, **config)
         results = self._list_request(
             list_training_jobs_request, "TrainingJobSummaries", max_results=max_results
         )
         return results
 
-    def list_processing_jobs(self, **kwargs) -> List[Dict]:
+    def list_transform_jobs(
+        self, name_contains: str | None = None, max_results: int | None = None, **kwargs
+    ) -> list[dict]:
+        """
+        This method wraps boto3's `list_transform_jobs`.
+        The transform job name and max results are configurable via arguments.
+        Other arguments are not, and should be provided via kwargs. Note boto3 expects these in
+        CamelCase format, for example:
+
+        .. code-block:: python
+
+            list_transform_jobs(name_contains="myjob", StatusEquals="Failed")
+
+        .. seealso::
+            https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/sagemaker.html#SageMaker.Client.list_transform_jobs
+
+        :param name_contains: (optional) partial name to match
+        :param max_results: (optional) maximum number of results to return. None returns infinite results
+        :param kwargs: (optional) kwargs to boto3's list_transform_jobs method
+        :return: results of the list_transform_jobs request
+        """
+        config, max_results = self._preprocess_list_request_args(name_contains, max_results, **kwargs)
+        list_transform_jobs_request = partial(self.get_conn().list_transform_jobs, **config)
+        results = self._list_request(
+            list_transform_jobs_request, "TransformJobSummaries", max_results=max_results
+        )
+        return results
+
+    def list_processing_jobs(self, **kwargs) -> list[dict]:
         """
         This method wraps boto3's `list_processing_jobs`. All arguments should be provided via kwargs.
         Note boto3 expects these in CamelCase format, for example:
@@ -913,9 +871,40 @@ class SageMakerHook(AwsBaseHook):
         )
         return results
 
+    def _preprocess_list_request_args(
+        self, name_contains: str | None = None, max_results: int | None = None, **kwargs
+    ) -> tuple[dict[str, Any], int | None]:
+        """
+        This method preprocesses the arguments to the boto3's list_* methods.
+        It will turn arguments name_contains and max_results as boto3 compliant CamelCase format.
+        This method also makes sure that these two arguments are only set once.
+
+        :param name_contains: boto3 function with arguments
+        :param max_results: the result key to iterate over
+        :param kwargs: (optional) kwargs to boto3's list_* method
+        :return: Tuple with config dict to be passed to boto3's list_* method and max_results parameter
+        """
+        config = {}
+
+        if name_contains:
+            if "NameContains" in kwargs:
+                raise AirflowException("Either name_contains or NameContains can be provided, not both.")
+            config["NameContains"] = name_contains
+
+        if "MaxResults" in kwargs and kwargs["MaxResults"] is not None:
+            if max_results:
+                raise AirflowException("Either max_results or MaxResults can be provided, not both.")
+            # Unset MaxResults, we'll use the SageMakerHook's internal method for iteratively fetching results
+            max_results = kwargs["MaxResults"]
+            del kwargs["MaxResults"]
+
+        config.update(kwargs)
+
+        return config, max_results
+
     def _list_request(
-        self, partial_func: Callable, result_key: str, max_results: Optional[int] = None
-    ) -> List[Dict]:
+        self, partial_func: Callable, result_key: str, max_results: int | None = None
+    ) -> list[dict]:
         """
         All AWS boto3 list_* requests return results in batches (if the key "NextToken" is contained in the
         result, there are more results to fetch). The default AWS batch size is 10, and configurable up to
@@ -932,7 +921,7 @@ class SageMakerHook(AwsBaseHook):
         """
         sagemaker_max_results = 100  # Fixed number set by AWS
 
-        results: List[Dict] = []
+        results: list[dict] = []
         next_token = None
 
         while True:
@@ -954,3 +943,24 @@ class SageMakerHook(AwsBaseHook):
                 return results
             else:
                 next_token = response["NextToken"]
+
+    def find_processing_job_by_name(self, processing_job_name: str) -> bool:
+        """Query processing job by name"""
+        try:
+            self.get_conn().describe_processing_job(ProcessingJobName=processing_job_name)
+            return True
+        except ClientError as e:
+            if e.response['Error']['Code'] in ['ValidationException', 'ResourceNotFound']:
+                return False
+            raise
+
+    def delete_model(self, model_name: str):
+        """Delete SageMaker model
+
+        :param model_name: name of the model
+        """
+        try:
+            self.get_conn().delete_model(ModelName=model_name)
+        except Exception as general_error:
+            self.log.error("Failed to delete model, error: %s", general_error)
+            raise

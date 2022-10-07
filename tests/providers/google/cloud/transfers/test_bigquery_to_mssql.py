@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import unittest
 from unittest import mock
 
@@ -38,14 +40,13 @@ class TestBigQueryToMsSqlOperator(unittest.TestCase):
             replace=False,
         )
 
-        operator.execute(None)
+        operator.execute(context=mock.MagicMock())
         # fmt: off
-        mock_hook.return_value.get_conn.return_value.cursor.return_value.get_tabledata\
-            .assert_called_once_with(
-                dataset_id=TEST_DATASET,
-                table_id=TEST_TABLE_ID,
-                max_results=1000,
-                selected_fields=None,
-                start_index=0,
-            )
+        mock_hook.return_value.list_rows.assert_called_once_with(
+            dataset_id=TEST_DATASET,
+            table_id=TEST_TABLE_ID,
+            max_results=1000,
+            selected_fields=None,
+            start_index=0,
+        )
         # fmt: on

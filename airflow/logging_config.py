@@ -15,7 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
+
 import logging
 import warnings
 from logging.config import dictConfig
@@ -91,18 +92,14 @@ def validate_logging_config(logging_config):
         # Check for pre 1.10 setting that might be in deployed airflow.cfg files
         if task_log_reader == "file.task" and _get_handler("task"):
             warnings.warn(
-                "task_log_reader setting in [logging] has a deprecated value of "
-                "{!r}, but no handler with this name was found. Please update "
-                "your config to use {!r}. Running config has been adjusted to "
-                "match".format(
-                    task_log_reader,
-                    "task",
-                ),
+                f"task_log_reader setting in [logging] has a deprecated value of {task_log_reader!r}, "
+                "but no handler with this name was found. Please update your config to use task. "
+                "Running config has been adjusted to match",
                 DeprecationWarning,
             )
             conf.set('logging', 'task_log_reader', 'task')
         else:
             raise AirflowConfigException(
-                "Configured task_log_reader {!r} was not a handler of the 'airflow.task' "
-                "logger.".format(task_log_reader)
+                f"Configured task_log_reader {task_log_reader!r} was not a handler of "
+                f"the 'airflow.task' logger."
             )
