@@ -17,6 +17,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """Remove Transform Mark for Sphinx"""
+
 from __future__ import annotations
 
 import re
@@ -71,4 +72,4 @@ def setup(app):
     """Sets the transform up"""
     app.add_post_transform(TrimDocMarkerFlagsTransform)
 
-    return {"version": "builtin", "parallel_read_safe": False, "parallel_write_safe": False}
+    return {"version": "builtin", "parallel_read_safe": True, "parallel_write_safe": True}

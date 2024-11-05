@@ -23,7 +23,9 @@ from typing import NamedTuple
 from rich.console import Console
 
 from airflow.utils.code_utils import prepare_code_snippet
-from docs.exts.docs_build.code_utils import CONSOLE_WIDTH
+
+from docs.exts.docs_build.code_utils import CONSOLE_WIDTH  # isort:skip (needed to workaround isort bug)
+
 
 CURRENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 DOCS_DIR = os.path.abspath(os.path.join(CURRENT_DIR, os.pardir, os.pardir))
@@ -48,8 +50,8 @@ class DocBuildError(NamedTuple):
         return not self == other
 
     def __lt__(self, right):
-        file_path_a = self.file_path or ''
-        file_path_b = right.file_path or ''
+        file_path_a = self.file_path or ""
+        file_path_b = right.file_path or ""
         line_no_a = self.line_no or 0
         line_no_b = right.line_no or 0
         left = (file_path_a, line_no_a, self.message)
@@ -75,8 +77,9 @@ def display_errors_summary(build_errors: dict[str, list[DocBuildError]]) -> None
                 console.print(
                     f"File path: {os.path.relpath(error.file_path, start=DOCS_DIR)} ({error.line_no})"
                 )
-                console.print()
-                console.print(prepare_code_snippet(error.file_path, error.line_no))
+                if os.path.isfile(error.file_path):
+                    console.print()
+                    console.print(prepare_code_snippet(error.file_path, error.line_no))
             elif error.file_path:
                 console.print(f"File path: {error.file_path}")
     console.print()
@@ -93,7 +96,7 @@ def parse_sphinx_warnings(warning_text: str, docs_dir: str) -> list[DocBuildErro
     :return: list of DocBuildErrors.
     """
     sphinx_build_errors = []
-    for sphinx_warning in warning_text.split("\n"):
+    for sphinx_warning in warning_text.splitlines():
         if not sphinx_warning:
             continue
         warning_parts = sphinx_warning.split(":", 2)

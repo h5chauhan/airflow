@@ -20,7 +20,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Sequence
 
-from airflow import DAG, Dataset
+from airflow.assets import Asset
+from airflow.models.dag import DAG
 from airflow.operators.empty import EmptyOperator
 
 DEFAULT_DATE = datetime(2016, 1, 1)
@@ -30,7 +31,7 @@ default_args = {
     "start_date": DEFAULT_DATE,
 }
 
-dag = DAG(dag_id="test_only_empty_tasks", default_args=default_args, schedule='@once')
+dag = DAG(dag_id="test_only_empty_tasks", default_args=default_args, schedule="@once")
 
 
 class MyEmptyOperator(EmptyOperator):
@@ -55,4 +56,4 @@ with dag:
 
     EmptyOperator(task_id="test_task_on_success", on_success_callback=lambda *args, **kwargs: None)
 
-    EmptyOperator(task_id="test_task_outlets", outlets=[Dataset("hello")])
+    EmptyOperator(task_id="test_task_outlets", outlets=[Asset("hello")])

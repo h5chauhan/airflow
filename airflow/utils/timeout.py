@@ -32,14 +32,14 @@ _timeout = ContextManager[None]
 class TimeoutWindows(_timeout, LoggingMixin):
     """Windows timeout version: To be used in a ``with`` block and timeout its content."""
 
-    def __init__(self, seconds=1, error_message='Timeout'):
+    def __init__(self, seconds=1, error_message="Timeout"):
         super().__init__()
         self._timer: Timer | None = None
         self.seconds = seconds
-        self.error_message = error_message + ', PID: ' + str(os.getpid())
+        self.error_message = error_message + ", PID: " + str(os.getpid())
 
-    def handle_timeout(self, *args):  # pylint: disable=unused-argument
-        """Logs information and raises AirflowTaskTimeout."""
+    def handle_timeout(self, *args):
+        """Log information and raises AirflowTaskTimeout."""
         self.log.error("Process timed out, PID: %s", str(os.getpid()))
         raise AirflowTaskTimeout(self.error_message)
 
@@ -58,13 +58,13 @@ class TimeoutWindows(_timeout, LoggingMixin):
 class TimeoutPosix(_timeout, LoggingMixin):
     """POSIX Timeout version: To be used in a ``with`` block and timeout its content."""
 
-    def __init__(self, seconds=1, error_message='Timeout'):
+    def __init__(self, seconds=1, error_message="Timeout"):
         super().__init__()
         self.seconds = seconds
-        self.error_message = error_message + ', PID: ' + str(os.getpid())
+        self.error_message = error_message + ", PID: " + str(os.getpid())
 
     def handle_timeout(self, signum, frame):
-        """Logs information and raises AirflowTaskTimeout."""
+        """Log information and raises AirflowTaskTimeout."""
         self.log.error("Process timed out, PID: %s", str(os.getpid()))
         raise AirflowTaskTimeout(self.error_message)
 

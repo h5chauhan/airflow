@@ -16,32 +16,46 @@
 # under the License.
 from __future__ import annotations
 
-from typing import Iterator
+import functools
+import logging
+import sys
+from collections import defaultdict
+from typing import Iterator, Tuple
 
-from packaging.utils import canonicalize_name
+if sys.version_info >= (3, 12):
+    from importlib import metadata
+else:
+    import importlib_metadata as metadata  # type: ignore[no-redef]
 
-try:
-    import importlib_metadata as metadata
-except ImportError:
-    from importlib import metadata  # type: ignore[no-redef]
+log = logging.getLogger(__name__)
+
+EPnD = Tuple[metadata.EntryPoint, metadata.Distribution]
 
 
-def entry_points_with_dist(group: str) -> Iterator[tuple[metadata.EntryPoint, metadata.Distribution]]:
-    """Retrieve entry points of the given group.
+@functools.lru_cache(maxsize=None)
+def _get_grouped_entry_points() -> dict[str, list[EPnD]]:
+    mapping: dict[str, list[EPnD]] = defaultdict(list)
+    for dist in metadata.distributions():
+        try:
+            for e in dist.entry_points:
+                mapping[e.group].append((e, dist))
+        except Exception as e:
+            log.warning("Error when retrieving package metadata (skipping it): %s, %s", dist, e)
+    return mapping
 
-    This is like the ``entry_points()`` function from importlib.metadata,
-    except it also returns the distribution the entry_point was loaded from.
+
+def entry_points_with_dist(group: str) -> Iterator[EPnD]:
+    """
+    Retrieve entry points of the given group.
+
+    This is like the ``entry_points()`` function from ``importlib.metadata``,
+    except it also returns the distribution the entry point was loaded from.
+
+    Note that this may return multiple distributions to the same package if they
+    are loaded from different ``sys.path`` entries. The caller site should
+    implement appropriate deduplication logic if needed.
 
     :param group: Filter results to only this entrypoint group
     :return: Generator of (EntryPoint, Distribution) objects for the specified groups
     """
-    loaded: set[str] = set()
-    for dist in metadata.distributions():
-        key = canonicalize_name(dist.metadata["Name"])
-        if key in loaded:
-            continue
-        loaded.add(key)
-        for e in dist.entry_points:
-            if e.group != group:
-                continue
-            yield e, dist
+    return iter(_get_grouped_entry_points()[group])

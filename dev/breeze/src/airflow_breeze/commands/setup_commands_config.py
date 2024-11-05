@@ -23,18 +23,27 @@ SETUP_COMMANDS: dict[str, str | list[str]] = {
         "self-upgrade",
         "cleanup",
         "config",
+        "check-all-params-in-groups",
         "regenerate-command-images",
+        "synchronize-local-mounts",
         "command-hash-export",
         "version",
     ],
 }
 SETUP_PARAMETERS: dict[str, list[dict[str, str | list[str]]]] = {
+    "breeze setup check-all-params-in-groups": [
+        {
+            "name": "Check all params in groups flags",
+            "options": [
+                "--command",
+            ],
+        }
+    ],
     "breeze setup self-upgrade": [
         {
             "name": "Self-upgrade flags",
             "options": [
                 "--use-current-airflow-sources",
-                "--force",
             ],
         }
     ],
@@ -54,7 +63,7 @@ SETUP_PARAMETERS: dict[str, list[dict[str, str | list[str]]]] = {
                 "--backend",
                 "--postgres-version",
                 "--mysql-version",
-                "--mssql-version",
+                "--use-uv",
                 "--cheatsheet",
                 "--asciiart",
                 "--colour",
@@ -67,7 +76,10 @@ SETUP_PARAMETERS: dict[str, list[dict[str, str | list[str]]]] = {
             "options": [
                 "--force",
                 "--command",
+                "--check-only",
             ],
         },
     ],
+    "breeze setup synchronize-local-mounts": [],
+    "breeze setup version": [],
 }

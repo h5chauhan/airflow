@@ -19,16 +19,33 @@
 ``apache-airflow-providers-atlassian-jira``
 ===========================================
 
-Content
--------
 
 .. toctree::
+    :hidden:
+    :maxdepth: 1
+    :caption: Basics
+
+    Home <self>
+    Changelog <changelog>
+    Security <security>
+
+.. toctree::
+    :hidden:
+    :maxdepth: 1
+    :caption: Guides
+
+    Connection types <connections>
+    Notifications <notifications/index>
+
+.. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: References
 
     Python API <_api/airflow/providers/atlassian/jira/index>
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Resources
 
@@ -39,41 +56,42 @@ Content
 
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Commits
 
     Detailed list of commits <commits>
 
 
-Package apache-airflow-providers-atlassian-jira
+apache-airflow-providers-atlassian-jira package
 ------------------------------------------------------
 
-`Atlassian Jira <https://www.atlassian.com/>`__
+`Atlassian Jira <https://www.atlassian.com/software/jira/>`__
 
 
-Release: 1.0.0
+Release: 2.7.0
 
 Provider package
 ----------------
 
-This is a provider package for ``atlassian.jira`` provider. All classes for this provider package
-are in ``airflow.providers.atlassian.jira`` python package.
+This package is for the ``atlassian.jira`` provider.
+All classes for this package are included in the ``airflow.providers.atlassian.jira`` python package.
 
 Installation
 ------------
 
-You can install this package on top of an existing Airflow 2 installation (see ``Requirements`` below)
-for the minimum Airflow version supported) via
-``pip install apache-airflow-providers-atlassian-jira``
+You can install this package on top of an existing Airflow 2 installation via
+``pip install apache-airflow-providers-atlassian-jira``.
+For the minimum Airflow version supported, see ``Requirements`` below.
 
 Requirements
 ------------
 
-==================  ==================
-PIP package         Version required
-==================  ==================
-``apache-airflow``  ``>=2.2.0``
-``JIRA``            ``>1.0.7``
-==================  ==================
+The minimum Apache Airflow version supported by this provider package is ``2.8.0``.
 
-.. include:: ../../airflow/providers/atlassian/jira/CHANGELOG.rst
+========================  ==================
+PIP package               Version required
+========================  ==================
+``apache-airflow``        ``>=2.8.0``
+``atlassian-python-api``  ``>3.41.10``
+========================  ==================

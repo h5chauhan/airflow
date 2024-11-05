@@ -19,17 +19,27 @@
 ``apache-airflow-providers-jdbc``
 =================================
 
-Content
--------
 
 .. toctree::
+    :hidden:
+    :maxdepth: 1
+    :caption: Basics
+
+    Home <self>
+    Changelog <changelog>
+    Security <security>
+
+.. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Guides
 
-    Operators <operators>
+    Configuration <configurations-ref>
     Connection types <connections/jdbc>
+    Operators <operators>
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: References
 
@@ -37,15 +47,17 @@ Content
 
 .. toctree::
     :hidden:
+    :maxdepth: 1
     :caption: System tests
 
-    System Tests <_api/tests/system/providers/jdbc/index>
+    System Tests <_api/tests/system/jdbc/index>
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Resources
 
-    Example DAGs <https://github.com/apache/airflow/tree/providers-jdbc/3.0.0/tests/system/providers/jdbc/>
+    Example DAGs <https://github.com/apache/airflow/tree/providers-jdbc/|version|/providers/tests/system/jdbc/>
     PyPI Repository <https://pypi.org/project/apache-airflow-providers-jdbc/>
     Installing from sources <installing-providers-from-sources>
 
@@ -53,41 +65,44 @@ Content
 
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Commits
 
     Detailed list of commits <commits>
 
 
-Package apache-airflow-providers-jdbc
+apache-airflow-providers-jdbc package
 ------------------------------------------------------
 
 `Java Database Connectivity (JDBC) <https://docs.oracle.com/javase/8/docs/technotes/guides/jdbc/>`__
 
 
-Release: 3.2.1
+Release: 4.5.2
 
 Provider package
 ----------------
 
-This is a provider package for ``jdbc`` provider. All classes for this provider package
-are in ``airflow.providers.jdbc`` python package.
+This package is for the ``jdbc`` provider.
+All classes for this package are included in the ``airflow.providers.jdbc`` python package.
 
 Installation
 ------------
 
-You can install this package on top of an existing Airflow 2 installation (see ``Requirements`` below)
-for the minimum Airflow version supported) via
-``pip install apache-airflow-providers-jdbc``
+You can install this package on top of an existing Airflow 2 installation via
+``pip install apache-airflow-providers-jdbc``.
+For the minimum Airflow version supported, see ``Requirements`` below.
 
 Requirements
 ------------
 
+The minimum Apache Airflow version supported by this provider package is ``2.8.0``.
+
 =======================================  ==================
 PIP package                              Version required
 =======================================  ==================
-``apache-airflow``                       ``>=2.2.0``
-``apache-airflow-providers-common-sql``  ``>=1.2.0``
+``apache-airflow``                       ``>=2.8.0``
+``apache-airflow-providers-common-sql``  ``>=1.17.0``
 ``jaydebeapi``                           ``>=1.1.1``
 =======================================  ==================
 
@@ -116,7 +131,5 @@ Downloading official packages
 You can download officially released packages and verify their checksums and signatures from the
 `Official Apache Download site <https://downloads.apache.org/airflow/providers/>`_
 
-* `The apache-airflow-providers-jdbc 3.2.1 sdist package <https://downloads.apache.org/airflow/providers/apache-airflow-providers-jdbc-3.2.1.tar.gz>`_ (`asc <https://downloads.apache.org/airflow/providers/apache-airflow-providers-jdbc-3.2.1.tar.gz.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache-airflow-providers-jdbc-3.2.1.tar.gz.sha512>`__)
-* `The apache-airflow-providers-jdbc 3.2.1 wheel package <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-3.2.1-py3-none-any.whl>`_ (`asc <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-3.2.1-py3-none-any.whl.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-3.2.1-py3-none-any.whl.sha512>`__)
-
-.. include:: ../../airflow/providers/jdbc/CHANGELOG.rst
+* `The apache-airflow-providers-jdbc 4.5.2 sdist package <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-4.5.2.tar.gz>`_ (`asc <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-4.5.2.tar.gz.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-4.5.2.tar.gz.sha512>`__)
+* `The apache-airflow-providers-jdbc 4.5.2 wheel package <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-4.5.2-py3-none-any.whl>`_ (`asc <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-4.5.2-py3-none-any.whl.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache_airflow_providers_jdbc-4.5.2-py3-none-any.whl.sha512>`__)

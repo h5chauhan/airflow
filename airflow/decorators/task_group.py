@@ -15,7 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Implements the ``@task_group`` function decorator.
+"""
+Implements the ``@task_group`` function decorator.
 
 When the decorated function is called, a task group will be created to represent
 a collection of closely related tasks on the same DAG that should be grouped
@@ -30,43 +31,30 @@ import warnings
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, Mapping, Sequence, TypeVar, overload
 
 import attr
-from sqlalchemy.orm import Session
 
 from airflow.decorators.base import ExpandableFactory
 from airflow.models.expandinput import (
     DictOfListsExpandInput,
-    ExpandInput,
     ListOfDictsExpandInput,
-    OperatorExpandArgument,
-    OperatorExpandKwargsArgument,
+    MappedArgument,
 )
-from airflow.models.taskmixin import DAGNode
 from airflow.models.xcom_arg import XComArg
+from airflow.sdk.definitions.node import DAGNode
 from airflow.typing_compat import ParamSpec
-from airflow.utils.context import Context
 from airflow.utils.helpers import prevent_duplicates
-from airflow.utils.mixins import ResolveMixin
-from airflow.utils.session import NEW_SESSION, provide_session
 from airflow.utils.task_group import MappedTaskGroup, TaskGroup
 
 if TYPE_CHECKING:
     from airflow.models.dag import DAG
+    from airflow.models.expandinput import (
+        OperatorExpandArgument,
+        OperatorExpandKwargsArgument,
+    )
 
 FParams = ParamSpec("FParams")
 FReturn = TypeVar("FReturn", None, DAGNode)
 
 task_group_sig = inspect.signature(TaskGroup.__init__)
-
-
-@attr.define(kw_only=True)
-class _MappedArgument(ResolveMixin):
-    _input: ExpandInput
-    _key: str
-
-    @provide_session
-    def resolve(self, context: Context, *, session: Session = NEW_SESSION) -> Any:
-        data, _ = self._input.resolve(context, session=session)
-        return data[self._key]
 
 
 @attr.define()
@@ -92,10 +80,11 @@ class _TaskGroupFactory(ExpandableFactory, Generic[FParams, FReturn]):
                 group_id = repr(self.tg_kwargs["group_id"])
             except KeyError:
                 group_id = f"at {hex(id(self))}"
-            warnings.warn(f"Partial task group {group_id} was never mapped!")
+            warnings.warn(f"Partial task group {group_id} was never mapped!", stacklevel=1)
 
     def __call__(self, *args: FParams.args, **kwargs: FParams.kwargs) -> DAGNode:
-        """Instantiate the task group.
+        """
+        Instantiate the task group.
 
         This uses the wrapped function to create a task group. Depending on the
         return type of the wrapped function, this either returns the last task
@@ -129,13 +118,15 @@ class _TaskGroupFactory(ExpandableFactory, Generic[FParams, FReturn]):
         return task_group
 
     def override(self, **kwargs: Any) -> _TaskGroupFactory[FParams, FReturn]:
-        return attr.evolve(self, tg_kwargs={**self.tg_kwargs, **kwargs})
+        # TODO: FIXME when mypy gets compatible with new attrs
+        return attr.evolve(self, tg_kwargs={**self.tg_kwargs, **kwargs})  # type: ignore[arg-type]
 
     def partial(self, **kwargs: Any) -> _TaskGroupFactory[FParams, FReturn]:
         self._validate_arg_names("partial", kwargs)
         prevent_duplicates(self.partial_kwargs, kwargs, fail_reason="duplicate partial")
         kwargs.update(self.partial_kwargs)
-        return attr.evolve(self, partial_kwargs=kwargs)
+        # TODO: FIXME when mypy gets compatible with new attrs
+        return attr.evolve(self, partial_kwargs=kwargs)  # type: ignore[arg-type]
 
     def expand(self, **kwargs: OperatorExpandArgument) -> DAGNode:
         if not kwargs:
@@ -146,7 +137,7 @@ class _TaskGroupFactory(ExpandableFactory, Generic[FParams, FReturn]):
         return self._create_task_group(
             functools.partial(MappedTaskGroup, expand_input=expand_input),
             **self.partial_kwargs,
-            **{k: _MappedArgument(input=expand_input, key=k) for k in kwargs},
+            **{k: MappedArgument(input=expand_input, key=k) for k in kwargs},
         )
 
     def expand_kwargs(self, kwargs: OperatorExpandKwargsArgument) -> DAGNode:
@@ -175,7 +166,7 @@ class _TaskGroupFactory(ExpandableFactory, Generic[FParams, FReturn]):
         return self._create_task_group(
             functools.partial(MappedTaskGroup, expand_input=expand_input),
             **self.partial_kwargs,
-            **{k: _MappedArgument(input=expand_input, key=k) for k in map_kwargs},
+            **{k: MappedArgument(input=expand_input, key=k) for k in map_kwargs},
         )
 
 
@@ -197,18 +188,17 @@ def task_group(
     ui_color: str = "CornflowerBlue",
     ui_fgcolor: str = "#000",
     add_suffix_on_collision: bool = False,
-) -> Callable[[Callable[FParams, FReturn]], _TaskGroupFactory[FParams, FReturn]]:
-    ...
+) -> Callable[[Callable[FParams, FReturn]], _TaskGroupFactory[FParams, FReturn]]: ...
 
 
 # This covers the @task_group case (no parentheses).
 @overload
-def task_group(python_callable: Callable[FParams, FReturn]) -> _TaskGroupFactory[FParams, FReturn]:
-    ...
+def task_group(python_callable: Callable[FParams, FReturn]) -> _TaskGroupFactory[FParams, FReturn]: ...
 
 
 def task_group(python_callable=None, **tg_kwargs):
-    """Python TaskGroup decorator.
+    """
+    Python TaskGroup decorator.
 
     This wraps a function into an Airflow TaskGroup. When used as the
     ``@task_group()`` form, all arguments are forwarded to the underlying

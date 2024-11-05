@@ -16,23 +16,25 @@
 # under the License.
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import airflow
 from airflow.api_connexion.schemas.version_schema import version_info_schema
-from airflow.api_connexion.types import APIResponse
 from airflow.utils.platform import get_airflow_git_version
+
+if TYPE_CHECKING:
+    from airflow.api_connexion.types import APIResponse
 
 
 class VersionInfo(NamedTuple):
-    """Version information"""
+    """Version information."""
 
     version: str
     git_version: str | None
 
 
 def get_version() -> APIResponse:
-    """Get version information"""
+    """Get version information."""
     airflow_version = airflow.__version__
 
     git_version = get_airflow_git_version()

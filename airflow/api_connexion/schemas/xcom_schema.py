@@ -25,40 +25,48 @@ from airflow.models import XCom
 
 
 class XComCollectionItemSchema(SQLAlchemySchema):
-    """Schema for a xcom item"""
+    """Schema for a xcom item."""
 
     class Meta:
-        """Meta"""
+        """Meta."""
 
         model = XCom
 
     key = auto_field()
     timestamp = auto_field()
     execution_date = auto_field()
+    map_index = auto_field()
     task_id = auto_field()
     dag_id = auto_field()
 
 
-class XComSchema(XComCollectionItemSchema):
-    """XCom schema"""
+class XComSchemaNative(XComCollectionItemSchema):
+    """XCom schema with native return type."""
 
-    value = auto_field()
+    value = fields.Raw()
+
+
+class XComSchemaString(XComCollectionItemSchema):
+    """XCom schema forced to be string."""
+
+    value = fields.String()
 
 
 class XComCollection(NamedTuple):
-    """List of XComs with meta"""
+    """List of XComs with meta."""
 
     xcom_entries: list[XCom]
     total_entries: int
 
 
 class XComCollectionSchema(Schema):
-    """XCom Collection Schema"""
+    """XCom Collection Schema."""
 
     xcom_entries = fields.List(fields.Nested(XComCollectionItemSchema))
     total_entries = fields.Int()
 
 
-xcom_schema = XComSchema()
+xcom_schema_native = XComSchemaNative()
+xcom_schema_string = XComSchemaString()
 xcom_collection_item_schema = XComCollectionItemSchema()
 xcom_collection_schema = XComCollectionSchema()

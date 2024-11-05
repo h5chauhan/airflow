@@ -22,13 +22,16 @@ import os
 import re
 import textwrap
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import rich_click as click
 from attr import dataclass
 from github import Github
-from github.Issue import Issue
 from rich.console import Console
 from tabulate import tabulate
+
+if TYPE_CHECKING:
+    from github.Issue import Issue
 
 PROVIDER_TESTING_LABEL = "testing status"
 
@@ -40,9 +43,8 @@ MY_DIR_PATH = Path(os.path.dirname(__file__))
 SOURCE_DIR_PATH = MY_DIR_PATH / os.pardir / os.pardir
 
 
-@click.group(context_settings={'help_option_names': ['-h', '--help'], 'max_content_width': 500})
-def cli():
-    ...
+@click.group(context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 500})
+def cli(): ...
 
 
 option_table = click.option(
@@ -62,7 +64,7 @@ option_github_token = click.option(
         Can be generated with:
         https://github.com/settings/tokens/new?description=Read%20Write%20isssues&scopes=repo"""
     ),
-    envvar='GITHUB_TOKEN',
+    envvar="GITHUB_TOKEN",
 )
 
 
@@ -78,7 +80,7 @@ class Stats:
     users_commented: set[str]
 
     def percent_tested(self) -> int:
-        return int(100.0 * self.tested_issues / self.num_issues)
+        return 100 * self.tested_issues // self.num_issues
 
     def num_involved_users_who_commented(self) -> int:
         return len(self.users_involved.intersection(self.users_commented))
@@ -87,7 +89,7 @@ class Stats:
         return len(self.users_commented - self.users_involved)
 
     def percent_commented_among_involved(self) -> int:
-        return int(100.0 * self.num_involved_users_who_commented() / len(self.users_involved))
+        return 100 * self.num_involved_users_who_commented() // len(self.users_involved)
 
     def __str__(self):
         return (

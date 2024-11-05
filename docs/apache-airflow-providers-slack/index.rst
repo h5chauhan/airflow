@@ -19,34 +19,42 @@
 ``apache-airflow-providers-slack``
 ==================================
 
-Content
--------
+
 .. toctree::
     :hidden:
+    :maxdepth: 1
+    :caption: Basics
+
+    Home <self>
+    Changelog <changelog>
+    Security <security>
+
+.. toctree::
+    :hidden:
+    :maxdepth: 1
     :caption: System tests
 
-    System Tests <_api/tests/system/providers/slack/index>
+    System Tests <_api/tests/system/slack/index>
+
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Guides
 
-    How-to Guide <operators/slack_operator_howto_guide>
+    Connection Types <connections/index>
+    Operators <operators/index>
+    Slack Notifications <notifications/index>
 
 .. toctree::
-    :maxdepth: 1
-    :caption: Guides
-
-    SqlToSlackOperator types <operators/sql_to_slack>
-
-.. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: References
 
-    Connection Types <connections/index>
     Python API <_api/airflow/providers/slack/index>
-    Example DAGs <https://github.com/apache/airflow/tree/providers-slack/5.1.0/tests/system/providers/slack>
+    Example DAGs <https://github.com/apache/airflow/tree/providers-slack/|version|/providers/tests/system/slack>
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Resources
 
@@ -57,42 +65,48 @@ Content
 
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Commits
 
     Detailed list of commits <commits>
 
 
-Package apache-airflow-providers-slack
+apache-airflow-providers-slack package
 ------------------------------------------------------
 
-`Slack <https://slack.com/>`__
+`Slack <https://slack.com/>`__ services integration including:
+
+  - `Slack API <https://api.slack.com/>`__
+  - `Slack Incoming Webhook <https://api.slack.com/messaging/webhooks>`__
 
 
-Release: 6.0.0
+Release: 8.9.1
 
 Provider package
 ----------------
 
-This is a provider package for ``slack`` provider. All classes for this provider package
-are in ``airflow.providers.slack`` python package.
+This package is for the ``slack`` provider.
+All classes for this package are included in the ``airflow.providers.slack`` python package.
 
 Installation
 ------------
 
-You can install this package on top of an existing Airflow 2 installation (see ``Requirements`` below)
-for the minimum Airflow version supported) via
-``pip install apache-airflow-providers-slack``
+You can install this package on top of an existing Airflow 2 installation via
+``pip install apache-airflow-providers-slack``.
+For the minimum Airflow version supported, see ``Requirements`` below.
 
 Requirements
 ------------
 
+The minimum Apache Airflow version supported by this provider package is ``2.8.0``.
+
 =======================================  ==================
 PIP package                              Version required
 =======================================  ==================
-``apache-airflow``                       ``>=2.2.0``
-``apache-airflow-providers-common-sql``  ``>=1.2.0``
-``slack_sdk``                            ``>=3.0.0``
+``apache-airflow``                       ``>=2.8.0``
+``apache-airflow-providers-common-sql``  ``>=1.3.1``
+``slack_sdk``                            ``>=3.19.0``
 =======================================  ==================
 
 Cross provider package dependencies
@@ -120,7 +134,5 @@ Downloading official packages
 You can download officially released packages and verify their checksums and signatures from the
 `Official Apache Download site <https://downloads.apache.org/airflow/providers/>`_
 
-* `The apache-airflow-providers-slack 6.0.0 sdist package <https://downloads.apache.org/airflow/providers/apache-airflow-providers-slack-6.0.0.tar.gz>`_ (`asc <https://downloads.apache.org/airflow/providers/apache-airflow-providers-slack-6.0.0.tar.gz.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache-airflow-providers-slack-6.0.0.tar.gz.sha512>`__)
-* `The apache-airflow-providers-slack 6.0.0 wheel package <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-6.0.0-py3-none-any.whl>`_ (`asc <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-6.0.0-py3-none-any.whl.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-6.0.0-py3-none-any.whl.sha512>`__)
-
-.. include:: ../../airflow/providers/slack/CHANGELOG.rst
+* `The apache-airflow-providers-slack 8.9.1 sdist package <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-8.9.1.tar.gz>`_ (`asc <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-8.9.1.tar.gz.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-8.9.1.tar.gz.sha512>`__)
+* `The apache-airflow-providers-slack 8.9.1 wheel package <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-8.9.1-py3-none-any.whl>`_ (`asc <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-8.9.1-py3-none-any.whl.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache_airflow_providers_slack-8.9.1-py3-none-any.whl.sha512>`__)

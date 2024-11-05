@@ -17,17 +17,21 @@
  * under the License.
  */
 
-import { useSearchParams } from 'react-router-dom';
-import URLSearchParamsWrapper from 'src/utils/URLSearchParamWrapper';
+import { useSearchParams } from "react-router-dom";
+import {
+  LIMIT_PARAM,
+  OFFSET_PARAM,
+  SORT_PARAM,
+} from "src/components/NewTable/searchParams";
 
-const RUN_ID = 'dag_run_id';
-const TASK_ID = 'task_id';
-const MAP_INDEX = 'map_index';
+export const RUN_ID = "dag_run_id";
+const TASK_ID = "task_id";
+const MAP_INDEX = "map_index";
 
 export interface SelectionProps {
-  runId?: string | null ;
+  runId?: string | null;
   taskId?: string | null;
-  mapIndex?: number | null;
+  mapIndex?: number;
 }
 
 const useSelection = () => {
@@ -35,14 +39,33 @@ const useSelection = () => {
 
   // Clear selection, but keep other search params
   const clearSelection = () => {
+    const params = new URLSearchParams(window.location.search);
     searchParams.delete(RUN_ID);
     searchParams.delete(TASK_ID);
     searchParams.delete(MAP_INDEX);
+    [...searchParams.keys()].forEach((key) => {
+      if (
+        key === OFFSET_PARAM ||
+        key === LIMIT_PARAM ||
+        key.includes(SORT_PARAM)
+      )
+        params.delete(key);
+    });
     setSearchParams(searchParams);
   };
 
   const onSelect = ({ runId, taskId, mapIndex }: SelectionProps) => {
-    const params = new URLSearchParamsWrapper(searchParams);
+    // Check the window, in case params have changed since this hook was loaded
+    const params = new URLSearchParams(window.location.search);
+
+    [...searchParams.keys()].forEach((key) => {
+      if (
+        key === OFFSET_PARAM ||
+        key === LIMIT_PARAM ||
+        key.includes(SORT_PARAM)
+      )
+        params.delete(key);
+    });
 
     if (runId) params.set(RUN_ID, runId);
     else params.delete(RUN_ID);
@@ -59,7 +82,8 @@ const useSelection = () => {
   const runId = searchParams.get(RUN_ID);
   const taskId = searchParams.get(TASK_ID);
   const mapIndexParam = searchParams.get(MAP_INDEX);
-  const mapIndex = mapIndexParam !== null ? parseInt(mapIndexParam, 10) : null;
+  const mapIndex =
+    mapIndexParam !== null ? parseInt(mapIndexParam, 10) : undefined;
 
   return {
     selected: {

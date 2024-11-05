@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """Document roles"""
+
 from __future__ import annotations
 
 #
@@ -30,7 +31,7 @@ class RoleException(Exception):
     """Exception for roles extension"""
 
 
-def get_template_field(env, fullname):
+def get_template_field(env, fullname) -> list[str]:
     """
     Gets template fields for specific operator class.
 
@@ -38,7 +39,6 @@ def get_template_field(env, fullname):
     :param fullname: Full path to operator class.
         For example: ``airflow.providers.google.cloud.operators.vision.CloudVisionCreateProductSetOperator``
     :return: List of template field
-    :rtype: list[str]
     """
     modname, classname = fullname.rsplit(".", 1)
 

@@ -14,7 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Config sub-commands"""
+"""Config sub-commands."""
+
 from __future__ import annotations
 
 import locale
@@ -23,6 +24,7 @@ import os
 import platform
 import subprocess
 import sys
+from enum import Enum
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -34,6 +36,7 @@ from airflow.providers_manager import ProvidersManager
 from airflow.typing_compat import Protocol
 from airflow.utils.cli import suppress_logs_and_warning
 from airflow.utils.platform import getuser
+from airflow.utils.providers_configuration_loader import providers_configuration_loaded
 from airflow.version import version as airflow_version
 
 log = logging.getLogger(__name__)
@@ -43,13 +46,13 @@ class Anonymizer(Protocol):
     """Anonymizer protocol."""
 
     def process_path(self, value) -> str:
-        """Remove pii from paths"""
+        """Remove pii from paths."""
 
     def process_username(self, value) -> str:
-        """Remove pii from username"""
+        """Remove pii from username."""
 
     def process_url(self, value) -> str:
-        """Remove pii from URL"""
+        """Remove pii from URL."""
 
 
 class NullAnonymizer(Anonymizer):
@@ -81,7 +84,7 @@ class PiiAnonymizer(Anonymizer):
     def process_username(self, value) -> str:
         if not value:
             return value
-        return value[0] + "..." + value[-1]
+        return f"{value[0]}...{value[-1]}"
 
     def process_url(self, value) -> str:
         if not value:
@@ -111,11 +114,11 @@ class PiiAnonymizer(Anonymizer):
 
             # pack
             if username and password and host:
-                netloc = username + ":" + password + "@" + host
+                netloc = f"{username}:{password}@{host}"
             elif username and host:
-                netloc = username + "@" + host
+                netloc = f"{username}@{host}"
             elif password and host:
-                netloc = ":" + password + "@" + host
+                netloc = f":{password}@{host}"
             elif host:
                 netloc = host
             else:
@@ -124,17 +127,18 @@ class PiiAnonymizer(Anonymizer):
         return urlunsplit((url_parts.scheme, netloc, url_parts.path, url_parts.query, url_parts.fragment))
 
 
-class OperatingSystem:
-    """Operating system"""
+class OperatingSystem(Enum):
+    """Operating system."""
 
     WINDOWS = "Windows"
     LINUX = "Linux"
     MACOSX = "Mac OS"
     CYGWIN = "Cygwin"
+    UNKNOWN = "Unknown"
 
     @staticmethod
-    def get_current() -> str | None:
-        """Get current operating system"""
+    def get_current() -> OperatingSystem:
+        """Get current operating system."""
         if os.name == "nt":
             return OperatingSystem.WINDOWS
         elif "linux" in sys.platform:
@@ -143,24 +147,26 @@ class OperatingSystem:
             return OperatingSystem.MACOSX
         elif "cygwin" in sys.platform:
             return OperatingSystem.CYGWIN
-        return None
+        return OperatingSystem.UNKNOWN
 
 
-class Architecture:
-    """Compute architecture"""
+class Architecture(Enum):
+    """Compute architecture."""
 
     X86_64 = "x86_64"
     X86 = "x86"
     PPC = "ppc"
     ARM = "arm"
+    UNKNOWN = "unknown"
 
     @staticmethod
-    def get_current():
-        """Get architecture"""
-        return _MACHINE_TO_ARCHITECTURE.get(platform.machine().lower())
+    def get_current() -> Architecture:
+        """Get architecture."""
+        current_architecture = _MACHINE_TO_ARCHITECTURE.get(platform.machine().lower())
+        return current_architecture or Architecture.UNKNOWN
 
 
-_MACHINE_TO_ARCHITECTURE = {
+_MACHINE_TO_ARCHITECTURE: dict[str, Architecture] = {
     "amd64": Architecture.X86_64,
     "x86_64": Architecture.X86_64,
     "i686-64": Architecture.X86_64,
@@ -176,11 +182,12 @@ _MACHINE_TO_ARCHITECTURE = {
     "arm64": Architecture.ARM,
     "armv7": Architecture.ARM,
     "armv7l": Architecture.ARM,
+    "aarch64": Architecture.ARM,
 }
 
 
 class AirflowInfo:
-    """Renders information about Airflow instance"""
+    """Renders information about Airflow instance."""
 
     def __init__(self, anonymizer):
         self.anonymizer = anonymizer
@@ -203,17 +210,17 @@ class AirflowInfo:
 
     @staticmethod
     def _task_logging_handler():
-        """Returns task logging handler."""
+        """Return task logging handler."""
 
         def get_fullname(o):
             module = o.__class__.__module__
             if module is None or module == str.__class__.__module__:
                 return o.__class__.__name__  # Avoid reporting __builtin__
             else:
-                return module + '.' + o.__class__.__name__
+                return f"{module}.{o.__class__.__name__}"
 
         try:
-            handler_names = [get_fullname(handler) for handler in logging.getLogger('airflow.task').handlers]
+            handler_names = [get_fullname(handler) for handler in logging.getLogger("airflow.task").handlers]
             return ", ".join(handler_names)
         except Exception:
             return "NOT AVAILABLE"
@@ -253,13 +260,13 @@ class AirflowInfo:
         operating_system = OperatingSystem.get_current()
         arch = Architecture.get_current()
         uname = platform.uname()
-        _locale = locale.getdefaultlocale()
+        _locale = locale.getlocale()
         python_location = self.anonymizer.process_path(sys.executable)
         python_version = sys.version.replace("\n", " ")
 
         return [
-            ("OS", operating_system or "NOT AVAILABLE"),
-            ("architecture", arch or "NOT AVAILABLE"),
+            ("OS", operating_system.value),
+            ("architecture", arch.value),
             ("uname", str(uname)),
             ("locale", str(_locale)),
             ("python_version", python_version),
@@ -305,10 +312,10 @@ class AirflowInfo:
 
     @property
     def _providers_info(self):
-        return [(p.data['package-name'], p.version) for p in ProvidersManager().providers.values()]
+        return [(p.data["package-name"], p.version) for p in ProvidersManager().providers.values()]
 
     def show(self, output: str, console: AirflowConsole | None = None) -> None:
-        """Shows information about Airflow instance"""
+        """Show information about Airflow instance."""
         all_info = {
             "Apache Airflow": self._airflow_info,
             "System info": self._system_info,
@@ -330,7 +337,7 @@ class AirflowInfo:
             )
 
     def render_text(self, output: str) -> str:
-        """Exports the info to string"""
+        """Export the info to string."""
         console = AirflowConsole(record=True)
         with console.capture():
             self.show(output=output, console=console)
@@ -338,7 +345,7 @@ class AirflowInfo:
 
 
 class FileIoException(Exception):
-    """Raises when error happens in FileIo.io integration"""
+    """Raises when error happens in FileIo.io integration."""
 
 
 @tenacity.retry(
@@ -349,7 +356,7 @@ class FileIoException(Exception):
     after=tenacity.after_log(log, logging.DEBUG),
 )
 def _upload_text_to_fileio(content):
-    """Upload text file to File.io service and return lnk"""
+    """Upload text file to File.io service and return link."""
     resp = httpx.post("https://file.io", content=content)
     if resp.status_code not in [200, 201]:
         print(resp.json())
@@ -373,6 +380,7 @@ def _send_report_to_fileio(info):
 
 
 @suppress_logs_and_warning
+@providers_configuration_loaded
 def show_info(args):
     """Show information related to Airflow, system and other."""
     # Enforce anonymization, when file_io upload is tuned on.

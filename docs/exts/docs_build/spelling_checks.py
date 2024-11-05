@@ -64,12 +64,12 @@ class SpellingError(NamedTuple):
         return not self == other
 
     def __lt__(self, other):
-        file_path_a = self.file_path or ''
-        file_path_b = other.file_path or ''
+        file_path_a = self.file_path or ""
+        file_path_b = other.file_path or ""
         line_no_a = self.line_no or 0
         line_no_b = other.line_no or 0
-        context_line_a = self.context_line or ''
-        context_line_b = other.context_line or ''
+        context_line_a = self.context_line or ""
+        context_line_b = other.context_line or ""
         left = (file_path_a, line_no_a, context_line_a, self.spelling, self.message)
         right = (
             file_path_b,
@@ -90,7 +90,7 @@ def parse_spelling_warnings(warning_text: str, docs_dir: str) -> list[SpellingEr
     :return: list of SpellingError.
     """
     sphinx_spelling_errors = []
-    for sphinx_warning in warning_text.split("\n"):
+    for sphinx_warning in warning_text.splitlines():
         if not sphinx_warning:
             continue
         warning_parts = None
@@ -102,7 +102,7 @@ def parse_spelling_warnings(warning_text: str, docs_dir: str) -> list[SpellingEr
                 sphinx_spelling_errors.append(
                     SpellingError(
                         file_path=os.path.join(docs_dir, warning_parts[0]),
-                        line_no=int(warning_parts[1]) if warning_parts[1] not in ('None', '') else None,
+                        line_no=int(warning_parts[1]) if warning_parts[1] not in ("None", "") else None,
                         spelling=warning_parts[2],
                         suggestion=warning_parts[3] if warning_parts[3] else None,
                         context_line=warning_parts[4],
@@ -154,7 +154,9 @@ def display_spelling_error_summary(spelling_errors: dict[str, list[SpellingError
 
     console.print("=" * 100)
     console.print()
-    msg = """
+    msg = """[green]
+If there are spelling errors related to class or function name, make sure
+those names are quoted with backticks '`' - this should exclude it from spellcheck process.
 If there are spelling errors in the summary above, and the spelling is
 correct, add the spelling to docs/spelling_wordlist.txt or use the
 spelling directive.
@@ -177,11 +179,16 @@ def _display_error(error: SpellingError):
     if error.file_path:
         console.print(f"File path: {os.path.relpath(error.file_path, start=DOCS_DIR)}")
         if error.spelling:
-            console.print(f"Incorrect Spelling: '{error.spelling}'")
+            console.print(f"[red]Incorrect Spelling: '{error.spelling}'")
         if error.suggestion:
             console.print(f"Suggested Spelling: '{error.suggestion}'")
         if error.context_line:
             console.print(f"Line with Error: '{error.context_line}'")
-        if error.file_path and not error.file_path.endswith("<unknown>") and error.line_no:
+        if (
+            error.file_path
+            and not error.file_path.endswith("<unknown>")
+            and error.line_no
+            and os.path.isfile(error.file_path)
+        ):
             console.print(f"Line Number: {error.line_no}")
             console.print(prepare_code_snippet(error.file_path, error.line_no))

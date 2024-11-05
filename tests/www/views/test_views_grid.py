@@ -17,27 +17,35 @@
 # under the License.
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+from typing import TYPE_CHECKING
 
 import pendulum
 import pytest
 from dateutil.tz import UTC
 
-from airflow.datasets import Dataset
+from airflow.assets import Asset
+from airflow.decorators import task_group
 from airflow.lineage.entities import File
 from airflow.models import DagBag
-from airflow.models.dagrun import DagRun
-from airflow.models.dataset import DatasetDagRunQueue, DatasetEvent, DatasetModel
+from airflow.models.asset import AssetDagRunQueue, AssetEvent, AssetModel
 from airflow.operators.empty import EmptyOperator
+from airflow.utils import timezone
 from airflow.utils.state import DagRunState, TaskInstanceState
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.types import DagRunType
 from airflow.www.views import dag_to_grid
-from tests.test_utils.asserts import assert_queries_count
-from tests.test_utils.db import clear_db_datasets, clear_db_runs
-from tests.test_utils.mock_operators import MockOperator
 
-DAG_ID = 'test'
+from tests_common.test_utils.asserts import assert_queries_count
+from tests_common.test_utils.db import clear_db_assets, clear_db_runs
+from tests_common.test_utils.mock_operators import MockOperator
+
+pytestmark = pytest.mark.db_test
+
+if TYPE_CHECKING:
+    from airflow.models.dagrun import DagRun
+
+DAG_ID = "test"
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -47,28 +55,34 @@ def examples_dag_bag():
 
 
 @pytest.fixture(autouse=True)
-def clean():
+def _clean():
     clear_db_runs()
-    clear_db_datasets()
+    clear_db_assets()
     yield
     clear_db_runs()
-    clear_db_datasets()
+    clear_db_assets()
 
 
 @pytest.fixture
 def dag_without_runs(dag_maker, session, app, monkeypatch):
     with monkeypatch.context() as m:
         # Remove global operator links for this test
-        m.setattr('airflow.plugins_manager.global_operator_extra_links', [])
-        m.setattr('airflow.plugins_manager.operator_extra_links', [])
-        m.setattr('airflow.plugins_manager.registered_operator_link_classes', {})
+        m.setattr("airflow.plugins_manager.global_operator_extra_links", [])
+        m.setattr("airflow.plugins_manager.operator_extra_links", [])
+        m.setattr("airflow.plugins_manager.registered_operator_link_classes", {})
 
         with dag_maker(dag_id=DAG_ID, serialized=True, session=session):
             EmptyOperator(task_id="task1")
-            with TaskGroup(group_id='group'):
-                MockOperator.partial(task_id='mapped').expand(arg1=['a', 'b', 'c', 'd'])
 
-        m.setattr(app, 'dag_bag', dag_maker.dagbag)
+            @task_group
+            def mapped_task_group(arg1):
+                return MockOperator(task_id="subtask2", arg1=arg1)
+
+            mapped_task_group.expand(arg1=["a", "b", "c"])
+            with TaskGroup(group_id="group"):
+                MockOperator.partial(task_id="mapped").expand(arg1=["a", "b", "c", "d"])
+
+        m.setattr(app, "dag_bag", dag_maker.dagbag)
         yield dag_maker
 
 
@@ -76,59 +90,109 @@ def dag_without_runs(dag_maker, session, app, monkeypatch):
 def dag_with_runs(dag_without_runs):
     date = dag_without_runs.dag.start_date
     run_1 = dag_without_runs.create_dagrun(
-        run_id='run_1', state=DagRunState.SUCCESS, run_type=DagRunType.SCHEDULED, execution_date=date
+        run_id="run_1", state=DagRunState.SUCCESS, run_type=DagRunType.SCHEDULED, execution_date=date
     )
     run_2 = dag_without_runs.create_dagrun(
-        run_id='run_2',
+        run_id="run_2",
         run_type=DagRunType.SCHEDULED,
-        execution_date=dag_without_runs.dag.next_dagrun_info(date).logical_date,
+        execution_date=date + timedelta(days=1),
     )
 
-    yield run_1, run_2
+    return run_1, run_2
 
 
 def test_no_runs(admin_client, dag_without_runs):
-    resp = admin_client.get(f'/object/grid_data?dag_id={DAG_ID}', follow_redirects=True)
+    resp = admin_client.get(f"/object/grid_data?dag_id={DAG_ID}", follow_redirects=True)
     assert resp.status_code == 200, resp.json
     assert resp.json == {
-        'dag_runs': [],
-        'groups': {
-            'children': [
+        "dag_runs": [],
+        "groups": {
+            "children": [
                 {
-                    'extra_links': [],
-                    'has_outlet_datasets': False,
-                    'id': 'task1',
-                    'instances': [],
-                    'is_mapped': False,
-                    'label': 'task1',
-                    'operator': 'EmptyOperator',
+                    "extra_links": [],
+                    "has_outlet_assets": False,
+                    "id": "task1",
+                    "instances": [],
+                    "is_mapped": False,
+                    "label": "task1",
+                    "operator": "EmptyOperator",
+                    "trigger_rule": "all_success",
                 },
                 {
-                    'children': [
+                    "children": [
                         {
-                            'extra_links': [],
-                            'has_outlet_datasets': False,
-                            'id': 'group.mapped',
-                            'instances': [],
-                            'is_mapped': True,
-                            'label': 'mapped',
-                            'operator': 'MockOperator',
+                            "extra_links": [],
+                            "has_outlet_assets": False,
+                            "id": "mapped_task_group.subtask2",
+                            "instances": [],
+                            "is_mapped": True,
+                            "label": "subtask2",
+                            "operator": "MockOperator",
+                            "trigger_rule": "all_success",
                         }
                     ],
-                    'id': 'group',
-                    'instances': [],
-                    'label': 'group',
-                    'tooltip': '',
+                    "is_mapped": True,
+                    "id": "mapped_task_group",
+                    "instances": [],
+                    "label": "mapped_task_group",
+                    "tooltip": "",
+                },
+                {
+                    "children": [
+                        {
+                            "extra_links": [],
+                            "has_outlet_assets": False,
+                            "id": "group.mapped",
+                            "instances": [],
+                            "is_mapped": True,
+                            "label": "mapped",
+                            "operator": "MockOperator",
+                            "trigger_rule": "all_success",
+                        }
+                    ],
+                    "id": "group",
+                    "instances": [],
+                    "label": "group",
+                    "tooltip": "",
                 },
             ],
-            'id': None,
-            'instances': [],
-            'label': None,
+            "id": None,
+            "instances": [],
+            "label": None,
         },
-        'ordering': ['data_interval_end', 'execution_date'],
+        "ordering": ["data_interval_end", "execution_date"],
+        "errors": [],
     }
 
 
+def test_grid_data_filtered_on_run_type_and_run_state(admin_client, dag_with_runs):
+    for uri_params, expected_run_types, expected_run_states in [
+        ("run_state=success&run_state=queued", ["scheduled"], ["success"]),
+        ("run_state=running&run_state=failed", ["scheduled"], ["running"]),
+        ("run_type=scheduled&run_type=manual", ["scheduled", "scheduled"], ["success", "running"]),
+        ("run_type=backfill&run_type=manual", [], []),
+        ("run_state=running&run_type=failed&run_type=backfill&run_type=manual", [], []),
+        (
+            "run_state=running&run_type=failed&run_type=scheduled&run_type=backfill&run_type=manual",
+            ["scheduled"],
+            ["running"],
+        ),
+    ]:
+        resp = admin_client.get(f"/object/grid_data?dag_id={DAG_ID}&{uri_params}", follow_redirects=True)
+        assert resp.status_code == 200, resp.json
+        actual_run_types = list(map(lambda x: x["run_type"], resp.json["dag_runs"]))
+        actual_run_states = list(map(lambda x: x["state"], resp.json["dag_runs"]))
+        assert actual_run_types == expected_run_types
+        assert actual_run_states == expected_run_states
+
+
+# Create this as a fixture so that it is applied before the `dag_with_runs` fixture is!
+@pytest.fixture
+def _freeze_time_for_dagruns(time_machine):
+    time_machine.move_to("2022-01-02T00:00:00+00:00", tick=False)
+
+
+@pytest.mark.usefixtures("_freeze_time_for_dagruns")
 def test_one_run(admin_client, dag_with_runs: list[DagRun], session):
     """
     Test a DAG with complex interaction of states:
@@ -155,235 +219,304 @@ def test_one_run(admin_client, dag_with_runs: list[DagRun], session):
 
     session.flush()
 
-    resp = admin_client.get(f'/object/grid_data?dag_id={DAG_ID}', follow_redirects=True)
+    resp = admin_client.get(f"/object/grid_data?dag_id={DAG_ID}", follow_redirects=True)
 
     assert resp.status_code == 200, resp.json
 
-    # We cannot use freezegun here as it does not play well with Flask 2.2 and SqlAlchemy
-    # Unlike real datetime, when FakeDatetime is used, it coerces to
-    # '2020-08-06 09:00:00+00:00' which is rejected by MySQL for EXPIRY Column
-    current_date_placeholder = '2022-01-02T00:00:00+00:00'
-    actual_date_in_json = datetime.fromisoformat(resp.json['dag_runs'][0]['end_date'])
-    assert datetime.now(tz=UTC) - actual_date_in_json < timedelta(minutes=5)
-    res = resp.json
-    res['dag_runs'][0]['end_date'] = current_date_placeholder
-    assert res == {
-        'dag_runs': [
+    assert resp.json == {
+        "dag_runs": [
             {
-                'conf': None,
-                'conf_is_json': False,
-                'data_interval_end': '2016-01-02T00:00:00+00:00',
-                'data_interval_start': '2016-01-01T00:00:00+00:00',
-                'end_date': current_date_placeholder,
-                'execution_date': '2016-01-01T00:00:00+00:00',
-                'external_trigger': False,
-                'last_scheduling_decision': None,
-                'queued_at': None,
-                'run_id': 'run_1',
-                'run_type': 'scheduled',
-                'start_date': '2016-01-01T00:00:00+00:00',
-                'state': 'success',
+                "conf": None,
+                "conf_is_json": False,
+                "data_interval_end": "2016-01-02T00:00:00+00:00",
+                "data_interval_start": "2016-01-01T00:00:00+00:00",
+                "end_date": timezone.utcnow().isoformat(),
+                "execution_date": "2016-01-01T00:00:00+00:00",
+                "external_trigger": False,
+                "last_scheduling_decision": None,
+                "note": None,
+                "queued_at": None,
+                "run_id": "run_1",
+                "run_type": "scheduled",
+                "start_date": "2016-01-01T00:00:00+00:00",
+                "state": "success",
+                "triggered_by": "test",
             },
             {
-                'conf': None,
-                'conf_is_json': False,
-                'data_interval_end': '2016-01-03T00:00:00+00:00',
-                'data_interval_start': '2016-01-02T00:00:00+00:00',
-                'end_date': None,
-                'execution_date': '2016-01-02T00:00:00+00:00',
-                'external_trigger': False,
-                'last_scheduling_decision': None,
-                'queued_at': None,
-                'run_id': 'run_2',
-                'run_type': 'scheduled',
-                'start_date': '2016-01-01T00:00:00+00:00',
-                'state': 'running',
+                "conf": None,
+                "conf_is_json": False,
+                "data_interval_end": "2016-01-03T00:00:00+00:00",
+                "data_interval_start": "2016-01-02T00:00:00+00:00",
+                "end_date": None,
+                "execution_date": "2016-01-02T00:00:00+00:00",
+                "external_trigger": False,
+                "last_scheduling_decision": None,
+                "note": None,
+                "queued_at": None,
+                "run_id": "run_2",
+                "run_type": "scheduled",
+                "start_date": "2016-01-01T00:00:00+00:00",
+                "state": "running",
+                "triggered_by": "test",
             },
         ],
-        'groups': {
-            'children': [
+        "groups": {
+            "children": [
                 {
-                    'extra_links': [],
-                    'has_outlet_datasets': False,
-                    'id': 'task1',
-                    'instances': [
+                    "extra_links": [],
+                    "has_outlet_assets": False,
+                    "id": "task1",
+                    "instances": [
                         {
-                            'run_id': 'run_1',
-                            'start_date': None,
-                            'end_date': None,
-                            'state': 'success',
-                            'task_id': 'task1',
-                            'try_number': 1,
+                            "run_id": "run_1",
+                            "queued_dttm": None,
+                            "start_date": None,
+                            "end_date": None,
+                            "note": None,
+                            "state": "success",
+                            "task_id": "task1",
+                            "try_number": 0,
                         },
                         {
-                            'run_id': 'run_2',
-                            'start_date': None,
-                            'end_date': None,
-                            'state': 'success',
-                            'task_id': 'task1',
-                            'try_number': 1,
+                            "run_id": "run_2",
+                            "queued_dttm": None,
+                            "start_date": None,
+                            "end_date": None,
+                            "note": None,
+                            "state": "success",
+                            "task_id": "task1",
+                            "try_number": 0,
                         },
                     ],
-                    'is_mapped': False,
-                    'label': 'task1',
-                    'operator': 'EmptyOperator',
+                    "is_mapped": False,
+                    "label": "task1",
+                    "operator": "EmptyOperator",
+                    "trigger_rule": "all_success",
                 },
                 {
-                    'children': [
+                    "children": [
                         {
-                            'extra_links': [],
-                            'has_outlet_datasets': False,
-                            'id': 'group.mapped',
-                            'instances': [
+                            "extra_links": [],
+                            "has_outlet_assets": False,
+                            "id": "mapped_task_group.subtask2",
+                            "instances": [
                                 {
-                                    'run_id': 'run_1',
-                                    'mapped_states': {'success': 4},
-                                    'start_date': None,
-                                    'end_date': None,
-                                    'state': 'success',
-                                    'task_id': 'group.mapped',
+                                    "run_id": "run_1",
+                                    "mapped_states": {"success": 3},
+                                    "queued_dttm": None,
+                                    "start_date": None,
+                                    "end_date": None,
+                                    "state": "success",
+                                    "task_id": "mapped_task_group.subtask2",
                                 },
                                 {
-                                    'run_id': 'run_2',
-                                    'mapped_states': {'no_status': 2, 'running': 1, 'success': 1},
-                                    'start_date': '2021-07-01T01:00:00+00:00',
-                                    'end_date': '2021-07-01T01:02:03+00:00',
-                                    'state': 'running',
-                                    'task_id': 'group.mapped',
+                                    "run_id": "run_2",
+                                    "mapped_states": {"no_status": 3},
+                                    "queued_dttm": None,
+                                    "start_date": None,
+                                    "end_date": None,
+                                    "state": None,
+                                    "task_id": "mapped_task_group.subtask2",
                                 },
                             ],
-                            'is_mapped': True,
-                            'label': 'mapped',
-                            'operator': 'MockOperator',
+                            "is_mapped": True,
+                            "label": "subtask2",
+                            "operator": "MockOperator",
+                            "trigger_rule": "all_success",
+                        }
+                    ],
+                    "is_mapped": True,
+                    "id": "mapped_task_group",
+                    "instances": [
+                        {
+                            "end_date": None,
+                            "run_id": "run_1",
+                            "mapped_states": {"success": 3},
+                            "queued_dttm": None,
+                            "start_date": None,
+                            "state": "success",
+                            "task_id": "mapped_task_group",
+                        },
+                        {
+                            "run_id": "run_2",
+                            "queued_dttm": None,
+                            "start_date": None,
+                            "end_date": None,
+                            "state": None,
+                            "mapped_states": {"no_status": 3},
+                            "task_id": "mapped_task_group",
                         },
                     ],
-                    'id': 'group',
-                    'instances': [
+                    "label": "mapped_task_group",
+                    "tooltip": "",
+                },
+                {
+                    "children": [
                         {
-                            'end_date': None,
-                            'run_id': 'run_1',
-                            'start_date': None,
-                            'state': 'success',
-                            'task_id': 'group',
-                        },
-                        {
-                            'run_id': 'run_2',
-                            'start_date': '2021-07-01T01:00:00+00:00',
-                            'end_date': '2021-07-01T01:02:03+00:00',
-                            'state': 'running',
-                            'task_id': 'group',
+                            "extra_links": [],
+                            "has_outlet_assets": False,
+                            "id": "group.mapped",
+                            "instances": [
+                                {
+                                    "run_id": "run_1",
+                                    "mapped_states": {"success": 4},
+                                    "queued_dttm": None,
+                                    "start_date": None,
+                                    "end_date": None,
+                                    "state": "success",
+                                    "task_id": "group.mapped",
+                                },
+                                {
+                                    "run_id": "run_2",
+                                    "mapped_states": {"no_status": 2, "running": 1, "success": 1},
+                                    "queued_dttm": None,
+                                    "start_date": "2021-07-01T01:00:00+00:00",
+                                    "end_date": "2021-07-01T01:02:03+00:00",
+                                    "state": "running",
+                                    "task_id": "group.mapped",
+                                },
+                            ],
+                            "is_mapped": True,
+                            "label": "mapped",
+                            "operator": "MockOperator",
+                            "trigger_rule": "all_success",
                         },
                     ],
-                    'label': 'group',
-                    'tooltip': '',
+                    "id": "group",
+                    "instances": [
+                        {
+                            "end_date": None,
+                            "run_id": "run_1",
+                            "queued_dttm": None,
+                            "start_date": None,
+                            "state": "success",
+                            "task_id": "group",
+                        },
+                        {
+                            "run_id": "run_2",
+                            "queued_dttm": None,
+                            "start_date": "2021-07-01T01:00:00+00:00",
+                            "end_date": "2021-07-01T01:02:03+00:00",
+                            "state": "running",
+                            "task_id": "group",
+                        },
+                    ],
+                    "label": "group",
+                    "tooltip": "",
                 },
             ],
-            'id': None,
-            'instances': [],
-            'label': None,
+            "id": None,
+            "instances": [],
+            "label": None,
         },
-        'ordering': ['data_interval_end', 'execution_date'],
+        "ordering": ["data_interval_end", "execution_date"],
+        "errors": [],
     }
 
 
 def test_query_count(dag_with_runs, session):
     run1, run2 = dag_with_runs
-    with assert_queries_count(1):
+    with assert_queries_count(2):
         dag_to_grid(run1.dag, (run1, run2), session)
 
 
-def test_has_outlet_dataset_flag(admin_client, dag_maker, session, app, monkeypatch):
+def test_has_outlet_asset_flag(admin_client, dag_maker, session, app, monkeypatch):
     with monkeypatch.context() as m:
         # Remove global operator links for this test
-        m.setattr('airflow.plugins_manager.global_operator_extra_links', [])
-        m.setattr('airflow.plugins_manager.operator_extra_links', [])
-        m.setattr('airflow.plugins_manager.registered_operator_link_classes', {})
+        m.setattr("airflow.plugins_manager.global_operator_extra_links", [])
+        m.setattr("airflow.plugins_manager.operator_extra_links", [])
+        m.setattr("airflow.plugins_manager.registered_operator_link_classes", {})
 
         with dag_maker(dag_id=DAG_ID, serialized=True, session=session):
             lineagefile = File("/tmp/does_not_exist")
             EmptyOperator(task_id="task1")
             EmptyOperator(task_id="task2", outlets=[lineagefile])
-            EmptyOperator(task_id="task3", outlets=[Dataset('foo'), lineagefile])
-            EmptyOperator(task_id="task4", outlets=[Dataset('foo')])
+            EmptyOperator(task_id="task3", outlets=[Asset("foo"), lineagefile])
+            EmptyOperator(task_id="task4", outlets=[Asset("foo")])
 
-        m.setattr(app, 'dag_bag', dag_maker.dagbag)
-        resp = admin_client.get(f'/object/grid_data?dag_id={DAG_ID}', follow_redirects=True)
+        m.setattr(app, "dag_bag", dag_maker.dagbag)
+        resp = admin_client.get(f"/object/grid_data?dag_id={DAG_ID}", follow_redirects=True)
 
-    def _expected_task_details(task_id, has_outlet_datasets):
+    def _expected_task_details(task_id, has_outlet_assets):
         return {
-            'extra_links': [],
-            'has_outlet_datasets': has_outlet_datasets,
-            'id': task_id,
-            'instances': [],
-            'is_mapped': False,
-            'label': task_id,
-            'operator': 'EmptyOperator',
+            "extra_links": [],
+            "has_outlet_assets": has_outlet_assets,
+            "id": task_id,
+            "instances": [],
+            "is_mapped": False,
+            "label": task_id,
+            "operator": "EmptyOperator",
+            "trigger_rule": "all_success",
         }
 
     assert resp.status_code == 200, resp.json
     assert resp.json == {
-        'dag_runs': [],
-        'groups': {
-            'children': [
-                _expected_task_details('task1', False),
-                _expected_task_details('task2', False),
-                _expected_task_details('task3', True),
-                _expected_task_details('task4', True),
+        "dag_runs": [],
+        "groups": {
+            "children": [
+                _expected_task_details("task1", False),
+                _expected_task_details("task2", False),
+                _expected_task_details("task3", True),
+                _expected_task_details("task4", True),
             ],
-            'id': None,
-            'instances': [],
-            'label': None,
+            "id": None,
+            "instances": [],
+            "label": None,
         },
-        'ordering': ['data_interval_end', 'execution_date'],
+        "ordering": ["data_interval_end", "execution_date"],
+        "errors": [],
     }
 
 
 @pytest.mark.need_serialized_dag
-def test_next_run_datasets(admin_client, dag_maker, session, app, monkeypatch):
+def test_next_run_assets(admin_client, dag_maker, session, app, monkeypatch):
     with monkeypatch.context() as m:
-        datasets = [Dataset(uri=f's3://bucket/key/{i}') for i in [1, 2]]
+        assets = [Asset(uri=f"s3://bucket/key/{i}") for i in [1, 2]]
 
-        with dag_maker(dag_id=DAG_ID, schedule=datasets, serialized=True, session=session):
-            EmptyOperator(task_id='task1')
+        with dag_maker(dag_id=DAG_ID, schedule=assets, serialized=True, session=session):
+            EmptyOperator(task_id="task1")
 
-        m.setattr(app, 'dag_bag', dag_maker.dagbag)
+        m.setattr(app, "dag_bag", dag_maker.dagbag)
 
-        ds1_id = session.query(DatasetModel.id).filter_by(uri=datasets[0].uri).scalar()
-        ds2_id = session.query(DatasetModel.id).filter_by(uri=datasets[1].uri).scalar()
-        ddrq = DatasetDagRunQueue(
-            target_dag_id=DAG_ID, dataset_id=ds1_id, created_at=pendulum.DateTime(2022, 8, 2, tzinfo=UTC)
+        asset1_id = session.query(AssetModel.id).filter_by(uri=assets[0].uri).scalar()
+        asset2_id = session.query(AssetModel.id).filter_by(uri=assets[1].uri).scalar()
+        adrq = AssetDagRunQueue(
+            target_dag_id=DAG_ID, asset_id=asset1_id, created_at=pendulum.DateTime(2022, 8, 2, tzinfo=UTC)
         )
-        session.add(ddrq)
-        dataset_events = [
-            DatasetEvent(
-                dataset_id=ds1_id,
+        session.add(adrq)
+        asset_events = [
+            AssetEvent(
+                asset_id=asset1_id,
                 extra={},
                 timestamp=pendulum.DateTime(2022, 8, 1, 1, tzinfo=UTC),
             ),
-            DatasetEvent(
-                dataset_id=ds1_id,
+            AssetEvent(
+                asset_id=asset1_id,
                 extra={},
                 timestamp=pendulum.DateTime(2022, 8, 2, 1, tzinfo=UTC),
             ),
-            DatasetEvent(
-                dataset_id=ds1_id,
+            AssetEvent(
+                asset_id=asset1_id,
                 extra={},
                 timestamp=pendulum.DateTime(2022, 8, 2, 2, tzinfo=UTC),
             ),
         ]
-        session.add_all(dataset_events)
+        session.add_all(asset_events)
         session.commit()
 
-        resp = admin_client.get(f'/object/next_run_datasets/{DAG_ID}', follow_redirects=True)
+        resp = admin_client.get(f"/object/next_run_assets/{DAG_ID}", follow_redirects=True)
 
     assert resp.status_code == 200, resp.json
-    assert resp.json == [
-        {'id': ds1_id, 'uri': 's3://bucket/key/1', 'lastUpdate': "2022-08-02T02:00:00+00:00"},
-        {'id': ds2_id, 'uri': 's3://bucket/key/2', 'lastUpdate': None},
-    ]
+    assert resp.json == {
+        "asset_expression": {"all": ["s3://bucket/key/1", "s3://bucket/key/2"]},
+        "events": [
+            {"id": asset1_id, "uri": "s3://bucket/key/1", "lastUpdate": "2022-08-02T02:00:00+00:00"},
+            {"id": asset2_id, "uri": "s3://bucket/key/2", "lastUpdate": None},
+        ],
+    }
 
 
-def test_next_run_datasets_404(admin_client):
-    resp = admin_client.get('/object/next_run_datasets/missingdag', follow_redirects=True)
+def test_next_run_assets_404(admin_client):
+    resp = admin_client.get("/object/next_run_assets/missingdag", follow_redirects=True)
     assert resp.status_code == 404, resp.json
-    assert resp.json == {'error': "can't find dag missingdag"}
+    assert resp.json == {"error": "can't find dag missingdag"}

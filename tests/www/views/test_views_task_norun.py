@@ -22,7 +22,9 @@ import urllib.parse
 
 import pytest
 
-from tests.test_utils.db import clear_db_runs
+from tests_common.test_utils.db import clear_db_runs
+
+pytestmark = pytest.mark.db_test
 
 DEFAULT_DATE = datetime.datetime(2022, 1, 1)
 
@@ -30,7 +32,7 @@ DEFAULT_VAL = urllib.parse.quote_plus(str(DEFAULT_DATE))
 
 
 @pytest.fixture(scope="module", autouse=True)
-def reset_dagruns():
+def _reset_dagruns():
     """Clean up stray garbage from other tests."""
     clear_db_runs()
 

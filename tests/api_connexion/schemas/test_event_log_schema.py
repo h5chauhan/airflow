@@ -26,6 +26,8 @@ from airflow.api_connexion.schemas.event_log_schema import (
 from airflow.models import Log
 from airflow.utils import timezone
 
+pytestmark = [pytest.mark.db_test, pytest.mark.skip_if_database_isolation_mode]
+
 
 @pytest.fixture
 def task_instance(session, create_task_instance, request):
@@ -33,6 +35,7 @@ def task_instance(session, create_task_instance, request):
         session=session,
         dag_id="TEST_DAG_ID",
         task_id="TEST_TASK_ID",
+        run_id="TEST_RUN_ID",
         execution_date=request.instance.default_time,
     )
 
@@ -41,7 +44,7 @@ class TestEventLogSchemaBase:
     @pytest.fixture(autouse=True)
     def set_attrs(self):
         self.default_time = timezone.parse("2020-06-09T13:00:00+00:00")
-        self.default_time2 = timezone.parse('2020-06-11T07:00:00+00:00')
+        self.default_time2 = timezone.parse("2020-06-11T07:00:00+00:00")
 
 
 class TestEventLogSchema(TestEventLogSchemaBase):
@@ -54,8 +57,11 @@ class TestEventLogSchema(TestEventLogSchemaBase):
             "event": "TEST_EVENT",
             "dag_id": "TEST_DAG_ID",
             "task_id": "TEST_TASK_ID",
+            "run_id": "TEST_RUN_ID",
+            "map_index": -1,
+            "try_number": 0,
             "execution_date": self.default_time.isoformat(),
-            "owner": 'airflow',
+            "owner": "airflow",
             "when": self.default_time.isoformat(),
             "extra": None,
         }
@@ -77,8 +83,11 @@ class TestEventLogCollection(TestEventLogSchemaBase):
                     "event": "TEST_EVENT_1",
                     "dag_id": "TEST_DAG_ID",
                     "task_id": "TEST_TASK_ID",
+                    "run_id": "TEST_RUN_ID",
+                    "map_index": -1,
+                    "try_number": 0,
                     "execution_date": self.default_time.isoformat(),
-                    "owner": 'airflow',
+                    "owner": "airflow",
                     "when": self.default_time.isoformat(),
                     "extra": None,
                 },
@@ -87,8 +96,11 @@ class TestEventLogCollection(TestEventLogSchemaBase):
                     "event": "TEST_EVENT_2",
                     "dag_id": "TEST_DAG_ID",
                     "task_id": "TEST_TASK_ID",
+                    "run_id": "TEST_RUN_ID",
+                    "map_index": -1,
+                    "try_number": 0,
                     "execution_date": self.default_time.isoformat(),
-                    "owner": 'airflow',
+                    "owner": "airflow",
                     "when": self.default_time2.isoformat(),
                     "extra": None,
                 },

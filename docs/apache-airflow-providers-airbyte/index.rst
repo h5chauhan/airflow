@@ -18,10 +18,18 @@
 ``apache-airflow-providers-airbyte``
 ====================================
 
-Content
--------
 
 .. toctree::
+    :hidden:
+    :maxdepth: 1
+    :caption: Basics
+
+    Home <self>
+    Changelog <changelog>
+    Security <security>
+
+.. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Guides
 
@@ -29,6 +37,7 @@ Content
     Connection types <connections>
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: References
 
@@ -36,15 +45,17 @@ Content
 
 .. toctree::
     :hidden:
+    :maxdepth: 1
     :caption: System tests
 
-    System Tests <_api/tests/system/providers/airbyte/index>
+    System Tests <_api/tests/system/airbyte/index>
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Resources
 
-    Example DAGs <https://github.com/apache/airflow/tree/providers-airbyte/3.0.0/tests/system/providers/airbyte>
+    Example DAGs <https://github.com/apache/airflow/tree/providers-airbyte/|version|/providers/tests/system/airbyte>
     PyPI Repository <https://pypi.org/project/apache-airflow-providers-airbyte/>
     Installing from sources <installing-providers-from-sources>
 
@@ -52,69 +63,42 @@ Content
 
 
 .. toctree::
+    :hidden:
     :maxdepth: 1
     :caption: Commits
 
     Detailed list of commits <commits>
 
 
-Package apache-airflow-providers-airbyte
+apache-airflow-providers-airbyte package
 ------------------------------------------------------
 
-`Airbyte <https://airbyte.io/>`__
+`Airbyte <https://airbyte.com/>`__
 
 
-Release: 3.1.0
+Release: 4.0.0
 
 Provider package
 ----------------
 
-This is a provider package for ``airbyte`` provider. All classes for this provider package
-are in ``airflow.providers.airbyte`` python package.
+This package is for the ``airbyte`` provider.
+All classes for this package are included in the ``airflow.providers.airbyte`` python package.
 
 Installation
 ------------
 
-You can install this package on top of an existing Airflow 2 installation (see ``Requirements`` below)
-for the minimum Airflow version supported) via
-``pip install apache-airflow-providers-airbyte``
+You can install this package on top of an existing Airflow 2 installation via
+``pip install apache-airflow-providers-airbyte``.
+For the minimum Airflow version supported, see ``Requirements`` below.
 
 Requirements
 ------------
 
-=================================  ==================
-PIP package                        Version required
-=================================  ==================
-``apache-airflow``                 ``>=2.2.0``
-``apache-airflow-providers-http``
-=================================  ==================
+The minimum Apache Airflow version supported by this provider package is ``2.8.0``.
 
-Cross provider package dependencies
------------------------------------
-
-Those are dependencies that might be needed in order to use all the features of the package.
-You need to install the specified provider packages in order to use them.
-
-You can install such cross-provider dependencies when installing from PyPI. For example:
-
-.. code-block:: bash
-
-    pip install apache-airflow-providers-airbyte[http]
-
-
-================================================================================================  ========
-Dependent package                                                                                 Extra
-================================================================================================  ========
-`apache-airflow-providers-http <https://airflow.apache.org/docs/apache-airflow-providers-http>`_  ``http``
-================================================================================================  ========
-
-Downloading official packages
------------------------------
-
-You can download officially released packages and verify their checksums and signatures from the
-`Official Apache Download site <https://downloads.apache.org/airflow/providers/>`_
-
-* `The apache-airflow-providers-airbyte 3.1.0 sdist package <https://downloads.apache.org/airflow/providers/apache-airflow-providers-airbyte-3.1.0.tar.gz>`_ (`asc <https://downloads.apache.org/airflow/providers/apache-airflow-providers-airbyte-3.1.0.tar.gz.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache-airflow-providers-airbyte-3.1.0.tar.gz.sha512>`__)
-* `The apache-airflow-providers-airbyte 3.1.0 wheel package <https://downloads.apache.org/airflow/providers/apache_airflow_providers_airbyte-3.1.0-py3-none-any.whl>`_ (`asc <https://downloads.apache.org/airflow/providers/apache_airflow_providers_airbyte-3.1.0-py3-none-any.whl.asc>`__, `sha512 <https://downloads.apache.org/airflow/providers/apache_airflow_providers_airbyte-3.1.0-py3-none-any.whl.sha512>`__)
-
-.. include:: ../../airflow/providers/airbyte/CHANGELOG.rst
+==================  ==================
+PIP package         Version required
+==================  ==================
+``apache-airflow``  ``>=2.8.0``
+``airbyte-api``     ``>=0.52.0``
+==================  ==================

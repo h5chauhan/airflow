@@ -188,7 +188,7 @@ class BaseParameters:
     "-n",
     "--name",
     prompt="Your Name",
-    default=lambda: os.environ.get('USER', ''),
+    default=lambda: os.environ.get("USER", ""),
     show_default="Current User",
     help="Name of the Release Manager",
     type=click.STRING,
@@ -304,7 +304,7 @@ def result(
 @cli.command("announce")
 @click.option(
     "--receiver_email",
-    default=",".join(list(MAILING_LIST.values())),
+    default=",".join(MAILING_LIST.values()),
     prompt="The receiver email (To:)",
     help="Receiver's email address. If more than 1, separate them by comma",
 )
@@ -336,5 +336,5 @@ def announce(base_parameters, receiver_email: str):
         show_message("Twitter", twitter_msg)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

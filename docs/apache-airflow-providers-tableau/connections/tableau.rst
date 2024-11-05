@@ -61,7 +61,7 @@ Password (optional)
     Used with password authentication.
 
 Host
-    Specify the `Sever URL
+    Specify the `Server URL
     <https://tableau.github.io/server-client-python/docs/api-ref#server>`_ used for Tableau.
 
 Extra (optional)
@@ -69,9 +69,9 @@ Extra (optional)
     The following parameters are all optional:
 
     * ``site_id``: This corresponds to the contentUrl attribute in the Tableau REST API. The ``site_id`` is the portion of
-      the URL that follows the /site/ in the URL. For example, "MarketingTeam" is the ``site_id`` in the following URL
-      MyServer/#/site/MarketingTeam/projects. To specify the default site on Tableau Server, you can use an empty string
-      '' (single quotes, no space). For Tableau Online, you must provide a value for the ``site_id.``
+      the URL that follows the **/site/** in the URL. For example, **MarketingTeam** is the ``site_id`` in the following URL
+      **MyServer/#/site/MarketingTeam/projects**. To specify the default site on Tableau Server, you can use an empty string
+      **''** (single quotes, no space). For Tableau Online, you must provide a value for the ``site_id.``
       This is used for both token and password Authentication.
     * ``token_name``: The personal access token name.
       This is used with token authentication.

@@ -23,7 +23,7 @@ Templates reference
 Variables, macros and filters can be used in templates (see the :ref:`concepts:jinja-templating` section)
 
 The following come for free out of the box with Airflow.
-Additional custom macros can be added globally through :doc:`/plugins`, or at a DAG level through the
+Additional custom macros can be added globally through :doc:`authoring-and-scheduling/plugins`, or at a DAG level through the
 ``DAG.user_defined_macros`` argument.
 
 .. _templates:variables:
@@ -33,64 +33,95 @@ Variables
 The Airflow engine passes a few variables by default that are accessible
 in all templates
 
-==========================================  ====================================
-Variable                                    Description
-==========================================  ====================================
-``{{ data_interval_start }}``               Start of the data interval (`pendulum.DateTime`_).
-``{{ data_interval_end }}``                 End of the data interval (`pendulum.DateTime`_).
-``{{ ds }}``                                The DAG run's logical date as ``YYYY-MM-DD``.
-                                            Same as ``{{ dag_run.logical_date | ds }}``.
-``{{ ds_nodash }}``                         Same as ``{{ dag_run.logical_date | ds_nodash }}``.
-``{{ ts }}``                                Same as ``{{ dag_run.logical_date | ts }}``.
-                                            Example: ``2018-01-01T00:00:00+00:00``.
-``{{ ts_nodash_with_tz }}``                 Same as ``{{ dag_run.logical_date | ts_nodash_with_tz }}``.
-                                            Example: ``20180101T000000+0000``.
-``{{ ts_nodash }}``                         Same as ``{{ dag_run.logical_date | ts_nodash }}``.
-                                            Example: ``20180101T000000``.
-``{{ prev_data_interval_start_success }}``  Start of the data interval from prior successful DAG run
-                                            (`pendulum.DateTime`_ or ``None``).
-``{{ prev_data_interval_end_success }}``    End of the data interval from prior successful DAG run
-                                            (`pendulum.DateTime`_ or ``None``).
-``{{ prev_start_date_success }}``           Start date from prior successful dag run (if available)
-                                            (`pendulum.DateTime`_ or ``None``).
-``{{ dag }}``                               The DAG object.
-``{{ task }}``                              The Task object.
-``{{ macros }}``                            A reference to the macros package, described below.
-``{{ task_instance }}``                     The task_instance object.
-``{{ ti }}``                                Same as ``{{ task_instance }}``.
-``{{ params }}``                            A reference to the user-defined params dictionary which can be
-                                            overridden by the dictionary passed through ``trigger_dag -c`` if
-                                            you enabled ``dag_run_conf_overrides_params`` in ``airflow.cfg``.
-``{{ var.value.my_var }}``                  Global defined variables represented as a dictionary.
-``{{ var.json.my_var.path }}``              Global defined variables represented as a dictionary.
-                                            With deserialized JSON object, append the path to the key within
-                                            the JSON object.
-``{{ conn.my_conn_id }}``                   Connection represented as a dictionary.
-``{{ task_instance_key_str }}``             A unique, human-readable key to the task instance formatted
-                                            ``{dag_id}__{task_id}__{ds_nodash}``.
-``{{ conf }}``                              The full configuration object located at
-                                            ``airflow.configuration.conf`` which represents the content of
-                                            your ``airflow.cfg``.
-``{{ run_id }}``                            The ``run_id`` of the current DAG run.
-``{{ dag_run }}``                           A reference to the DagRun object.
-``{{ test_mode }}``                         Whether the task instance was called using the CLI's test
-                                            subcommand.
-==========================================  ====================================
+=========================================== ===================== ===================================================================
+Variable                                    Type                  Description
+=========================================== ===================== ===================================================================
+``{{ data_interval_start }}``               `pendulum.DateTime`_  Start of the data interval. Added in version 2.2.
+``{{ data_interval_end }}``                 `pendulum.DateTime`_  End of the data interval. Added in version 2.2.
+``{{ logical_date }}``                      `pendulum.DateTime`_  | A date-time that logically identifies the current DAG run. This value does not contain any semantics, but is simply a value for identification.
+                                                                  | Use ``data_interval_start`` and ``data_interval_end`` instead if you want a value that has real-world semantics,
+                                                                  | such as to get a slice of rows from the database based on timestamps.
+``{{ ds }}``                                str                   | The DAG run's logical date as ``YYYY-MM-DD``.
+                                                                  | Same as ``{{ logical_date | ds }}``.
+``{{ ds_nodash }}``                         str                   Same as ``{{ logical_date | ds_nodash }}``.
+``{{ exception }}``                         None | str |          | Error occurred while running task instance.
+                                            Exception             |
+                                            KeyboardInterrupt     |
+``{{ ts }}``                                str                   | Same as ``{{ logical_date | ts }}``.
+                                                                  | Example: ``2018-01-01T00:00:00+00:00``.
+``{{ ts_nodash_with_tz }}``                 str                   | Same as ``{{ logical_date | ts_nodash_with_tz }}``.
+                                                                  | Example: ``20180101T000000+0000``.
+``{{ ts_nodash }}``                         str                   | Same as ``{{ logical_date | ts_nodash }}``.
+                                                                  | Example: ``20180101T000000``.
+``{{ prev_data_interval_start_success }}``  `pendulum.DateTime`_  | Start of the data interval of the prior successful :class:`~airflow.models.dagrun.DagRun`.
+                                            | ``None``            | Added in version 2.2.
+``{{ prev_data_interval_end_success }}``    `pendulum.DateTime`_  | End of the data interval of the prior successful :class:`~airflow.models.dagrun.DagRun`.
+                                            | ``None``            | Added in version 2.2.
+``{{ prev_start_date_success }}``           `pendulum.DateTime`_  Start date from prior successful :class:`~airflow.models.dagrun.DagRun` (if available).
+                                            | ``None``
+``{{ prev_end_date_success }}``             `pendulum.DateTime`_  End date from prior successful :class:`~airflow.models.dagrun.DagRun` (if available).
+                                            | ``None``
+``{{ inlets }}``                            list                  List of inlets declared on the task.
+``{{ inlet_events }}``                      dict[str, ...]        Access past events of inlet assets. See :doc:`Assets <authoring-and-scheduling/datasets>`. Added in version 2.10.
+``{{ outlets }}``                           list                  List of outlets declared on the task.
+``{{ outlet_events }}``                     dict[str, ...]        | Accessors to attach information to asset events that will be emitted by the current task.
+                                                                  | See :doc:`Assets <authoring-and-scheduling/datasets>`. Added in version 2.10.
+``{{ dag }}``                               DAG                   The currently running :class:`~airflow.models.dag.DAG`. You can read more about DAGs in :doc:`DAGs <core-concepts/dags>`.
+``{{ task }}``                              BaseOperator          | The currently running :class:`~airflow.models.baseoperator.BaseOperator`. You can read more about Tasks in :doc:`core-concepts/operators`
+``{{ macros }}``                                                  | A reference to the macros package. See Macros_ below.
+``{{ task_instance }}``                     TaskInstance          The currently running :class:`~airflow.models.taskinstance.TaskInstance`.
+``{{ ti }}``                                TaskInstance          Same as ``{{ task_instance }}``.
+``{{ params }}``                            dict[str, Any]        | The user-defined params. This can be overridden by the mapping
+                                                                  | passed to ``trigger_dag -c`` if ``dag_run_conf_overrides_params``
+                                                                  | is enabled in ``airflow.cfg``.
+``{{ var.value }}``                                               Airflow variables. See `Airflow Variables in Templates`_ below.
+``{{ var.json }}``                                                Airflow variables. See `Airflow Variables in Templates`_ below.
+``{{ conn }}``                                                    Airflow connections. See `Airflow Connections in Templates`_ below.
+``{{ task_instance_key_str }}``             str                   | A unique, human-readable key to the task instance. The format is
+                                                                  | ``{dag_id}__{task_id}__{ds_nodash}``.
+``{{ conf }}``                              AirflowConfigParser   | The full configuration object representing the content of your
+                                                                  | ``airflow.cfg``. See :mod:`airflow.configuration.conf`.
+``{{ run_id }}``                            str                   The currently running :class:`~airflow.models.dagrun.DagRun` run ID.
+``{{ dag_run }}``                           DagRun                The currently running :class:`~airflow.models.dagrun.DagRun`.
+``{{ test_mode }}``                         bool                  Whether the task instance was run by the ``airflow test`` CLI.
+``{{ map_index_template }}``                None | str            Template used to render the expanded task instance of a mapped task. Setting this value will be reflected in the rendered result.
+``{{ expanded_ti_count }}``                 int | ``None``        | Number of task instances that a mapped task was expanded into. If
+                                                                  | the current task is not mapped, this should be ``None``.
+                                                                  | Added in version 2.5.
+``{{ triggering_asset_events }}``           dict[str,             | If in an Asset Scheduled DAG, a map of Asset URI to a list of triggering :class:`~airflow.models.asset.AssetEvent`
+                                            list[AssetEvent]]     | (there may be more than one, if there are multiple Assets with different frequencies).
+                                                                  | Read more here :doc:`Assets <authoring-and-scheduling/datasets>`.
+                                                                  | Added in version 2.4.
+=========================================== ===================== ===================================================================
 
 .. note::
 
     The DAG run's logical date, and values derived from it, such as ``ds`` and
     ``ts``, **should not** be considered unique in a DAG. Use ``run_id`` instead.
 
+Accessing Airflow context variables from TaskFlow tasks
+-------------------------------------------------------
+
+While ``@task`` decorated tasks don't support rendering jinja templates passed as arguments,
+all of the variables listed above can be accessed directly from tasks. The following code block
+is an example of accessing a ``task_instance`` object from its task:
+
+.. include:: ../shared/template-examples/taskflow.rst
+
+Deprecated variables
+-------------------------------------------------------
+
 The following variables are deprecated. They are kept for backward compatibility, but you should convert
 existing code to use other variables instead.
 
-=====================================   ====================================
+=====================================   ==========================================================================
 Deprecated Variable                     Description
-=====================================   ====================================
-``{{ execution_date }}``                the execution date (logical date), same as ``dag_run.logical_date``
-``{{ next_execution_date }}``           the logical date of the next scheduled run (if applicable);
-                                        you may be able to use ``data_interval_end`` instead
+=====================================   ==========================================================================
+``{{ execution_date }}``                the execution date (logical date), same as ``logical_date``
+``{{ next_execution_date }}``           the logical date of the next scheduled run,
+                                        you may be able to use ``data_interval_end`` instead; for manually
+                                        triggered dagruns that aren't on a schedule, ``next_execution_date`` is
+                                        set to ``logical_date``
 ``{{ next_ds }}``                       the next execution date as ``YYYY-MM-DD`` if exists, else ``None``
 ``{{ next_ds_nodash }}``                the next execution date as ``YYYYMMDD`` if exists, else ``None``
 ``{{ prev_execution_date }}``           the logical date of the previous scheduled run (if applicable)
@@ -100,9 +131,11 @@ Deprecated Variable                     Description
 ``{{ yesterday_ds_nodash }}``           the day before the execution date as ``YYYYMMDD``
 ``{{ tomorrow_ds }}``                   the day after the execution date as ``YYYY-MM-DD``
 ``{{ tomorrow_ds_nodash }}``            the day after the execution date as ``YYYYMMDD``
-``{{ prev_execution_date_success }}``   execution date from prior successful dag run
-
-=====================================   ====================================
+``{{ prev_execution_date_success }}``   execution date from prior successful DAG run;
+                                        you may be able to use ``prev_data_interval_start_success`` instead if
+                                        the timetable/schedule you use for the DAG defines ``data_interval_start``
+                                        compatible with the legacy ``execution_date``.
+=====================================   ==========================================================================
 
 Note that you can access the object's attributes and methods with simple
 dot notation. Here are some examples of what is possible:
@@ -117,7 +150,7 @@ You can access them as either plain-text or JSON. If you use JSON, you are
 also able to walk nested structures, such as dictionaries like:
 ``{{ var.json.my_dict_var.key1 }}``.
 
-It is also possible to fetch a variable by string if needed with
+It is also possible to fetch a variable by string if needed (for example your variable key contains dots) with
 ``{{ var.value.get('my.var', 'fallback') }}`` or
 ``{{ var.json.get('my.dict.var', {'key1': 'val1'}) }}``. Defaults can be
 supplied in case the variable does not exist.
@@ -133,13 +166,14 @@ Just like with ``var`` it's possible to fetch a connection by string  (e.g. ``{{
 
 Additionally, the ``extras`` field of a connection can be fetched as a Python Dictionary with the ``extra_dejson`` field, e.g.
 ``conn.my_aws_conn_id.extra_dejson.region_name`` would fetch ``region_name`` out of ``extras``.
+This way, defaults in ``extras`` can be provided as well (e.g. ``{{ conn.my_aws_conn_id.extra_dejson.get('region_name', 'Europe (Frankfurt)') }}``).
 
 Filters
 -------
 
 Airflow defines some Jinja filters that can be used to format values.
 
-For example, using ``{{ execution_date | ds }}`` will output the execution_date in the ``YYYY-MM-DD`` format.
+For example, using ``{{ logical_date | ds }}`` will output the logical_date in the ``YYYY-MM-DD`` format.
 
 =====================  ============  ==================================================================
 Filter                 Operates on   Description
@@ -177,9 +211,6 @@ Variable                            Description
 Some airflow specific macros are also defined:
 
 .. automodule:: airflow.macros
-    :members:
-
-.. automodule:: airflow.macros.hive
     :members:
 
 .. _pendulum.DateTime: https://pendulum.eustace.io/docs/#introduction

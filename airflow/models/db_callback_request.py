@@ -18,13 +18,16 @@
 from __future__ import annotations
 
 from importlib import import_module
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Column, Integer, String
 
-from airflow.callbacks.callback_requests import CallbackRequest
 from airflow.models.base import Base
 from airflow.utils import timezone
 from airflow.utils.sqlalchemy import ExtendedJSON, UtcDateTime
+
+if TYPE_CHECKING:
+    from airflow.callbacks.callback_requests import CallbackRequest
 
 
 class DbCallbackRequest(Base):
@@ -50,5 +53,5 @@ class DbCallbackRequest(Base):
         module = import_module("airflow.callbacks.callback_requests")
         callback_class = getattr(module, self.callback_type)
         # Get the function (from the instance) that we need to call
-        from_json = getattr(callback_class, 'from_json')
+        from_json = getattr(callback_class, "from_json")
         return from_json(self.callback_data)

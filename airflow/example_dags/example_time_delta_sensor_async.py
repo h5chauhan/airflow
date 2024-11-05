@@ -19,15 +19,16 @@
 Example DAG demonstrating ``TimeDeltaSensorAsync``, a drop in replacement for ``TimeDeltaSensor`` that
 defers and doesn't occupy a worker slot while it waits
 """
+
 from __future__ import annotations
 
 import datetime
 
 import pendulum
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.sensors.time_delta import TimeDeltaSensorAsync
+from airflow.providers.standard.sensors.time_delta import TimeDeltaSensorAsync
 
 with DAG(
     dag_id="example_time_delta_sensor_async",
@@ -36,6 +37,6 @@ with DAG(
     catchup=False,
     tags=["example"],
 ) as dag:
-    wait = TimeDeltaSensorAsync(task_id="wait", delta=datetime.timedelta(seconds=10))
+    wait = TimeDeltaSensorAsync(task_id="wait", delta=datetime.timedelta(seconds=30))
     finish = EmptyOperator(task_id="finish")
     wait >> finish

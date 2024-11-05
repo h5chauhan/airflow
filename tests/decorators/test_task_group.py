@@ -17,52 +17,53 @@
 # under the License.
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pendulum
 import pytest
 
 from airflow.decorators import dag, task_group
-from airflow.decorators.task_group import _MappedArgument
-from airflow.models.expandinput import DictOfListsExpandInput, ListOfDictsExpandInput
+from airflow.models.expandinput import DictOfListsExpandInput, ListOfDictsExpandInput, MappedArgument
+from airflow.operators.empty import EmptyOperator
 from airflow.utils.task_group import MappedTaskGroup
 
 
 def test_task_group_with_overridden_kwargs():
     @task_group(
         default_args={
-            'params': {
-                'x': 5,
-                'y': 5,
+            "params": {
+                "x": 5,
+                "y": 5,
             },
         },
         add_suffix_on_collision=True,
     )
-    def simple_tg():
-        ...
+    def simple_tg(): ...
 
     tg_with_overridden_kwargs = simple_tg.override(
-        group_id='custom_group_id',
+        group_id="custom_group_id",
         default_args={
-            'params': {
-                'x': 10,
+            "params": {
+                "x": 10,
             },
         },
     )
 
     assert tg_with_overridden_kwargs.tg_kwargs == {
-        'group_id': 'custom_group_id',
-        'default_args': {
-            'params': {
-                'x': 10,
+        "group_id": "custom_group_id",
+        "default_args": {
+            "params": {
+                "x": 10,
             },
         },
-        'add_suffix_on_collision': True,
+        "add_suffix_on_collision": True,
     }
 
 
 def test_tooltip_derived_from_function_docstring():
     """Test that the tooltip for TaskGroup is the decorated-function's docstring."""
 
-    @dag(start_date=pendulum.datetime(2022, 1, 1))
+    @dag(schedule=None, start_date=pendulum.datetime(2022, 1, 1))
     def pipeline():
         @task_group()
         def tg():
@@ -75,13 +76,13 @@ def test_tooltip_derived_from_function_docstring():
     assert _.task_group_dict["tg"].tooltip == "Function docstring."
 
 
-def test_tooltip_not_overriden_by_function_docstring():
+def test_tooltip_not_overridden_by_function_docstring():
     """
     Test that the tooltip for TaskGroup is the explicitly set value even if the decorated function has a
     docstring.
     """
 
-    @dag(start_date=pendulum.datetime(2022, 1, 1))
+    @dag(schedule=None, start_date=pendulum.datetime(2022, 1, 1))
     def pipeline():
         @task_group(tooltip="tooltip for the TaskGroup")
         def tg():
@@ -101,7 +102,7 @@ def test_partial_evolves_factory():
     def tg(a, b):
         pass
 
-    @dag(start_date=pendulum.datetime(2022, 1, 1))
+    @dag(schedule=None, start_date=pendulum.datetime(2022, 1, 1))
     def pipeline():
         nonlocal tgp
         tgp = tg.partial(a=1)
@@ -110,7 +111,7 @@ def test_partial_evolves_factory():
 
     assert d.task_group_dict == {}  # Calling partial() without expanding does not create a task group.
 
-    assert type(tgp) == type(tg)
+    assert type(tgp) is type(tg)
     assert tgp.partial_kwargs == {"a": 1}  # Partial kwargs are saved.
 
     # Warn if the partial object goes out of scope without being mapped.
@@ -119,7 +120,7 @@ def test_partial_evolves_factory():
 
 
 def test_expand_fail_empty():
-    @dag(start_date=pendulum.datetime(2022, 1, 1))
+    @dag(schedule=None, start_date=pendulum.datetime(2022, 1, 1))
     def pipeline():
         @task_group()
         def tg():
@@ -135,7 +136,7 @@ def test_expand_fail_empty():
 def test_expand_create_mapped():
     saved = {}
 
-    @dag(start_date=pendulum.datetime(2022, 1, 1))
+    @dag(schedule=None, start_date=pendulum.datetime(2022, 1, 1))
     def pipeline():
         @task_group()
         def tg(a, b):
@@ -150,11 +151,11 @@ def test_expand_create_mapped():
     assert isinstance(tg, MappedTaskGroup)
     assert tg._expand_input == DictOfListsExpandInput({"b": ["x", "y"]})
 
-    assert saved == {"a": 1, "b": _MappedArgument(input=tg._expand_input, key="b")}
+    assert saved == {"a": 1, "b": MappedArgument(input=tg._expand_input, key="b")}
 
 
 def test_expand_kwargs_no_wildcard():
-    @dag(start_date=pendulum.datetime(2022, 1, 1))
+    @dag(schedule=None, start_date=pendulum.datetime(2022, 1, 1))
     def pipeline():
         @task_group()
         def tg(**kwargs):
@@ -171,7 +172,7 @@ def test_expand_kwargs_no_wildcard():
 def test_expand_kwargs_create_mapped():
     saved = {}
 
-    @dag(start_date=pendulum.datetime(2022, 1, 1))
+    @dag(schedule=None, start_date=pendulum.datetime(2022, 1, 1))
     def pipeline():
         @task_group()
         def tg(a, b):
@@ -186,4 +187,125 @@ def test_expand_kwargs_create_mapped():
     assert isinstance(tg, MappedTaskGroup)
     assert tg._expand_input == ListOfDictsExpandInput([{"b": "x"}, {"b": None}])
 
-    assert saved == {"a": 1, "b": _MappedArgument(input=tg._expand_input, key="b")}
+    assert saved == {"a": 1, "b": MappedArgument(input=tg._expand_input, key="b")}
+
+
+@pytest.mark.db_test
+def test_task_group_expand_kwargs_with_upstream(dag_maker, session, caplog):
+    with dag_maker() as dag:
+
+        @dag.task
+        def t1():
+            return [{"a": 1}, {"a": 2}]
+
+        @task_group("tg1")
+        def tg1(a, b):
+            @dag.task()
+            def t2():
+                return [a, b]
+
+            t2()
+
+        tg1.expand_kwargs(t1())
+
+    dr = dag_maker.create_dagrun()
+    dr.task_instance_scheduling_decisions()
+    assert "Cannot expand" not in caplog.text
+    assert "missing upstream values: ['expand_kwargs() argument']" not in caplog.text
+
+
+@pytest.mark.db_test
+def test_task_group_expand_with_upstream(dag_maker, session, caplog):
+    with dag_maker() as dag:
+
+        @dag.task
+        def t1():
+            return [1, 2, 3]
+
+        @task_group("tg1")
+        def tg1(a, b):
+            @dag.task()
+            def t2():
+                return [a, b]
+
+            t2()
+
+        tg1.partial(a=1).expand(b=t1())
+
+    dr = dag_maker.create_dagrun()
+    dr.task_instance_scheduling_decisions()
+    assert "Cannot expand" not in caplog.text
+    assert "missing upstream values: ['b']" not in caplog.text
+
+
+def test_override_dag_default_args():
+    @dag(
+        dag_id="test_dag",
+        schedule=None,
+        start_date=pendulum.parse("20200101"),
+        default_args={
+            "retries": 1,
+            "owner": "x",
+        },
+    )
+    def pipeline():
+        @task_group(
+            group_id="task_group",
+            default_args={
+                "owner": "y",
+                "execution_timeout": timedelta(seconds=10),
+            },
+        )
+        def tg():
+            EmptyOperator(task_id="task")
+
+        tg()
+
+    test_dag = pipeline()
+    test_task = test_dag.task_group_dict["task_group"].children["task_group.task"]
+    assert test_task.retries == 1
+    assert test_task.owner == "y"
+    assert test_task.execution_timeout == timedelta(seconds=10)
+
+
+def test_override_dag_default_args_nested_tg():
+    @dag(
+        dag_id="test_dag",
+        schedule=None,
+        start_date=pendulum.parse("20200101"),
+        default_args={
+            "retries": 1,
+            "owner": "x",
+        },
+    )
+    def pipeline():
+        @task_group(
+            group_id="task_group",
+            default_args={
+                "owner": "y",
+                "execution_timeout": timedelta(seconds=10),
+            },
+        )
+        def tg():
+            @task_group(group_id="nested_task_group")
+            def nested_tg():
+                @task_group(group_id="another_task_group")
+                def another_tg():
+                    EmptyOperator(task_id="task")
+
+                another_tg()
+
+            nested_tg()
+
+        tg()
+
+    test_dag = pipeline()
+    test_task = (
+        test_dag.task_group_dict["task_group"]
+        .children["task_group.nested_task_group"]
+        .children["task_group.nested_task_group.another_task_group"]
+        .children["task_group.nested_task_group.another_task_group.task"]
+    )
+    assert test_task.retries == 1
+    assert test_task.owner == "y"
+    assert test_task.execution_timeout == timedelta(seconds=10)

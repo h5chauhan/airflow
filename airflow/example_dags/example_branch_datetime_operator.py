@@ -19,13 +19,14 @@
 Example DAG demonstrating the usage of DateTimeBranchOperator with datetime as well as time objects as
 targets.
 """
+
 from __future__ import annotations
 
 import pendulum
 
-from airflow import DAG
-from airflow.operators.datetime import BranchDateTimeOperator
+from airflow.models.dag import DAG
 from airflow.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.datetime import BranchDateTimeOperator
 
 dag1 = DAG(
     dag_id="example_branch_datetime_operator",
@@ -36,13 +37,13 @@ dag1 = DAG(
 )
 
 # [START howto_branch_datetime_operator]
-empty_task_11 = EmptyOperator(task_id='date_in_range', dag=dag1)
-empty_task_21 = EmptyOperator(task_id='date_outside_range', dag=dag1)
+empty_task_11 = EmptyOperator(task_id="date_in_range", dag=dag1)
+empty_task_21 = EmptyOperator(task_id="date_outside_range", dag=dag1)
 
 cond1 = BranchDateTimeOperator(
-    task_id='datetime_branch',
-    follow_task_ids_if_true=['date_in_range'],
-    follow_task_ids_if_false=['date_outside_range'],
+    task_id="datetime_branch",
+    follow_task_ids_if_true=["date_in_range"],
+    follow_task_ids_if_false=["date_outside_range"],
     target_upper=pendulum.datetime(2020, 10, 10, 15, 0, 0),
     target_lower=pendulum.datetime(2020, 10, 10, 14, 0, 0),
     dag=dag1,
@@ -61,13 +62,13 @@ dag2 = DAG(
     schedule="@daily",
 )
 # [START howto_branch_datetime_operator_next_day]
-empty_task_12 = EmptyOperator(task_id='date_in_range', dag=dag2)
-empty_task_22 = EmptyOperator(task_id='date_outside_range', dag=dag2)
+empty_task_12 = EmptyOperator(task_id="date_in_range", dag=dag2)
+empty_task_22 = EmptyOperator(task_id="date_outside_range", dag=dag2)
 
 cond2 = BranchDateTimeOperator(
-    task_id='datetime_branch',
-    follow_task_ids_if_true=['date_in_range'],
-    follow_task_ids_if_false=['date_outside_range'],
+    task_id="datetime_branch",
+    follow_task_ids_if_true=["date_in_range"],
+    follow_task_ids_if_false=["date_outside_range"],
     target_upper=pendulum.time(0, 0, 0),
     target_lower=pendulum.time(15, 0, 0),
     dag=dag2,
@@ -86,14 +87,14 @@ dag3 = DAG(
     schedule="@daily",
 )
 # [START howto_branch_datetime_operator_logical_date]
-empty_task_13 = EmptyOperator(task_id='date_in_range', dag=dag3)
-empty_task_23 = EmptyOperator(task_id='date_outside_range', dag=dag3)
+empty_task_13 = EmptyOperator(task_id="date_in_range", dag=dag3)
+empty_task_23 = EmptyOperator(task_id="date_outside_range", dag=dag3)
 
 cond3 = BranchDateTimeOperator(
-    task_id='datetime_branch',
+    task_id="datetime_branch",
     use_task_logical_date=True,
-    follow_task_ids_if_true=['date_in_range'],
-    follow_task_ids_if_false=['date_outside_range'],
+    follow_task_ids_if_true=["date_in_range"],
+    follow_task_ids_if_false=["date_outside_range"],
     target_upper=pendulum.datetime(2020, 10, 10, 15, 0, 0),
     target_lower=pendulum.datetime(2020, 10, 10, 14, 0, 0),
     dag=dag3,

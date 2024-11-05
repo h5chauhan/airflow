@@ -24,4 +24,5 @@ from airflow.models.mappedoperator import MappedOperator
 
 Operator = Union[BaseOperator, MappedOperator]
 
+
 __all__ = ["Operator"]

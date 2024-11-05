@@ -19,6 +19,9 @@ from __future__ import annotations
 
 from unittest import mock
 
+import attr
+import pytest
+
 from airflow.lineage import AUTO, apply_lineage, get_backend, prepare_lineage
 from airflow.lineage.backend import LineageBackend
 from airflow.lineage.entities import File
@@ -27,9 +30,19 @@ from airflow.operators.empty import EmptyOperator
 from airflow.utils import timezone
 from airflow.utils.context import Context
 from airflow.utils.types import DagRunType
-from tests.test_utils.config import conf_vars
+
+from tests_common.test_utils.config import conf_vars
+
+pytestmark = pytest.mark.db_test
+
 
 DEFAULT_DATE = timezone.datetime(2016, 1, 1)
+
+
+# helper
+@attr.define
+class A:
+    pass
 
 
 class CustomLineageBackend(LineageBackend):
@@ -38,6 +51,7 @@ class CustomLineageBackend(LineageBackend):
 
 
 class TestLineage:
+    @pytest.mark.skip_if_database_isolation_mode  # Test is broken in db isolation mode
     def test_lineage(self, dag_maker):
         f1s = "/tmp/does_not_exist_1-{}"
         f2s = "/tmp/does_not_exist_2-{}"
@@ -46,18 +60,18 @@ class TestLineage:
         file2 = File(f2s.format("{{ ds }}"))
         file3 = File(f3s)
 
-        with dag_maker(dag_id='test_prepare_lineage', start_date=DEFAULT_DATE) as dag:
+        with dag_maker(dag_id="test_prepare_lineage", start_date=DEFAULT_DATE) as dag:
             op1 = EmptyOperator(
-                task_id='leave1',
+                task_id="leave1",
                 inlets=file1,
                 outlets=[
                     file2,
                 ],
             )
-            op2 = EmptyOperator(task_id='leave2')
-            op3 = EmptyOperator(task_id='upstream_level_1', inlets=AUTO, outlets=file3)
-            op4 = EmptyOperator(task_id='upstream_level_2')
-            op5 = EmptyOperator(task_id='upstream_level_3', inlets=["leave1", "upstream_level_1"])
+            op2 = EmptyOperator(task_id="leave2")
+            op3 = EmptyOperator(task_id="upstream_level_1", inlets=AUTO, outlets=file3)
+            op4 = EmptyOperator(task_id="upstream_level_2")
+            op5 = EmptyOperator(task_id="upstream_level_3", inlets=["leave1", "upstream_level_1"])
 
             op1.set_downstream(op3)
             op2.set_downstream(op3)
@@ -105,8 +119,8 @@ class TestLineage:
     def test_lineage_render(self, dag_maker):
         # tests inlets / outlets are rendered if they are added
         # after initialization
-        with dag_maker(dag_id='test_lineage_render', start_date=DEFAULT_DATE):
-            op1 = EmptyOperator(task_id='task1')
+        with dag_maker(dag_id="test_lineage_render", start_date=DEFAULT_DATE):
+            op1 = EmptyOperator(task_id="task1")
         dag_run = dag_maker.create_dagrun(run_type=DagRunType.SCHEDULED)
 
         f1s = "/tmp/does_not_exist_1-{}"
@@ -122,21 +136,19 @@ class TestLineage:
         assert op1.inlets[0].url == f1s.format(DEFAULT_DATE)
         assert op1.outlets[0].url == f1s.format(DEFAULT_DATE)
 
-    def test_non_attr_outlet(self, dag_maker):
-        class A:
-            pass
-
+    @pytest.mark.skip_if_database_isolation_mode  # Test is broken in db isolation mode
+    def test_attr_outlet(self, dag_maker):
         a = A()
 
         f3s = "/tmp/does_not_exist_3"
         file3 = File(f3s)
 
-        with dag_maker(dag_id='test_prepare_lineage'):
+        with dag_maker(dag_id="test_prepare_lineage"):
             op1 = EmptyOperator(
-                task_id='leave1',
+                task_id="leave1",
                 outlets=[a, file3],
             )
-            op2 = EmptyOperator(task_id='leave2', inlets='auto')
+            op2 = EmptyOperator(task_id="leave2", inlets="auto")
 
             op1 >> op2
 
@@ -150,7 +162,7 @@ class TestLineage:
         op1.post_execute(ctx1)
 
         op2.pre_execute(ctx2)
-        assert op2.inlets == [file3]
+        assert op2.inlets == [a, file3]
         op2.post_execute(ctx2)
 
     @mock.patch("airflow.lineage.get_backend")
@@ -161,12 +173,12 @@ class TestLineage:
                 assert len(outlets) == 1
 
         func = mock.Mock()
-        func.__name__ = 'foo'
+        func.__name__ = "foo"
 
         mock_get_backend.return_value = TestBackend()
 
-        with dag_maker(dag_id='test_lineage_is_sent_to_backend', start_date=DEFAULT_DATE):
-            op1 = EmptyOperator(task_id='task1')
+        with dag_maker(dag_id="test_lineage_is_sent_to_backend", start_date=DEFAULT_DATE):
+            op1 = EmptyOperator(task_id="task1")
         dag_run = dag_maker.create_dagrun(run_type=DagRunType.SCHEDULED)
 
         file1 = File("/tmp/some_file")

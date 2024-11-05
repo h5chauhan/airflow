@@ -22,7 +22,10 @@ import werkzeug.test
 import werkzeug.wrappers
 
 from airflow.www.app import create_app
-from tests.test_utils.config import conf_vars
+
+from tests_common.test_utils.config import conf_vars
+
+pytestmark = pytest.mark.db_test
 
 
 @pytest.fixture(scope="module")
@@ -32,28 +35,28 @@ def app():
         return create_app(testing=True)
 
     app = factory()
-    app.config['WTF_CSRF_ENABLED'] = False
+    app.config["WTF_CSRF_ENABLED"] = False
     return app
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(app):
     return werkzeug.test.Client(app, werkzeug.wrappers.response.Response)
 
 
 def test_mount(client):
     # Test an endpoint that doesn't need auth!
-    resp = client.get('/test/health')
+    resp = client.get("/test/health")
     assert resp.status_code == 200
     assert b"healthy" in resp.data
 
 
 def test_not_found(client):
-    resp = client.get('/', follow_redirects=True)
+    resp = client.get("/", follow_redirects=True)
     assert resp.status_code == 404
 
 
 def test_index(client):
-    resp = client.get('/test/')
+    resp = client.get("/test/")
     assert resp.status_code == 302
-    assert resp.headers['Location'] == '/test/home'
+    assert resp.headers["Location"] == "/test/home"

@@ -19,6 +19,7 @@
 """
 Module to update db migration information in Airflow
 """
+
 from __future__ import annotations
 
 import os
@@ -28,17 +29,18 @@ from checksumdir import dirhash
 from rich.console import Console
 
 AIRFLOW_SOURCES_ROOT = Path(__file__).parents[2].resolve()
-SVG_FILE = AIRFLOW_SOURCES_ROOT / "docs" / "apache-airflow" / 'img' / 'airflow_erd.svg'
+SVG_FILE = AIRFLOW_SOURCES_ROOT / "docs" / "apache-airflow" / "img" / "airflow_erd.svg"
 HASH_FILE = SVG_FILE.with_suffix(".sha256")
 
 MIGRATIONS_DIR = AIRFLOW_SOURCES_ROOT / "airflow" / "migrations"
-if __name__ == '__main__':
+if __name__ == "__main__":
     from eralchemy2 import render_er
 
-    console = Console(width=400)
+    console = Console(width=400, color_system="standard")
 
+    console.print("[bright_blue]Preparing diagram for Airflow ERD")
     sha256hash = dirhash(
-        MIGRATIONS_DIR, 'sha256', excluded_extensions=['pyc'], ignore_hidden=True, include_paths=True
+        MIGRATIONS_DIR, "sha256", excluded_extensions=["pyc"], ignore_hidden=True, include_paths=True
     )
     old_hash = HASH_FILE.read_text() if HASH_FILE.exists() else ""
     if sha256hash != old_hash:
@@ -49,14 +51,15 @@ if __name__ == '__main__':
         render_er(
             os.environ.get("AIRFLOW__DATABASE__SQL_ALCHEMY_CONN"),
             os.fspath(SVG_FILE),
-            exclude_tables=['sqlite_sequence'],
+            exclude_tables=["sqlite_sequence"],
         )
         HASH_FILE.write_text(sha256hash)
-        host_os = os.environ.get('HOST_OS')
-        if host_os and host_os.lower() == 'linux':
+        host_os = os.environ.get("HOST_OS")
+        docker_is_rootless = os.environ.get("DOCKER_IS_ROOTLESS", "false") == "true"
+        if host_os and host_os.lower() == "linux" and not docker_is_rootless:
             try:
-                host_uid = int(os.environ['HOST_USER_ID'])
-                host_gid = int(os.environ['HOST_GROUP_ID'])
+                host_uid = int(os.environ["HOST_USER_ID"])
+                host_gid = int(os.environ["HOST_GROUP_ID"])
                 os.chown(path=HASH_FILE, uid=host_uid, gid=host_gid)
                 os.chown(path=SVG_FILE, uid=host_uid, gid=host_gid)
             except Exception as e:
@@ -65,3 +68,7 @@ if __name__ == '__main__':
         console.print(f"[green]The diagram has been generated in {SVG_FILE}. Please commit the changes!")
     else:
         console.print("[green]Skip file generation as no files changes since last generation")
+        console.print(
+            f"[bright_blue]You can delete [magenta]{HASH_FILE.relative_to(AIRFLOW_SOURCES_ROOT)}[/] "
+            f"[bright_blue]to regenerate the diagrams.[/]"
+        )

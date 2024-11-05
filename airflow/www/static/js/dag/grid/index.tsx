@@ -17,61 +17,85 @@
  * under the License.
  */
 
-/* global localStorage, ResizeObserver */
+/* global ResizeObserver */
 
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  Table,
-  Tbody,
-  Box,
-  Thead,
-  Flex,
-  IconButton,
-} from '@chakra-ui/react';
+import React, { useRef, useEffect } from "react";
+import { Table, Tbody, Box, Thead } from "@chakra-ui/react";
 
-import { MdReadMore } from 'react-icons/md';
+import { useGridData } from "src/api";
+import { useOffsetTop } from "src/utils";
 
-import { useGridData } from 'src/api';
-import { getMetaValue } from 'src/utils';
-import AutoRefresh from 'src/components/AutoRefresh';
-
-import renderTaskRows from './renderTaskRows';
-import ResetRoot from './ResetRoot';
-import DagRuns from './dagRuns';
-import ToggleGroups from './ToggleGroups';
-
-const dagId = getMetaValue('dag_id');
+import renderTaskRows from "./renderTaskRows";
+import DagRuns from "./dagRuns";
+import useSelection from "../useSelection";
 
 interface Props {
-  isPanelOpen?: boolean;
-  onPanelToggle?: () => void;
   hoveredTaskState?: string | null;
+  openGroupIds: string[];
+  onToggleGroups: (groupIds: string[]) => void;
+  isGridCollapsed?: boolean;
+  gridScrollRef?: React.RefObject<HTMLDivElement>;
+  ganttScrollRef?: React.RefObject<HTMLDivElement>;
 }
 
-const Grid = ({ isPanelOpen = false, onPanelToggle, hoveredTaskState }: Props) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
+const Grid = ({
+  hoveredTaskState,
+  openGroupIds,
+  onToggleGroups,
+  isGridCollapsed,
+  gridScrollRef,
+  ganttScrollRef,
+}: Props) => {
   const tableRef = useRef<HTMLTableSectionElement>(null);
+  const offsetTop = useOffsetTop(tableRef);
+  const { selected } = useSelection();
 
-  const { data: { groups, dagRuns } } = useGridData();
-  const dagRunIds = dagRuns.map((dr) => dr.runId);
+  const {
+    data: { groups, dagRuns },
+  } = useGridData();
+  const dagRunIds = dagRuns
+    .map((dr) => dr.runId)
+    .filter((id, i) => {
+      if (isGridCollapsed) {
+        if (selected.runId) return id === selected.runId;
+        return i === dagRuns.length - 1;
+      }
+      return true;
+    });
 
-  const openGroupsKey = `${dagId}/open-groups`;
-  const storedGroups = JSON.parse(localStorage.getItem(openGroupsKey) || '[]');
-  const [openGroupIds, setOpenGroupIds] = useState(storedGroups);
+  const onGanttScroll = (e: Event) => {
+    const { scrollTop } = e.currentTarget as HTMLDivElement;
+    if (scrollTop && gridScrollRef?.current) {
+      gridScrollRef.current.scrollTo(0, scrollTop);
 
-  const onToggleGroups = (groupIds: string[]) => {
-    localStorage.setItem(openGroupsKey, JSON.stringify(groupIds));
-    setOpenGroupIds(groupIds);
+      // Double check the scroll position after 100ms
+      setTimeout(() => {
+        const gridScrollTop = gridScrollRef?.current?.scrollTop;
+        const ganttScrollTop = ganttScrollRef?.current?.scrollTop;
+        if (ganttScrollTop !== gridScrollTop && gridScrollRef?.current) {
+          gridScrollRef.current.scrollTo(0, ganttScrollTop || 0);
+        }
+      }, 100);
+    }
   };
+
+  // Sync grid and gantt scroll
+  useEffect(() => {
+    const gantt = ganttScrollRef?.current;
+    gantt?.addEventListener("scroll", onGanttScroll);
+    return () => {
+      gantt?.removeEventListener("scroll", onGanttScroll);
+    };
+  });
 
   useEffect(() => {
     const scrollOnResize = new ResizeObserver(() => {
-      const runsContainer = scrollRef.current;
+      const runsContainer = gridScrollRef?.current;
       // Set scroll to top right if it is scrollable
       if (
-        tableRef?.current
-        && runsContainer
-        && runsContainer.scrollWidth > runsContainer.clientWidth
+        tableRef?.current &&
+        runsContainer &&
+        runsContainer.scrollWidth > runsContainer.clientWidth
       ) {
         runsContainer.scrollBy(tableRef.current.offsetWidth, 0);
       }
@@ -86,59 +110,39 @@ const Grid = ({ isPanelOpen = false, onPanelToggle, hoveredTaskState }: Props) =
       };
     }
     return () => {};
-  }, [tableRef, isPanelOpen]);
+  }, [tableRef, isGridCollapsed, gridScrollRef]);
 
   return (
     <Box
-      minWidth={isPanelOpen ? '350px' : undefined}
-      flexGrow={1}
-      m={3}
-      mt={0}
+      height="100%"
+      maxHeight={`calc(100% - ${offsetTop}px)`}
+      ref={gridScrollRef}
+      overflow="auto"
+      position="relative"
+      mt={8}
+      overscrollBehavior="auto"
+      pb={4}
     >
-      <Flex
-        alignItems="center"
-        justifyContent="space-between"
-        mb={2}
-        p={1}
-        backgroundColor="white"
-      >
-        <Flex alignItems="center">
-          <AutoRefresh />
-          <ToggleGroups
+      <Table borderRightWidth="16px" borderColor="transparent">
+        <Thead>
+          <DagRuns
             groups={groups}
             openGroupIds={openGroupIds}
             onToggleGroups={onToggleGroups}
+            isGridCollapsed={isGridCollapsed}
           />
-          <ResetRoot />
-        </Flex>
-        <IconButton
-          fontSize="2xl"
-          onClick={onPanelToggle}
-          title={`${isPanelOpen ? 'Hide ' : 'Show '} Details Panel`}
-          aria-label={isPanelOpen ? 'Show Details' : 'Hide Details'}
-          icon={<MdReadMore />}
-          transform={!isPanelOpen ? 'rotateZ(180deg)' : undefined}
-          transitionProperty="none"
-        />
-      </Flex>
-      <Box
-        overflow="auto"
-        ref={scrollRef}
-        maxHeight="900px"
-        position="relative"
-        pr={4}
-      >
-        <Table pr="10px">
-          <Thead>
-            <DagRuns />
-          </Thead>
-          <Tbody ref={tableRef}>
-            {renderTaskRows({
-              task: groups, dagRunIds, openGroupIds, onToggleGroups, hoveredTaskState,
-            })}
-          </Tbody>
-        </Table>
-      </Box>
+        </Thead>
+        <Tbody ref={tableRef}>
+          {renderTaskRows({
+            task: groups,
+            dagRunIds,
+            openGroupIds,
+            onToggleGroups,
+            hoveredTaskState,
+            isGridCollapsed,
+          })}
+        </Tbody>
+      </Table>
     </Box>
   );
 };

@@ -19,36 +19,37 @@
 ### DAG Tutorial Documentation
 This DAG is demonstrating an Extract -> Transform -> Load pipeline
 """
+
 from __future__ import annotations
 
 # [START tutorial]
 # [START import_module]
 import json
-from textwrap import dedent
+import textwrap
 
 import pendulum
 
 # The DAG object; we'll need this to instantiate a DAG
-from airflow import DAG
+from airflow.models.dag import DAG
 
 # Operators; we need this to operate!
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 # [END import_module]
 
 # [START instantiate_dag]
 with DAG(
-    'tutorial_dag',
+    "tutorial_dag",
     # [START default_args]
     # These args will get passed on to each operator
     # You can override them on a per-task basis during operator initialization
-    default_args={'retries': 2},
+    default_args={"retries": 2},
     # [END default_args]
-    description='DAG tutorial',
+    description="DAG tutorial",
     schedule=None,
     start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
     catchup=False,
-    tags=['example'],
+    tags=["example"],
 ) as dag:
     # [END instantiate_dag]
     # [START documentation]
@@ -57,16 +58,16 @@ with DAG(
 
     # [START extract_function]
     def extract(**kwargs):
-        ti = kwargs['ti']
+        ti = kwargs["ti"]
         data_string = '{"1001": 301.27, "1002": 433.21, "1003": 502.22}'
-        ti.xcom_push('order_data', data_string)
+        ti.xcom_push("order_data", data_string)
 
     # [END extract_function]
 
     # [START transform_function]
     def transform(**kwargs):
-        ti = kwargs['ti']
-        extract_data_string = ti.xcom_pull(task_ids='extract', key='order_data')
+        ti = kwargs["ti"]
+        extract_data_string = ti.xcom_pull(task_ids="extract", key="order_data")
         order_data = json.loads(extract_data_string)
 
         total_order_value = 0
@@ -75,14 +76,14 @@ with DAG(
 
         total_value = {"total_order_value": total_order_value}
         total_value_json_string = json.dumps(total_value)
-        ti.xcom_push('total_order_value', total_value_json_string)
+        ti.xcom_push("total_order_value", total_value_json_string)
 
     # [END transform_function]
 
     # [START load_function]
     def load(**kwargs):
-        ti = kwargs['ti']
-        total_value_string = ti.xcom_pull(task_ids='transform', key='total_order_value')
+        ti = kwargs["ti"]
+        total_value_string = ti.xcom_pull(task_ids="transform", key="total_order_value")
         total_order_value = json.loads(total_value_string)
 
         print(total_order_value)
@@ -91,10 +92,10 @@ with DAG(
 
     # [START main_flow]
     extract_task = PythonOperator(
-        task_id='extract',
+        task_id="extract",
         python_callable=extract,
     )
-    extract_task.doc_md = dedent(
+    extract_task.doc_md = textwrap.dedent(
         """\
     #### Extract task
     A simple Extract task to get data ready for the rest of the data pipeline.
@@ -104,10 +105,10 @@ with DAG(
     )
 
     transform_task = PythonOperator(
-        task_id='transform',
+        task_id="transform",
         python_callable=transform,
     )
-    transform_task.doc_md = dedent(
+    transform_task.doc_md = textwrap.dedent(
         """\
     #### Transform task
     A simple Transform task which takes in the collection of order data from xcom
@@ -117,10 +118,10 @@ with DAG(
     )
 
     load_task = PythonOperator(
-        task_id='load',
+        task_id="load",
         python_callable=load,
     )
-    load_task.doc_md = dedent(
+    load_task.doc_md = textwrap.dedent(
         """\
     #### Load task
     A simple Load task which takes in the result of the Transform task, by reading it

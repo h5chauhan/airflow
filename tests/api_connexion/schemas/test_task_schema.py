@@ -52,6 +52,7 @@ class TestTaskSchema:
             "retry_exponential_backoff": False,
             "start_date": "2020-06-16T00:00:00+00:00",
             "task_id": "task_id",
+            "task_display_name": "task_id",
             "template_fields": [],
             "trigger_rule": "all_success",
             "ui_color": "#e8f7e4",
@@ -59,13 +60,14 @@ class TestTaskSchema:
             "wait_for_downstream": False,
             "weight_rule": "downstream",
             "is_mapped": False,
+            "doc_md": None,
         }
         assert expected == result
 
 
 class TestTaskCollectionSchema:
     def test_serialize(self):
-        tasks = [EmptyOperator(task_id="task_id1", params={'foo': 'bar'})]
+        tasks = [EmptyOperator(task_id="task_id1", params={"foo": "bar"})]
         collection = TaskCollection(tasks, 1)
         result = task_collection_schema.dump(collection)
         expected = {
@@ -82,12 +84,12 @@ class TestTaskCollectionSchema:
                     "extra_links": [],
                     "operator_name": "EmptyOperator",
                     "owner": "airflow",
-                    'params': {
-                        'foo': {
-                            '__class': 'airflow.models.param.Param',
-                            'value': 'bar',
-                            'description': None,
-                            'schema': {},
+                    "params": {
+                        "foo": {
+                            "__class": "airflow.models.param.Param",
+                            "value": "bar",
+                            "description": None,
+                            "schema": {},
                         }
                     },
                     "pool": "default_pool",
@@ -99,6 +101,7 @@ class TestTaskCollectionSchema:
                     "retry_exponential_backoff": False,
                     "start_date": None,
                     "task_id": "task_id1",
+                    "task_display_name": "task_id1",
                     "template_fields": [],
                     "trigger_rule": "all_success",
                     "ui_color": "#e8f7e4",
@@ -106,6 +109,7 @@ class TestTaskCollectionSchema:
                     "wait_for_downstream": False,
                     "weight_rule": "downstream",
                     "is_mapped": False,
+                    "doc_md": None,
                 }
             ],
             "total_entries": 1,

@@ -46,9 +46,8 @@ SOURCE_DIR_PATH = os.path.abspath(os.path.join(MY_DIR_PATH, os.pardir))
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-@click.group(context_settings={'help_option_names': ['-h', '--help'], 'max_content_width': 500})
-def cli():
-    ...
+@click.group(context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 500})
+def cli(): ...
 
 
 def render_template_file(
@@ -116,13 +115,7 @@ option_github_token = click.option(
         Can be generated with:
         https://github.com/settings/tokens/new?description=Write%20issues&scopes=repo:status,public_repo"""
     ),
-    envvar='GITHUB_TOKEN',
-)
-
-option_verbose = click.option(
-    "--verbose",
-    is_flag=True,
-    help="Print verbose information about performed steps",
+    envvar="GITHUB_TOKEN",
 )
 
 option_dry_run = click.option(
@@ -188,11 +181,9 @@ option_start_from = click.option(
 @option_github_token
 @option_max_issues
 @option_start_from
-@option_verbose
 @cli.command()
 def prepare_bulk_issues(
     github_token: str,
-    verbose: bool,
     max_issues: int | None,
     dry_run: bool,
     template_file: str,
@@ -206,23 +197,18 @@ def prepare_bulk_issues(
     with open(csv_file) as f:
         read_issues = csv.reader(f)
         for index, row in enumerate(read_issues):
-            if index == 0:
-                continue
-            issues[row[0]].append(row)
+            if index:
+                issues[row[0]].append(row)
     names = sorted(issues.keys())[start_from:]
     total_issues = len(names)
     processed_issues = 0
     if dry_run:
-        for name in names:
+        for name in names[:max_issues]:
             issue_content, issue_title = get_issue_details(issues, name, template_file, title)
             console.print(f"[yellow]### {issue_title} #####[/]")
             console.print(issue_content)
             console.print()
             processed_issues += 1
-            if max_issues is not None:
-                max_issues -= 1
-                if max_issues == 0:
-                    break
         console.print()
         console.print(f"Displayed {processed_issues} issue(s).")
     else:
@@ -233,17 +219,12 @@ def prepare_bulk_issues(
             g = Github(github_token)
             repo = g.get_repo(repository)
             try:
-                for i in range(total_issues):
-                    name = names[i]
+                for name in names[:max_issues]:
                     issue_content, issue_title = get_issue_details(issues, name, template_file, title)
                     repo.create_issue(title=issue_title, body=issue_content, labels=labels_list)
                     progress.advance(task)
                     processed_issues += 1
                     sleep(2)  # avoid secondary rate limit!
-                    if max_issues is not None:
-                        max_issues -= 1
-                        if max_issues == 0:
-                            break
             except GithubException as e:
                 console.print(f"[red]Error!: {e}[/]")
                 console.print(

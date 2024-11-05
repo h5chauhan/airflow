@@ -17,54 +17,116 @@
  * under the License.
  */
 
-import React, { useState } from 'react';
-import { Button, useDisclosure } from '@chakra-ui/react';
+import React, { useState } from "react";
+import {
+  Flex,
+  Button,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
+  MenuButtonProps,
+} from "@chakra-ui/react";
+import { MdArrowDropDown } from "react-icons/md";
+import { getMetaValue } from "src/utils";
+import { useKeysPress } from "src/utils/useKeysPress";
+import keyboardShortcutIdentifier from "src/dag/keyboardShortcutIdentifier";
+import { useClearRun, useQueueRun } from "src/api";
+import ConfirmationModal from "./ConfirmationModal";
 
-import { useClearRun } from 'src/api';
-import { getMetaValue } from 'src/utils';
-import ConfirmDialog from 'src/components/ConfirmDialog';
+const canEdit = getMetaValue("can_edit") === "True";
+const dagId = getMetaValue("dag_id");
 
-const canEdit = getMetaValue('can_edit') === 'True';
-
-interface Props {
-  dagId: string;
+interface Props extends MenuButtonProps {
   runId: string;
 }
 
-const ClearRun = ({ dagId, runId }: Props) => {
-  const [affectedTasks, setAffectedTasks] = useState('');
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const { mutateAsync: onClear, isLoading } = useClearRun(dagId, runId);
+const ClearRun = ({ runId, ...otherProps }: Props) => {
+  const { mutateAsync: onClear, isLoading: isClearLoading } = useClearRun(
+    dagId,
+    runId
+  );
 
-  const onClick = async () => {
-    const data = await onClear({ confirmed: false });
-    setAffectedTasks(data);
-    onOpen();
+  const { mutateAsync: onQueue, isLoading: isQueueLoading } = useQueueRun(
+    dagId,
+    runId
+  );
+
+  const clearExistingTasks = () => {
+    onClear({ confirmed: true });
   };
 
-  const onConfirm = async () => {
-    await onClear({ confirmed: true });
-    setAffectedTasks('');
-    onClose();
+  const clearFailedTasks = () => {
+    onClear({ confirmed: true, only_failed: true });
   };
 
+  const queueNewTasks = () => {
+    onQueue({ confirmed: true });
+  };
+
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+
+  const storedValue = localStorage.getItem("doNotShowClearRunModal");
+  const [doNotShowAgain, setDoNotShowAgain] = useState(
+    storedValue ? JSON.parse(storedValue) : false
+  );
+
+  const confirmAction = () => {
+    localStorage.setItem(
+      "doNotShowClearRunModal",
+      JSON.stringify(doNotShowAgain)
+    );
+    clearExistingTasks();
+    setShowConfirmationModal(false);
+  };
+
+  useKeysPress(keyboardShortcutIdentifier.dagRunClear, () => {
+    if (!doNotShowAgain) {
+      setShowConfirmationModal(true);
+    } else clearExistingTasks();
+  });
+
+  const clearLabel = "Clear tasks or add new tasks";
   return (
     <>
-      <Button
-        onClick={onClick}
-        isLoading={isLoading}
-        isDisabled={!canEdit}
+      <Menu>
+        <MenuButton
+          as={Button}
+          colorScheme="blue"
+          transition="all 0.2s"
+          title={clearLabel}
+          aria-label={clearLabel}
+          disabled={!canEdit || isClearLoading || isQueueLoading}
+          {...otherProps}
+          mt={2}
+        >
+          <Flex>
+            Clear
+            <MdArrowDropDown size="16px" />
+          </Flex>
+        </MenuButton>
+        <MenuList>
+          <MenuItem onClick={clearExistingTasks}>Clear existing tasks</MenuItem>
+          <MenuItem onClick={clearFailedTasks}>
+            Clear only failed tasks
+          </MenuItem>
+          <MenuItem onClick={queueNewTasks}>Queue up new tasks</MenuItem>
+        </MenuList>
+      </Menu>
+      <ConfirmationModal
+        isOpen={showConfirmationModal}
+        onClose={() => setShowConfirmationModal(false)}
+        header="Confirmation"
+        submitButton={
+          <Button onClick={confirmAction} colorScheme="blue">
+            Clear DAG run
+          </Button>
+        }
+        doNotShowAgain={doNotShowAgain}
+        onDoNotShowAgainChange={(value) => setDoNotShowAgain(value)}
       >
-        Clear existing tasks
-      </Button>
-      <ConfirmDialog
-        isOpen={isOpen}
-        onClose={onClose}
-        onConfirm={onConfirm}
-        isLoading={isLoading}
-        description="Task instances you are about to clear:"
-        body={affectedTasks}
-      />
+        This DAG run will be cleared. Are you sure you want to proceed?
+      </ConfirmationModal>
     </>
   );
 };

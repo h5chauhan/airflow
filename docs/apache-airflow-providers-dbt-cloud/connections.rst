@@ -15,6 +15,9 @@
     specific language governing permissions and limitations
     under the License.
 
+.. spelling:word-list::
+
+    getdbt
 
 
 .. _howto/connection:dbt-cloud:
@@ -65,10 +68,28 @@ Login (optional)
       If an Account ID is not provided in an Airflow connection, ``account_id`` *must* be explicitly passed to
       an operator or hook method.
 
-Schema (optional)
-    The Tenant name for your dbt Cloud environment (i.e. https://my-tenant.getdbt.com). This is particularly
-    useful when using a single-tenant dbt Cloud instance. If a Tenant name is not provided, "cloud"
-    will be used as the default value (i.e. https://cloud.getdbt.com) assuming a multi-tenant instance.
+Host (optional)
+    The Tenant domain for your dbt Cloud environment (e.g. "my-tenant.getdbt.com"). This is particularly
+    useful when using a single-tenant dbt Cloud instance or `other dbt Cloud regions <https://docs.getdbt.com/docs/deploy/regions-ip-addresses>`__
+    like EMEA or a Virtual Private dbt Cloud. If a Tenant domain is not provided, "cloud.getdbt.com" will be
+    used as the default value assuming a multi-tenant instance in the North America region.
+
+    If using the Connection form in the Airflow UI, the Tenant domain can also be stored in the "Tenant"
+    field.
+
+Extra (optional)
+    Specify extra parameters as JSON dictionary. As of now, only `proxies` is supported when wanting to connect to dbt Cloud via a proxy.
+
+    `proxies` should be a dictionary of proxies to be used by HTTP and HTTPS connections.
+
+.. code-block:: json
+
+    {
+      "proxies": {
+        "http": "http://myproxy.mycompany.local:8080",
+        "https": "http://myproxy.mycompany.local:8080"
+      }
+    }
 
 When specifying the connection as an environment variable, you should specify it following the standard syntax
 of a database connection. Note that all components of the URI should be URL-encoded.
@@ -88,12 +109,17 @@ For example, to add a connection with the connection ID of "dbt_cloud_default":
 
         export AIRFLOW_CONN_DBT_CLOUD_DEFAULT='dbt-cloud://:api_token@'
 
-    When specifying Tenant name:
+    When specifying a Tenant domain, be sure to follow the Access URL pattern in the table [here](https://docs.getdbt.com/docs/cloud/about-cloud/access-regions-ip-addresses)
 
     .. code-block:: bash
 
-        export AIRFLOW_CONN_DBT_CLOUD_DEFAULT='dbt-cloud://:api_token@:/my-tenant'
+        export AIRFLOW_CONN_DBT_CLOUD_DEFAULT='dbt-cloud://:api_token@my-access-url'
+
+    As an example, if my account is hosted in the Cell-based North America region and my access URL is ab123.us1.dbt.com, my conn string should be:
+    .. code-block:: bash
+
+        export AIRFLOW_CONN_DBT_CLOUD_DEFAULT='dbt-cloud://:api_token@ab123.us1.dbt.com'
 
 You can refer to the documentation on
-:ref:`creating connections via environment variables <environment_variables_secrets_backend>` for more
+:ref:`creating connections via environment variables <environment_variables_connections>` for more
 information.

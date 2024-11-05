@@ -25,28 +25,28 @@ from airflow.models.dagwarning import DagWarning
 
 
 class DagWarningSchema(SQLAlchemySchema):
-    """Import error schema"""
+    """Import error schema."""
 
     class Meta:
-        """Meta"""
+        """Meta."""
 
         model = DagWarning
 
     dag_id = auto_field(data_key="dag_id", dump_only=True)
-    warning_type = auto_field()
-    message = auto_field()
-    timestamp = auto_field(format="iso")
+    warning_type = auto_field(dump_only=True)
+    message = auto_field(dump_only=True)
+    timestamp = auto_field(format="iso", dump_only=True)
 
 
 class DagWarningCollection(NamedTuple):
-    """List of dag warnings with metadata"""
+    """List of dag warnings with metadata."""
 
     dag_warnings: list[DagWarning]
     total_entries: int
 
 
 class DagWarningCollectionSchema(Schema):
-    """Import error collection schema"""
+    """Import error collection schema."""
 
     dag_warnings = fields.List(fields.Nested(DagWarningSchema))
     total_entries = fields.Int()

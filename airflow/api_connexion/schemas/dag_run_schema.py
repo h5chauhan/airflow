@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from typing import NamedTuple
 
-from marshmallow import fields, post_dump, pre_load, validate
+from marshmallow import ValidationError, fields, post_dump, pre_load, validate, validates_schema
 from marshmallow.schema import Schema
 from marshmallow.validate import Range
 from marshmallow_sqlalchemy import SQLAlchemySchema, auto_field
@@ -32,11 +32,11 @@ from airflow.api_connexion.schemas.enum_schemas import DagStateField
 from airflow.models.dagrun import DagRun
 from airflow.utils import timezone
 from airflow.utils.state import DagRunState
-from airflow.utils.types import DagRunType
+from airflow.utils.types import DagRunTriggeredByType, DagRunType
 
 
 class ConfObject(fields.Field):
-    """The conf field"""
+    """The conf field."""
 
     def _serialize(self, value, attr, obj, **kwargs):
         if not value:
@@ -53,15 +53,15 @@ _MISSING = object()
 
 
 class DAGRunSchema(SQLAlchemySchema):
-    """Schema for DAGRun"""
+    """Schema for DAGRun."""
 
     class Meta:
-        """Meta"""
+        """Meta."""
 
         model = DagRun
         dateformat = "iso"
 
-    run_id = auto_field(data_key='dag_run_id')
+    run_id = auto_field(data_key="dag_run_id")
     dag_id = auto_field(dump_only=True)
     execution_date = auto_field(data_key="logical_date", validate=validate_istimezone)
     start_date = auto_field(dump_only=True)
@@ -69,14 +69,17 @@ class DAGRunSchema(SQLAlchemySchema):
     state = DagStateField(dump_only=True)
     external_trigger = auto_field(dump_default=True, dump_only=True)
     conf = ConfObject()
-    data_interval_start = auto_field(dump_only=True)
-    data_interval_end = auto_field(dump_only=True)
+    data_interval_start = auto_field(validate=validate_istimezone)
+    data_interval_end = auto_field(validate=validate_istimezone)
     last_scheduling_decision = auto_field(dump_only=True)
     run_type = auto_field(dump_only=True)
+    note = auto_field(dump_only=False)
+    triggered_by = fields.Enum(DagRunTriggeredByType, by_value=True, dump_only=True)
 
     @pre_load
     def autogenerate(self, data, **kwargs):
-        """Auto generate run_id and logical_date if they are not provided.
+        """
+        Auto generate run_id and logical_date if they are not provided.
 
         For compatibility, if `execution_date` is submitted, it is converted
         to `logical_date`.
@@ -107,12 +110,32 @@ class DAGRunSchema(SQLAlchemySchema):
     @post_dump
     def autofill(self, data, **kwargs):
         """Populate execution_date from logical_date for compatibility."""
+        ret_data = {}
         data["execution_date"] = data["logical_date"]
-        return data
+        if self.context.get("fields"):
+            ret_fields = self.context.get("fields")
+            for ret_field in ret_fields:
+                if ret_field not in data:
+                    raise ValueError(f"{ret_field} not in DAGRunSchema")
+                ret_data[ret_field] = data[ret_field]
+        else:
+            ret_data = data
+
+        return ret_data
+
+    @validates_schema
+    def validate_data_interval_dates(self, data, **kwargs):
+        data_interval_start_exists = data.get("data_interval_start") is not None
+        data_interval_end_exists = data.get("data_interval_end") is not None
+
+        if data_interval_start_exists != data_interval_end_exists:
+            raise ValidationError(
+                "Both 'data_interval_start' and 'data_interval_end' must be specified together"
+            )
 
 
 class SetDagRunStateFormSchema(Schema):
-    """Schema for handling the request of setting state of DAG run"""
+    """Schema for handling the request of setting state of DAG run."""
 
     state = DagStateField(
         validate=validate.OneOf(
@@ -122,32 +145,32 @@ class SetDagRunStateFormSchema(Schema):
 
 
 class ClearDagRunStateFormSchema(Schema):
-    """Schema for handling the request of clearing a DAG run"""
+    """Schema for handling the request of clearing a DAG run."""
 
     dry_run = fields.Boolean(load_default=True)
 
 
 class DAGRunCollection(NamedTuple):
-    """List of DAGRuns with metadata"""
+    """List of DAGRuns with metadata."""
 
     dag_runs: list[DagRun]
     total_entries: int
 
 
 class DAGRunCollectionSchema(Schema):
-    """DAGRun Collection schema"""
+    """DAGRun Collection schema."""
 
     dag_runs = fields.List(fields.Nested(DAGRunSchema))
     total_entries = fields.Int()
 
 
 class DagRunsBatchFormSchema(Schema):
-    """Schema to validate and deserialize the Form(request payload) submitted to DagRun Batch endpoint"""
+    """Schema to validate and deserialize the Form(request payload) submitted to DagRun Batch endpoint."""
 
     class Meta:
-        """Meta"""
+        """Meta."""
 
-        datetimeformat = 'iso'
+        datetimeformat = "iso"
         strict = True
 
     order_by = fields.String()
@@ -161,6 +184,14 @@ class DagRunsBatchFormSchema(Schema):
     start_date_lte = fields.DateTime(load_default=None, validate=validate_istimezone)
     end_date_gte = fields.DateTime(load_default=None, validate=validate_istimezone)
     end_date_lte = fields.DateTime(load_default=None, validate=validate_istimezone)
+    updated_at_gte = fields.DateTime(load_default=None, validate=validate_istimezone)
+    updated_at_lte = fields.DateTime(load_default=None, validate=validate_istimezone)
+
+
+class SetDagRunNoteFormSchema(Schema):
+    """Schema for handling the request of clearing a DAG run."""
+
+    note = fields.String(allow_none=True, validate=validate.Length(max=1000))
 
 
 dagrun_schema = DAGRunSchema()
@@ -168,3 +199,4 @@ dagrun_collection_schema = DAGRunCollectionSchema()
 set_dagrun_state_form_schema = SetDagRunStateFormSchema()
 clear_dagrun_form_schema = ClearDagRunStateFormSchema()
 dagruns_batch_form_schema = DagRunsBatchFormSchema()
+set_dagrun_note_form_schema = SetDagRunNoteFormSchema()

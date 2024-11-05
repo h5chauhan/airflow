@@ -18,13 +18,14 @@
 """
 Example DAG demonstrating the usage of BranchDayOfWeekOperator.
 """
+
 from __future__ import annotations
 
 import pendulum
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.weekday import BranchDayOfWeekOperator
+from airflow.providers.standard.operators.weekday import BranchDayOfWeekOperator
 from airflow.utils.weekday import WeekDay
 
 with DAG(
@@ -35,10 +36,10 @@ with DAG(
     schedule="@daily",
 ) as dag:
     # [START howto_operator_day_of_week_branch]
-    empty_task_1 = EmptyOperator(task_id='branch_true')
-    empty_task_2 = EmptyOperator(task_id='branch_false')
-    empty_task_3 = EmptyOperator(task_id='branch_weekend')
-    empty_task_4 = EmptyOperator(task_id='branch_mid_week')
+    empty_task_1 = EmptyOperator(task_id="branch_true")
+    empty_task_2 = EmptyOperator(task_id="branch_false")
+    empty_task_3 = EmptyOperator(task_id="branch_weekend")
+    empty_task_4 = EmptyOperator(task_id="branch_mid_week")
 
     branch = BranchDayOfWeekOperator(
         task_id="make_choice",

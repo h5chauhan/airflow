@@ -16,6 +16,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """Example DAG demonstrating the usage of the @taskgroup decorator."""
+
 from __future__ import annotations
 
 import pendulum
@@ -29,31 +30,31 @@ from airflow.models.dag import DAG
 @task
 def task_start():
     """Empty Task which is First Task of Dag"""
-    return '[Task_start]'
+    return "[Task_start]"
 
 
 @task
 def task_1(value: int) -> str:
     """Empty Task1"""
-    return f'[ Task1 {value} ]'
+    return f"[ Task1 {value} ]"
 
 
 @task
 def task_2(value: str) -> str:
     """Empty Task2"""
-    return f'[ Task2 {value} ]'
+    return f"[ Task2 {value} ]"
 
 
 @task
 def task_3(value: str) -> None:
     """Empty Task3"""
-    print(f'[ Task3 {value} ]')
+    print(f"[ Task3 {value} ]")
 
 
 @task
 def task_end() -> None:
     """Empty Task which is Last Task of Dag"""
-    print('[ Task_End  ]')
+    print("[ Task_End  ]")
 
 
 # Creating TaskGroups
@@ -66,6 +67,7 @@ def task_group_function(value: int) -> None:
 # Executing Tasks and TaskGroups
 with DAG(
     dag_id="example_task_group_decorator",
+    schedule=None,
     start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
     catchup=False,
     tags=["example"],

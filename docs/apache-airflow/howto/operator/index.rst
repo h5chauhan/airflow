@@ -24,15 +24,12 @@ An operator represents a single, ideally idempotent, task. Operators
 determine what actually executes when your DAG runs.
 
 .. note::
-    See the :doc:`Operators Concepts </concepts/operators>` documentation and the
-    :doc:`Operators API Reference </python-api-ref>` for more
-    information.
+    See the :doc:`Operators Concepts </core-concepts/operators>` documentation.
 
 .. toctree::
     :maxdepth: 2
 
     bash
-    datetime
+    file
     python
-    weekday
     external_task_sensor

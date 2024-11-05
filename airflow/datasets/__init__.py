@@ -1,3 +1,4 @@
+#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -14,29 +15,31 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+# We do not use "from __future__ import annotations" here because it is not supported
+# by Pycharm when we want to make sure all imports in airflow work from namespace packages
+# Adding it automatically is excluded in pyproject.toml via I002 ruff rule exclusion
+
+# Make `airflow` a namespace package, supporting installing
+# airflow.providers.* in different locations (i.e. one in site, and one in user
+# lib.)  This is required by some IDEs to resolve the import paths.
 from __future__ import annotations
 
-from typing import Any
-from urllib.parse import urlparse
+import warnings
 
-import attr
+from airflow.assets import AssetAlias as DatasetAlias, Dataset
+
+# TODO: Remove this module in Airflow 3.2
+
+warnings.warn(
+    "Import from the airflow.dataset module is deprecated and "
+    "will be removed in the Airflow 3.2. Please import it from 'airflow.assets'.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
-@attr.define()
-class Dataset:
-    """A Dataset is used for marking data dependencies between workflows."""
-
-    uri: str = attr.field(validator=[attr.validators.min_len(1), attr.validators.max_len(3000)])
-    extra: dict[str, Any] | None = None
-
-    @uri.validator
-    def _check_uri(self, attr, uri: str):
-        if uri.isspace():
-            raise ValueError(f'{attr.name} cannot be just whitespace')
-        try:
-            uri.encode('ascii')
-        except UnicodeEncodeError:
-            raise ValueError(f'{attr.name!r} must be ascii')
-        parsed = urlparse(uri)
-        if parsed.scheme and parsed.scheme.lower() == 'airflow':
-            raise ValueError(f'{attr.name!r} scheme `airflow` is reserved')
+__all__ = [
+    "Dataset",
+    "DatasetAlias",
+]

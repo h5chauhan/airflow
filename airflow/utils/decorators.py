@@ -17,59 +17,42 @@
 # under the License.
 from __future__ import annotations
 
-import warnings
+import sys
 from collections import deque
-from functools import wraps
-from typing import Callable, TypeVar, cast
+from typing import Callable, TypeVar
 
-from airflow.exceptions import RemovedInAirflow3Warning
-
-T = TypeVar('T', bound=Callable)
-
-
-def apply_defaults(func: T) -> T:
-    """
-    This decorator is deprecated.
-
-    In previous versions, all subclasses of BaseOperator must use apply_default decorator for the"
-    `default_args` feature to work properly.
-
-    In current version, it is optional. The decorator is applied automatically using the metaclass.
-    """
-    warnings.warn(
-        "This decorator is deprecated. \n"
-        "\n"
-        "In previous versions, all subclasses of BaseOperator must use apply_default decorator for the "
-        "`default_args` feature to work properly.\n"
-        "\n"
-        "In current version, it is optional. The decorator is applied automatically using the metaclass.\n",
-        RemovedInAirflow3Warning,
-        stacklevel=3,
-    )
-
-    # Make it still be a wrapper to keep the previous behaviour of an extra stack frame
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    return cast(T, wrapper)
+T = TypeVar("T", bound=Callable)
 
 
 def remove_task_decorator(python_source: str, task_decorator_name: str) -> str:
     """
-    Removed @task.
+    Remove @task or similar decorators as well as @setup and @teardown.
 
-    :param python_source:
+    :param python_source: The python source code
+    :param task_decorator_name: the decorator name
+
+    TODO: Python 3.9+: Rewrite this to use ast.parse and ast.unparse
     """
-    if task_decorator_name not in python_source:
-        return python_source
-    split = python_source.split(task_decorator_name)
-    before_decorator, after_decorator = split[0], split[1]
-    if after_decorator[0] == "(":
-        after_decorator = _balance_parens(after_decorator)
-    if after_decorator[0] == "\n":
-        after_decorator = after_decorator[1:]
-    return before_decorator + after_decorator
+
+    def _remove_task_decorator(py_source, decorator_name):
+        # if no line starts with @decorator_name, we can early exit
+        for line in py_source.split("\n"):
+            if line.startswith(decorator_name):
+                break
+        else:
+            return python_source
+        split = python_source.split(decorator_name, 1)
+        before_decorator, after_decorator = split[0], split[1]
+        if after_decorator[0] == "(":
+            after_decorator = _balance_parens(after_decorator)
+        if after_decorator[0] == "\n":
+            after_decorator = after_decorator[1:]
+        return before_decorator + after_decorator
+
+    decorators = ["@setup", "@teardown", "@task.skip_if", "@task.run_if", task_decorator_name]
+    for decorator in decorators:
+        python_source = _remove_task_decorator(python_source, decorator)
+    return python_source
 
 
 def _balance_parens(after_decorator):
@@ -82,4 +65,26 @@ def _balance_parens(after_decorator):
             num_paren = num_paren + 1
         elif current == ")":
             num_paren = num_paren - 1
-    return ''.join(after_decorator)
+    return "".join(after_decorator)
+
+
+class _autostacklevel_warn:
+    def __init__(self, delta):
+        self.warnings = __import__("warnings")
+        self.delta = delta
+
+    def __getattr__(self, name):
+        return getattr(self.warnings, name)
+
+    def __dir__(self):
+        return dir(self.warnings)
+
+    def warn(self, message, category=None, stacklevel=1, source=None):
+        self.warnings.warn(message, category, stacklevel + self.delta, source)
+
+
+def fixup_decorator_warning_stack(func, delta: int = 2):
+    if func.__globals__.get("warnings") is sys.modules["warnings"]:
+        # Yes, this is more than slightly hacky, but it _automatically_ sets the right stacklevel parameter to
+        # `warnings.warn` to ignore the decorator.
+        func.__globals__["warnings"] = _autostacklevel_warn(delta)

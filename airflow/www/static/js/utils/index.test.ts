@@ -17,9 +17,18 @@
  * under the License.
  */
 
-import { isEmpty } from 'lodash';
-import type { DagRun } from 'src/types';
-import { getDagRunLabel, getTask, getTaskSummary } from '.';
+import { isEmpty } from "lodash";
+import type { DagRun } from "src/types";
+import {
+  getDagRunLabel,
+  getTask,
+  getTaskSummary,
+  highlightByKeywords,
+} from ".";
+import {
+  logGroupStart,
+  logGroupEnd,
+} from "../dag/details/taskInstance/Logs/utils";
 
 const sampleTasks = {
   id: null,
@@ -27,64 +36,69 @@ const sampleTasks = {
   label: null,
   children: [
     {
-      id: 'task_1',
-      label: 'task_1',
+      id: "task_1",
+      label: "task_1",
       instances: [],
-      operator: 'BashOperator',
+      operator: "BashOperator",
     },
     {
-      id: 'group_task',
-      label: 'group_task',
+      id: "group_task",
+      label: "group_task",
       instances: [],
       children: [
         {
-          id: 'group_task.task_2',
-          label: 'task_2',
+          id: "group_task.task_2",
+          label: "task_2",
           instances: [],
           children: [
             {
-              id: 'group_task.task_2.nested',
-              label: 'nested',
+              id: "group_task.task_2.nested",
+              label: "nested",
               instances: [],
-              operator: 'BashOperator',
+              operator: "BashOperator",
             },
           ],
         },
       ],
     },
     {
-      id: 'task_3',
-      label: 'task_3',
+      id: "task_3",
+      label: "task_3",
       instances: [],
-      children: [{
-        id: 'task_3.child',
-        label: 'child',
-        instances: [],
-        operator: 'PythonOperator',
-      }],
+      children: [
+        {
+          id: "task_3.child",
+          label: "child",
+          instances: [],
+          operator: "PythonOperator",
+        },
+      ],
     },
   ],
 };
 
-describe('Test getTask()', () => {
-  test('Can get a nested task_id', async () => {
-    const task = getTask({ taskId: 'task_3.child', task: sampleTasks });
-    expect(task?.label).toBe('child');
+describe("Test getTask()", () => {
+  test("Can get a nested task_id", async () => {
+    const task = getTask({ taskId: "task_3.child", task: sampleTasks });
+    expect(task?.label).toBe("child");
   });
 
-  test('Can get a group', async () => {
-    const task = getTask({ taskId: 'group_task', task: sampleTasks });
-    expect(task?.label).toBe('group_task');
+  test("Can get a group", async () => {
+    const task = getTask({ taskId: "group_task", task: sampleTasks });
+    expect(task?.label).toBe("group_task");
   });
 
-  test('Can get a multi-nested task', async () => {
-    const task = getTask({ taskId: 'group_task.task_2.nested', task: sampleTasks });
-    expect(task?.label).toBe('nested');
+  test("Can get a multi-nested task", async () => {
+    const task = getTask({
+      taskId: "group_task.task_2.nested",
+      task: sampleTasks,
+    });
+    expect(task?.label).toBe("nested");
   });
 });
 
-describe('Test getTaskSummary()', () => {
-  test('Counts tasks, groups, and operators with deep nesting', async () => {
+describe("Test getTaskSummary()", () => {
+  test("Counts tasks, groups, and operators with deep nesting", async () => {
     const summary = getTaskSummary({ task: sampleTasks });
 
     expect(summary.groupCount).toBe(3);
@@ -93,15 +107,15 @@ describe('Test getTaskSummary()', () => {
     expect(summary.operators.PythonOperator).toBe(1);
   });
 
-  test('Returns 0 groups and no operators', async () => {
+  test("Returns 0 groups and no operators", async () => {
     const noOperators = {
       id: null,
       instances: [],
       label: null,
       children: [
         {
-          id: 'task_1',
-          label: 'task_1',
+          id: "task_1",
+          label: "task_1",
           instances: [],
         },
       ],
@@ -114,31 +128,103 @@ describe('Test getTaskSummary()', () => {
   });
 });
 
-describe('Test getDagRunLabel', () => {
+describe("Test getDagRunLabel", () => {
   const dagRun = {
-    dagId: 'dagId',
-    runId: 'run1',
-    dataIntervalStart: '2021-12-07T21:14:19.704433+00:00',
-    dataIntervalEnd: '2021-12-08T21:14:19.704433+00:00',
-    queuedAt: '2021-11-08T21:14:18.21521+00:00',
-    startDate: '2021-11-08T21:14:19.704433+00:00',
-    endDate: '2021-11-08T21:17:13.206426+00:00',
-    state: 'failed',
-    runType: 'scheduled',
-    executionDate: '2021-12-09T21:14:19.704433+00:00',
-    lastSchedulingDecision: '2021-11-08T21:14:19.704433+00:00',
+    dagId: "dagId",
+    runId: "run1",
+    dataIntervalStart: "2021-12-07T21:14:19.704433+00:00",
+    dataIntervalEnd: "2021-12-08T21:14:19.704433+00:00",
+    queuedAt: "2021-11-08T21:14:18.21521+00:00",
+    startDate: "2021-11-08T21:14:19.704433+00:00",
+    endDate: "2021-11-08T21:17:13.206426+00:00",
+    state: "failed",
+    runType: "scheduled",
+    executionDate: "2021-12-09T21:14:19.704433+00:00",
+    lastSchedulingDecision: "2021-11-08T21:14:19.704433+00:00",
     externalTrigger: false,
     conf: null,
-    confIsJson: false,
+    note: "someRandomValue",
   } as DagRun;
 
-  test('Defaults to dataIntervalEnd', async () => {
+  test("Defaults to executionDate", async () => {
     const runLabel = getDagRunLabel({ dagRun });
-    expect(runLabel).toBe(dagRun.dataIntervalEnd);
+    expect(runLabel).toBe(dagRun.executionDate);
   });
 
-  test('Passing an order overrides default', async () => {
-    const runLabel = getDagRunLabel({ dagRun, ordering: ['executionDate'] });
-    expect(runLabel).toBe(dagRun.executionDate);
+  test("Passing an order overrides default", async () => {
+    const runLabel = getDagRunLabel({ dagRun, ordering: ["dataIntervalEnd"] });
+    expect(runLabel).toBe(dagRun.dataIntervalEnd);
+  });
+});
+
+describe("Test highlightByKeywords", () => {
+  test("Highlight error line by red color", async () => {
+    const originalLine = "line with Error";
+    const expected = `\x1b[1m\x1b[31mline with Error\x1b[39m\x1b[0m`;
+    const highlightedLine = highlightByKeywords(
+      originalLine,
+      ["error"],
+      ["warn"],
+      logGroupStart,
+      logGroupEnd
+    );
+    expect(highlightedLine).toBe(expected);
+  });
+  test("Highlight warning line by yellow color", async () => {
+    const originalLine = "line with Warning";
+    const expected = `\x1b[1m\x1b[33mline with Warning\x1b[39m\x1b[0m`;
+    const highlightedLine = highlightByKeywords(
+      originalLine,
+      ["error"],
+      ["warn"],
+      logGroupStart,
+      logGroupEnd
+    );
+    expect(highlightedLine).toBe(expected);
+  });
+  test("Highlight line by red color when line has both error and warning", async () => {
+    const originalLine = "line with error Warning";
+    const expected = `\x1b[1m\x1b[31mline with error Warning\x1b[39m\x1b[0m`;
+    const highlightedLine = highlightByKeywords(
+      originalLine,
+      ["error"],
+      ["warn"],
+      logGroupStart,
+      logGroupEnd
+    );
+    expect(highlightedLine).toBe(expected);
+  });
+  test("No highlight for line with start log marker", async () => {
+    const originalLine = " INFO - ::group::error";
+    const highlightedLine = highlightByKeywords(
+      originalLine,
+      ["error"],
+      ["warn"],
+      logGroupStart,
+      logGroupEnd
+    );
+    expect(highlightedLine).toBe(originalLine);
+  });
+  test("No highlight for line with end log marker", async () => {
+    const originalLine = " INFO - ::endgroup::";
+    const highlightedLine = highlightByKeywords(
+      originalLine,
+      ["endgroup"],
+      ["warn"],
+      logGroupStart,
+      logGroupEnd
+    );
+    expect(highlightedLine).toBe(originalLine);
+  });
+  test("No highlight", async () => {
+    const originalLine = "sample line";
+    const highlightedLine = highlightByKeywords(
+      originalLine,
+      ["error"],
+      ["warn"],
+      logGroupStart,
+      logGroupEnd
+    );
+    expect(highlightedLine).toBe(originalLine);
   });
 });

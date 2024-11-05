@@ -17,31 +17,39 @@
 """
 Useful tools for various Paths used inside Airflow Sources.
 """
+
 from __future__ import annotations
 
 import hashlib
 import os
+import platform
+import shutil
 import subprocess
 import sys
 import tempfile
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from airflow_breeze import NAME
-from airflow_breeze.utils.confirm import set_forced_answer
 from airflow_breeze.utils.console import get_console
 from airflow_breeze.utils.reinstall import reinstall_breeze, warn_dependencies_changed, warn_non_editable
+from airflow_breeze.utils.shared_options import get_verbose, set_forced_answer
 
-AIRFLOW_CFG_FILE = "setup.cfg"
+PYPROJECT_TOML_FILE = "pyproject.toml"
 
 
 def search_upwards_for_airflow_sources_root(start_from: Path) -> Path | None:
     root = Path(start_from.root)
     d = start_from
     while d != root:
-        attempt = d / AIRFLOW_CFG_FILE
-        if attempt.exists() and "name = apache-airflow\n" in attempt.read_text():
-            return attempt.parent
+        airflow_candidate = d / "airflow"
+        airflow_candidate_init_py = airflow_candidate / "__init__.py"
+        if (
+            airflow_candidate.is_dir()
+            and airflow_candidate_init_py.is_file()
+            and "airflow" in airflow_candidate_init_py.read_text().lower()
+        ):
+            return airflow_candidate.parent
         d = d.parent
     return None
 
@@ -55,15 +63,21 @@ def in_self_upgrade() -> bool:
 
 
 def in_help() -> bool:
-    return "--help" in sys.argv
+    return "--help" in sys.argv or "-h" in sys.argv
 
 
-def skip_upgrade_check():
-    return in_self_upgrade() or in_autocomplete() or in_help() or hasattr(sys, '_called_from_test')
+def skip_breeze_self_upgrade_check():
+    return (
+        in_self_upgrade()
+        or in_autocomplete()
+        or in_help()
+        or hasattr(sys, "_called_from_test")
+        or os.environ.get("SKIP_BREEZE_SELF_UPGRADE_CHECK")
+    )
 
 
 def skip_group_output():
-    return in_autocomplete() or in_help() or os.environ.get('SKIP_GROUP_OUTPUT') is not None
+    return in_autocomplete() or in_help() or os.environ.get("SKIP_GROUP_OUTPUT") is not None
 
 
 def get_package_setup_metadata_hash() -> str:
@@ -79,22 +93,20 @@ def get_package_setup_metadata_hash() -> str:
     try:
         from importlib.metadata import distribution  # type: ignore[attr-defined]
     except ImportError:
-        from importlib_metadata import distribution  # type: ignore[no-redef]
+        from importlib_metadata import distribution  # type: ignore[no-redef, assignment]
 
     prefix = "Package config hash: "
 
-    for line in distribution('apache-airflow-breeze').metadata.as_string().splitlines(keepends=False):
+    for line in distribution("apache-airflow-breeze").metadata.as_string().splitlines(keepends=False):
         if line.startswith(prefix):
             return line[len(prefix) :]
     return "NOT FOUND"
 
 
-def get_sources_setup_metadata_hash(sources: Path) -> str:
+def get_pyproject_toml_hash(sources: Path) -> str:
     try:
         the_hash = hashlib.new("blake2b")
-        the_hash.update((sources / "dev" / "breeze" / "setup.py").read_bytes())
-        the_hash.update((sources / "dev" / "breeze" / "setup.cfg").read_bytes())
-        the_hash.update((sources / "dev" / "breeze" / "pyproject.toml").read_bytes())
+        the_hash.update((sources / "dev" / "breeze" / PYPROJECT_TOML_FILE).read_bytes())
         return the_hash.hexdigest()
     except FileNotFoundError as e:
         return f"Missing file {e.filename}"
@@ -102,7 +114,7 @@ def get_sources_setup_metadata_hash(sources: Path) -> str:
 
 def get_installation_sources_config_metadata_hash() -> str:
     """
-    Retrieves hash of setup.py and setup.cfg files from the source of installation of Breeze.
+    Retrieves hash of pyproject.toml from the source of installation of Breeze.
 
     This is used in order to determine if we need to upgrade Breeze, because some
     setup files changed. Blake2b algorithm will not be flagged by security checkers
@@ -112,24 +124,35 @@ def get_installation_sources_config_metadata_hash() -> str:
     installation_sources = get_installation_airflow_sources()
     if installation_sources is None:
         return "NOT FOUND"
-    return get_sources_setup_metadata_hash(installation_sources)
+    return get_pyproject_toml_hash(installation_sources)
 
 
 def get_used_sources_setup_metadata_hash() -> str:
     """
     Retrieves hash of setup files from the currently used sources.
     """
-    return get_sources_setup_metadata_hash(get_used_airflow_sources())
+    return get_pyproject_toml_hash(get_used_airflow_sources())
 
 
 def set_forced_answer_for_upgrade_check():
     """When we run upgrade check --answer is not parsed yet, so we need to guess it."""
-    if "--answer n" in " ".join(sys.argv).lower() or os.environ.get('ANSWER', '').lower().startswith("n"):
+    if "--answer n" in " ".join(sys.argv).lower() or os.environ.get("ANSWER", "").lower().startswith("n"):
         set_forced_answer("no")
-    if "--answer y" in " ".join(sys.argv).lower() or os.environ.get('ANSWER', '').lower().startswith("y"):
+    if "--answer y" in " ".join(sys.argv).lower() or os.environ.get("ANSWER", "").lower().startswith("y"):
         set_forced_answer("yes")
-    if "--answer q" in " ".join(sys.argv).lower() or os.environ.get('ANSWER', '').lower().startswith("q"):
+    if "--answer q" in " ".join(sys.argv).lower() or os.environ.get("ANSWER", "").lower().startswith("q"):
         set_forced_answer("quit")
+
+
+def process_breeze_readme(breeze_sources: Path, sources_hash: str):
+    breeze_readme = breeze_sources / "README.md"
+    lines = breeze_readme.read_text().splitlines(keepends=True)
+    result_lines = []
+    for line in lines:
+        if line.startswith("Package config hash:"):
+            line = f"Package config hash: {sources_hash}\n"
+        result_lines.append(line)
+    breeze_readme.write_text("".join(result_lines))
 
 
 def reinstall_if_setup_changed() -> bool:
@@ -142,12 +165,20 @@ def reinstall_if_setup_changed() -> bool:
     except ModuleNotFoundError as e:
         if "importlib_metadata" in e.msg:
             return False
+        if "apache-airflow-breeze" in e.msg:
+            print(
+                """Missing Package `apache-airflow-breeze`. Please install it.\n
+                   Use `uv tool install -e ./dev/breeze or `pipx install -e ./dev/breeze`
+                   to install the package."""
+            )
+            return False
     sources_hash = get_installation_sources_config_metadata_hash()
     if sources_hash != package_hash:
         installation_sources = get_installation_airflow_sources()
         if installation_sources is not None:
             breeze_sources = installation_sources / "dev" / "breeze"
             warn_dependencies_changed()
+            process_breeze_readme(breeze_sources, sources_hash)
             set_forced_answer_for_upgrade_check()
             reinstall_breeze(breeze_sources)
             set_forced_answer(None)
@@ -191,13 +222,13 @@ def get_used_airflow_sources() -> Path:
     return current_sources
 
 
-@lru_cache(maxsize=None)
+@cache
 def find_airflow_sources_root_to_operate_on() -> Path:
     """
-    Find the root of airflow sources we operate on. Handle the case when Breeze is installed via `pipx` from
-    a different source tree, so it searches upwards of the current directory to find the right root of
-    airflow directory we are actually in. This **might** be different than the sources of Airflow Breeze
-    was installed from.
+    Find the root of airflow sources we operate on. Handle the case when Breeze is installed via
+    `pipx` or `uv tool` from a different source tree, so it searches upwards of the current directory
+    to find the right root of airflow directory we are actually in. This **might** be different
+    than the sources of Airflow Breeze was installed from.
 
     If not found, we operate on Airflow sources that we were installed it. This handles the case when
     we run Breeze from a "random" directory.
@@ -215,41 +246,92 @@ def find_airflow_sources_root_to_operate_on() -> Path:
     :return: Path for the found sources.
 
     """
-    sources_root_from_env = os.getenv('AIRFLOW_SOURCES_ROOT', None)
+    sources_root_from_env = os.getenv("AIRFLOW_SOURCES_ROOT", None)
     if sources_root_from_env:
         return Path(sources_root_from_env)
     installation_airflow_sources = get_installation_airflow_sources()
-    if installation_airflow_sources is None and not skip_upgrade_check():
+    if installation_airflow_sources is None and not skip_breeze_self_upgrade_check():
         get_console().print(
             "\n[error]Breeze should only be installed with -e flag[/]\n\n"
             "[warning]Please go to Airflow sources and run[/]\n\n"
-            f"     {NAME} self-upgrade --force\n"
+            f"     {NAME} setup self-upgrade --use-current-airflow-sources\n"
+            '[warning]If during installation you see warning starting "Ignoring --editable install",[/]\n'
+            '[warning]make sure you first downgrade "packaging" package to <23.2, for example by:[/]\n\n'
+            f'     pip install "packaging<23.2"\n\n'
         )
         sys.exit(1)
     airflow_sources = get_used_airflow_sources()
-    if not skip_upgrade_check():
+    if not skip_breeze_self_upgrade_check():
         # only print warning and sleep if not producing complete results
         reinstall_if_different_sources(airflow_sources)
         reinstall_if_setup_changed()
-    os.chdir(str(airflow_sources))
+    os.chdir(airflow_sources.as_posix())
+    airflow_home_dir = Path(os.environ.get("AIRFLOW_HOME", (Path.home() / "airflow").resolve().as_posix()))
+    if airflow_sources.resolve() == airflow_home_dir.resolve():
+        get_console().print(
+            f"\n[error]Your Airflow sources are checked out in {airflow_home_dir} which "
+            f"is your also your AIRFLOW_HOME where airflow writes logs and database. \n"
+            f"This is a bad idea because Airflow might override and cleanup your checked out "
+            f"sources and .git repository.[/]\n"
+        )
+        get_console().print("\nPlease check out your Airflow code elsewhere.\n")
+        sys.exit(1)
     return airflow_sources
 
 
 AIRFLOW_SOURCES_ROOT = find_airflow_sources_root_to_operate_on().resolve()
-BUILD_CACHE_DIR = AIRFLOW_SOURCES_ROOT / '.build'
-DAGS_DIR = AIRFLOW_SOURCES_ROOT / 'dags'
-FILES_DIR = AIRFLOW_SOURCES_ROOT / 'files'
-HOOKS_DIR = AIRFLOW_SOURCES_ROOT / 'hooks'
+AIRFLOW_WWW_DIR = AIRFLOW_SOURCES_ROOT / "airflow" / "www"
+AIRFLOW_UI_DIR = AIRFLOW_SOURCES_ROOT / "airflow" / "ui"
+AIRFLOW_OLD_PROVIDERS_DIR = AIRFLOW_SOURCES_ROOT / "airflow" / "providers"
+AIRFLOW_PROVIDERS_PROJECT = AIRFLOW_SOURCES_ROOT / "providers"
+AIRFLOW_PROVIDERS_SRC = AIRFLOW_PROVIDERS_PROJECT / "src"
+AIRFLOW_PROVIDERS_NS_PACKAGE = AIRFLOW_PROVIDERS_SRC / "airflow" / "providers"
+TESTS_PROVIDERS_ROOT = AIRFLOW_PROVIDERS_PROJECT / "tests"
+SYSTEM_TESTS_PROVIDERS_ROOT = AIRFLOW_PROVIDERS_PROJECT / "tests" / "system"
+DOCS_ROOT = AIRFLOW_SOURCES_ROOT / "docs"
+BUILD_CACHE_DIR = AIRFLOW_SOURCES_ROOT / ".build"
+GENERATED_DIR = AIRFLOW_SOURCES_ROOT / "generated"
+CONSTRAINTS_CACHE_DIR = BUILD_CACHE_DIR / "constraints"
+PROVIDER_DEPENDENCIES_JSON_FILE_PATH = GENERATED_DIR / "provider_dependencies.json"
+PROVIDER_METADATA_JSON_FILE_PATH = GENERATED_DIR / "provider_metadata.json"
+WWW_CACHE_DIR = BUILD_CACHE_DIR / "www"
+UI_CACHE_DIR = BUILD_CACHE_DIR / "ui"
+AIRFLOW_TMP_DIR_PATH = AIRFLOW_SOURCES_ROOT / "tmp"
+WWW_ASSET_COMPILE_LOCK = WWW_CACHE_DIR / ".asset_compile.lock"
+WWW_ASSET_OUT_FILE = WWW_CACHE_DIR / "asset_compile.out"
+WWW_ASSET_OUT_DEV_MODE_FILE = WWW_CACHE_DIR / "asset_compile_dev_mode.out"
+WWW_ASSET_HASH_FILE = AIRFLOW_SOURCES_ROOT / ".build" / "www" / "hash.txt"
+WWW_NODE_MODULES_DIR = AIRFLOW_SOURCES_ROOT / "airflow" / "www" / "node_modules"
+WWW_STATIC_DIST_DIR = AIRFLOW_SOURCES_ROOT / "airflow" / "www" / "static" / "dist"
+UI_ASSET_COMPILE_LOCK = UI_CACHE_DIR / ".asset_compile.lock"
+UI_ASSET_OUT_FILE = UI_CACHE_DIR / "asset_compile.out"
+UI_ASSET_OUT_DEV_MODE_FILE = UI_CACHE_DIR / "asset_compile_dev_mode.out"
+UI_ASSET_HASH_FILE = AIRFLOW_SOURCES_ROOT / ".build" / "ui" / "hash.txt"
+UI_NODE_MODULES_DIR = AIRFLOW_SOURCES_ROOT / "airflow" / "ui" / "node_modules"
+UI_DIST_DIR = AIRFLOW_SOURCES_ROOT / "airflow" / "ui" / "dist"
+DAGS_DIR = AIRFLOW_SOURCES_ROOT / "dags"
+FILES_DIR = AIRFLOW_SOURCES_ROOT / "files"
+FILES_SBOM_DIR = FILES_DIR / "sbom"
+HOOKS_DIR = AIRFLOW_SOURCES_ROOT / "hooks"
 KUBE_DIR = AIRFLOW_SOURCES_ROOT / ".kube"
-LOGS_DIR = AIRFLOW_SOURCES_ROOT / 'logs'
-DIST_DIR = AIRFLOW_SOURCES_ROOT / 'dist'
-SCRIPTS_CI_DIR = AIRFLOW_SOURCES_ROOT / 'scripts' / 'ci'
-DOCKER_CONTEXT_DIR = AIRFLOW_SOURCES_ROOT / 'docker-context-files'
+LOGS_DIR = AIRFLOW_SOURCES_ROOT / "logs"
+DIST_DIR = AIRFLOW_SOURCES_ROOT / "dist"
+OUT_DIR = AIRFLOW_SOURCES_ROOT / "out"
+REPRODUCIBLE_DIR = OUT_DIR / "reproducible"
+GENERATED_PROVIDER_PACKAGES_DIR = DIST_DIR / "provider_packages"
+DOCS_DIR = AIRFLOW_SOURCES_ROOT / "docs"
+SCRIPTS_CI_DIR = AIRFLOW_SOURCES_ROOT / "scripts" / "ci"
+SCRIPTS_DOCKER_DIR = AIRFLOW_SOURCES_ROOT / "scripts" / "docker"
+SCRIPTS_CI_DOCKER_COMPOSE_DIR = SCRIPTS_CI_DIR / "docker-compose"
+SCRIPTS_CI_DOCKER_COMPOSE_LOCAL_YAML_FILE = SCRIPTS_CI_DOCKER_COMPOSE_DIR / "local.yml"
+GENERATED_DOCKER_COMPOSE_ENV_FILE = SCRIPTS_CI_DOCKER_COMPOSE_DIR / "_generated_docker_compose.env"
+GENERATED_DOCKER_ENV_FILE = SCRIPTS_CI_DOCKER_COMPOSE_DIR / "_generated_docker.env"
+GENERATED_DOCKER_LOCK_FILE = SCRIPTS_CI_DOCKER_COMPOSE_DIR / "_generated.lock"
+DOCKER_CONTEXT_DIR = AIRFLOW_SOURCES_ROOT / "docker-context-files"
 CACHE_TMP_FILE_DIR = tempfile.TemporaryDirectory()
-OUTPUT_LOG = Path(CACHE_TMP_FILE_DIR.name, 'out.log')
+OUTPUT_LOG = Path(CACHE_TMP_FILE_DIR.name, "out.log")
 BREEZE_SOURCES_ROOT = AIRFLOW_SOURCES_ROOT / "dev" / "breeze"
-
-MSSQL_TMP_DIR_NAME = ".tmp-mssql"
+AIRFLOW_HOME_DIR = Path(os.environ.get("AIRFLOW_HOME", Path.home() / "airflow"))
 
 
 def create_volume_if_missing(volume_name: str):
@@ -295,3 +377,43 @@ def create_directories_and_files() -> None:
     (AIRFLOW_SOURCES_ROOT / ".bash_aliases").touch()
     (AIRFLOW_SOURCES_ROOT / ".bash_history").touch()
     (AIRFLOW_SOURCES_ROOT / ".inputrc").touch()
+
+
+def cleanup_python_generated_files():
+    if get_verbose():
+        get_console().print("[info]Cleaning .pyc and __pycache__")
+    permission_errors = []
+    for path in AIRFLOW_SOURCES_ROOT.rglob("*.pyc"):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            # File has been removed in the meantime.
+            pass
+        except PermissionError:
+            permission_errors.append(path)
+    for path in AIRFLOW_SOURCES_ROOT.rglob("__pycache__"):
+        try:
+            shutil.rmtree(path)
+        except FileNotFoundError:
+            # File has been removed in the meantime.
+            pass
+        except PermissionError:
+            permission_errors.append(path)
+    if permission_errors:
+        if platform.uname().system.lower() == "linux":
+            get_console().print("[warning]There were files that you could not clean-up:\n")
+            get_console().print(permission_errors)
+            get_console().print(
+                "Please run at earliest convenience:\n"
+                "[warning]breeze ci fix-ownership[/]\n\n"
+                "If you have sudo you can use:\n"
+                "[warning]breeze ci fix-ownership --use-sudo[/]\n\n"
+                "This will fix ownership of those.\n"
+                "You can also remove those files manually using sudo."
+            )
+        else:
+            get_console().print("[warnings]There were files that you could not clean-up:\n")
+            get_console().print(permission_errors)
+            get_console().print("You can also remove those files manually using sudo.")
+    if get_verbose():
+        get_console().print("[info]Cleaned")

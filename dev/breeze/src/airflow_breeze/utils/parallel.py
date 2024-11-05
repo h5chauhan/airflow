@@ -23,22 +23,40 @@ import sys
 import textwrap
 import time
 from abc import ABCMeta, abstractmethod
+from collections.abc import Generator
 from contextlib import contextmanager
+from enum import Enum
 from multiprocessing.pool import ApplyResult, Pool
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Thread
-from typing import Any, Generator, NamedTuple
+from typing import Any, NamedTuple
 
 from rich.table import Table
 
 from airflow_breeze.utils.console import MessageType, Output, get_console
+from airflow_breeze.utils.shared_options import (
+    get_dry_run,
+    get_forced_answer,
+    get_verbose,
+    set_dry_run,
+    set_forced_answer,
+    set_verbose,
+)
 
 MAX_LINE_LENGTH = 155
 
 
+def _init_worker(verbose: bool, dry_run: bool, forced_answer: str | None):
+    set_verbose(verbose)
+    set_dry_run(dry_run)
+    set_forced_answer(forced_answer)
+
+
 def create_pool(parallelism: int) -> Pool:
-    return Pool(parallelism)
+    return Pool(
+        parallelism, initializer=_init_worker, initargs=(get_verbose(), get_dry_run(), get_forced_answer())
+    )
 
 
 def get_temp_file_name() -> str:
@@ -49,24 +67,24 @@ def get_temp_file_name() -> str:
 
 
 def get_output_files(titles: list[str]) -> list[Output]:
-    outputs = [Output(title=titles[i], file_name=get_temp_file_name()) for i in range(len(titles))]
+    outputs = [Output(title=title, file_name=get_temp_file_name()) for title in titles]
     for out in outputs:
-        get_console().print(f"[info]Capturing output of {out.title}:[/] {out.file_name}")
+        get_console().print(f"[info]Capturing output of {out.escaped_title}:[/] {out.file_name}")
     return outputs
 
 
 def nice_timedelta(delta: datetime.timedelta):
-    d = {'d': delta.days}
-    d['h'], rem = divmod(delta.seconds, 3600)
-    d['m'], d['s'] = divmod(rem, 60)
-    return "{d} days {h:02}:{m:02}:{s:02}".format(**d) if d['d'] else "{h:02}:{m:02}:{s:02}".format(**d)
+    d = {"d": delta.days}
+    d["h"], rem = divmod(delta.seconds, 3600)
+    d["m"], d["s"] = divmod(rem, 60)
+    return "{d} days {h:02}:{m:02}:{s:02}".format(**d) if d["d"] else "{h:02}:{m:02}:{s:02}".format(**d)
 
 
-ANSI_COLOUR_MATCHER = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
+ANSI_COLOUR_MATCHER = re.compile(r"(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]")
 
 
-def remove_ansi_colours(line):
-    return ANSI_COLOUR_MATCHER.sub('', line)
+def remove_ansi_colours(line: str):
+    return ANSI_COLOUR_MATCHER.sub("", line)
 
 
 def get_last_lines_of_file(file_name: str, num_lines: int = 2) -> tuple[list[str], list[str]]:
@@ -80,8 +98,11 @@ def get_last_lines_of_file(file_name: str, num_lines: int = 2) -> tuple[list[str
     """
     # account for EOL
     max_read = (180 + 2) * num_lines
-    seek_size = min(os.stat(file_name).st_size, max_read)
-    with open(file_name, 'rb') as temp_f:
+    try:
+        seek_size = min(os.stat(file_name).st_size, max_read)
+    except FileNotFoundError:
+        return [], []
+    with open(file_name, "rb") as temp_f:
         temp_f.seek(-seek_size, os.SEEK_END)
         tail = temp_f.read().decode(errors="ignore")
     last_lines = tail.splitlines()[-num_lines:]
@@ -98,8 +119,14 @@ class AbstractProgressInfoMatcher(metaclass=ABCMeta):
         """
 
 
+class ShowLastLineProgressMatcher(AbstractProgressInfoMatcher):
+    def get_best_matching_lines(self, output: Output) -> list[str] | None:
+        last_lines, _ = get_last_lines_of_file(output.file_name, num_lines=1)
+        return last_lines
+
+
 class DockerBuildxProgressMatcher(AbstractProgressInfoMatcher):
-    DOCKER_BUILDX_PROGRESS_MATCHER = re.compile(r'\s*#(\d*) ')
+    DOCKER_BUILDX_PROGRESS_MATCHER = re.compile(r"\s*#(\d*) ")
 
     def __init__(self):
         self.last_docker_build_lines: dict[str, str] = {}
@@ -173,23 +200,23 @@ class GenericRegexpProgressMatcher(AbstractProgressInfoMatcher):
         return [last_match]
 
 
-DOCKER_PULL_PROGRESS_REGEXP = r'^[0-9a-f]+: .*|.*\[[ \d%]*\].*|^Waiting'
+DOCKER_PULL_PROGRESS_REGEXP = r"^[0-9a-f]+: .*|.*\[[ \d%]*\].*|^Waiting"
 
 
 def bytes2human(n):
-    symbols = ('K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
+    symbols = ("K", "M", "G", "T", "P", "E", "Z", "Y")
     prefix = {}
     for i, s in enumerate(symbols):
         prefix[s] = 1 << (i + 1) * 10
     for s in reversed(symbols):
         if n >= prefix[s]:
-            value = float(n) / prefix[s]
-            return f'{value:.1f}{s}'
+            value = n / prefix[s]
+            return f"{value:.1f}{s}"
     return f"{n}B"
 
 
 def get_printable_value(key: str, value: Any) -> str:
-    if key == 'percent':
+    if key == "percent":
         return f"{value} %"
     if isinstance(value, (int, float)):
         return bytes2human(value)
@@ -202,7 +229,7 @@ def get_single_tuple_array(title: str, t: NamedTuple) -> Table:
     for key, value in t._asdict().items():
         table.add_column(header=key, header_style="info")
         row.append(get_printable_value(key, value))
-    table.add_row(*row, style="magenta")
+    table.add_row(*row, style="special")
     return table
 
 
@@ -219,26 +246,26 @@ def get_multi_tuple_array(title: str, tuples: list[tuple[NamedTuple, ...]]) -> T
         for named_tuple in t:
             for key, value in named_tuple._asdict().items():
                 row.append(get_printable_value(key, value))
-        table.add_row(*row, style="magenta")
+        table.add_row(*row, style="special")
     return table
 
 
 IGNORED_FSTYPES = [
-    'autofs',
-    'bps',
-    'cgroup',
-    'cgroup2',
-    'configfs',
-    'debugfs',
-    'devpts',
-    'fusectl',
-    'mqueue',
-    'nsfs',
-    'overlay',
-    'proc',
-    'pstore',
-    'squashfs',
-    'tracefs',
+    "autofs",
+    "bps",
+    "cgroup",
+    "cgroup2",
+    "configfs",
+    "debugfs",
+    "devpts",
+    "fusectl",
+    "mqueue",
+    "nsfs",
+    "overlay",
+    "proc",
+    "pstore",
+    "squashfs",
+    "tracefs",
 ]
 
 
@@ -247,7 +274,7 @@ class ParallelMonitor(Thread):
         self,
         outputs: list[Output],
         initial_time_in_seconds: int = 2,
-        time_in_seconds: int = 10,
+        time_in_seconds: int = int(os.environ.get("AIRFLOW_MONITOR_DELAY_TIME_IN_SECONDS", "20")),
         debug_resources: bool = False,
         progress_matcher: AbstractProgressInfoMatcher | None = None,
     ):
@@ -257,13 +284,11 @@ class ParallelMonitor(Thread):
         self.time_in_seconds = time_in_seconds
         self.debug_resources = debug_resources
         self.progress_matcher = progress_matcher
-        self.start_time = datetime.datetime.utcnow()
-        self.last_custom_progress: list[str] | None = None
+        self.start_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def print_single_progress(self, output: Output):
         if self.progress_matcher:
             progress_lines: list[str] | None = self.progress_matcher.get_best_matching_lines(output)
-            progress_lines = self.last_custom_progress if progress_lines is None else progress_lines
             if progress_lines is not None:
                 first_line = True
                 for index, line in enumerate(progress_lines):
@@ -283,12 +308,12 @@ class ParallelMonitor(Thread):
             else:
                 size = os.path.getsize(output.file_name) if Path(output.file_name).exists() else 0
                 default_output = f"File: {output.file_name} Size: {size:>10} bytes"
-                get_console().print(f"Progress: {output.title[:30]:<30} {default_output:>161}")
+                get_console().print(f"Progress: {output.escaped_title[:30]:<30} {default_output:>161}")
 
     def print_summary(self):
         import psutil
 
-        time_passed = datetime.datetime.utcnow() - self.start_time
+        time_passed = datetime.datetime.now(tz=datetime.timezone.utc) - self.start_time
         get_console().rule()
         for output in self.outputs:
             self.print_single_progress(output)
@@ -323,6 +348,7 @@ def print_async_summary(completed_list: list[ApplyResult]) -> None:
     get_console().print()
     for result in completed_list:
         return_code, info = result.get()
+        info = info.replace("[", "\\[")
         if return_code != 0:
             get_console().print(f"[error]NOK[/] for {info}: Return code: {return_code}.")
         else:
@@ -332,7 +358,14 @@ def print_async_summary(completed_list: list[ApplyResult]) -> None:
 
 def get_completed_result_list(results: list[ApplyResult]) -> list[ApplyResult]:
     """Return completed results from the list."""
-    return list(filter(lambda result: result.ready(), results))
+    return [result for result in results if result.ready()]
+
+
+class SummarizeAfter(Enum):
+    NO_SUMMARY = 0
+    FAILURE = 1
+    SUCCESS = 2
+    BOTH = 3
 
 
 def check_async_run_results(
@@ -340,8 +373,10 @@ def check_async_run_results(
     success: str,
     outputs: list[Output],
     include_success_outputs: bool,
-    poll_time: float = 0.2,
+    poll_time_seconds: float = 0.2,
     skip_cleanup: bool = False,
+    summarize_on_ci: SummarizeAfter = SummarizeAfter.NO_SUMMARY,
+    summary_start_regexp: str | None = None,
 ):
     """
     Check if all async results were success. Exits with error if not.
@@ -349,8 +384,13 @@ def check_async_run_results(
     :param outputs: outputs where results are written to
     :param success: Success string printed when everything is OK
     :param include_success_outputs: include outputs of successful parallel runs
-    :param poll_time: what's the poll time between checks
+    :param poll_time_seconds: what's the poll time between checks
     :param skip_cleanup: whether to skip cleanup of temporary files.
+    :param summarize_on_ci: determines when to summarize the parallel jobs  when they are completed in CI,
+        outside the folded CI output
+    :param summary_start_regexp: the regexp that determines line after which
+        outputs should be printed as summary, so that you do not have to look at the folded details of
+        the run in CI
     """
     from airflow_breeze.utils.ci_group import ci_group
 
@@ -363,15 +403,15 @@ def check_async_run_results(
             completed_number = current_completed_number
             get_console().print(
                 f"\n[info]Completed {completed_number} out of {total_number_of_results} "
-                f"({int(100*completed_number/total_number_of_results)}%).[/]\n"
+                f"({completed_number / total_number_of_results:.0%}).[/]\n"
             )
             print_async_summary(completed_list)
-        time.sleep(poll_time)
+        time.sleep(poll_time_seconds)
         completed_list = get_completed_result_list(results)
     completed_number = len(completed_list)
     get_console().print(
         f"\n[info]Completed {completed_number} out of {total_number_of_results} "
-        f"({int(100*completed_number/total_number_of_results)}%).[/]\n"
+        f"({completed_number / total_number_of_results:.0%}).[/]\n"
     )
     print_async_summary(completed_list)
     errors = False
@@ -382,23 +422,41 @@ def check_async_run_results(
         else:
             message_type = MessageType.SUCCESS
         if message_type == MessageType.ERROR or include_success_outputs:
-            with ci_group(title=f"{outputs[i].title}", message_type=message_type):
+            with ci_group(title=f"{outputs[i].escaped_title}", message_type=message_type):
                 os.write(1, Path(outputs[i].file_name).read_bytes())
         else:
-            get_console().print(f"[success]{outputs[i].title}")
+            get_console().print(f"[success]{outputs[i].escaped_title} OK[/]")
+    if summarize_on_ci != SummarizeAfter.NO_SUMMARY:
+        regex = re.compile(summary_start_regexp) if summary_start_regexp is not None else None
+        for i, result in enumerate(results):
+            failure = result.get()[0] != 0
+            if summarize_on_ci in [
+                SummarizeAfter.BOTH,
+                SummarizeAfter.FAILURE if failure else SummarizeAfter.SUCCESS,
+            ]:
+                print_lines = False
+                for line in Path(outputs[i].file_name).read_bytes().decode(errors="ignore").splitlines():
+                    if not print_lines and (regex is None or regex.match(remove_ansi_colours(line))):
+                        print_lines = True
+                        get_console().print(f"\n[info]Summary: {outputs[i].escaped_title:<30}:\n")
+                    if print_lines:
+                        print(line)
     try:
         if errors:
             get_console().print("\n[error]There were errors when running some tasks. Quitting.[/]\n")
+            from airflow_breeze.utils.docker_command_utils import fix_ownership_using_docker
+
+            fix_ownership_using_docker()
             sys.exit(1)
         else:
             get_console().print(f"\n[success]{success}[/]\n")
+            from airflow_breeze.utils.docker_command_utils import fix_ownership_using_docker
+
+            fix_ownership_using_docker()
     finally:
         if not skip_cleanup:
             for output in outputs:
-                try:
-                    os.unlink(output.file_name)
-                except FileNotFoundError:
-                    pass
+                Path(output.file_name).unlink(missing_ok=True)
 
 
 @contextmanager
@@ -406,7 +464,7 @@ def run_with_pool(
     parallelism: int,
     all_params: list[str],
     initial_time_in_seconds: int = 2,
-    time_in_seconds: int = 10,
+    time_in_seconds: int = int(os.environ.get("AIRFLOW_MONITOR_DELAY_TIME_IN_SECONDS", "20")),
     debug_resources: bool = False,
     progress_matcher: AbstractProgressInfoMatcher | None = None,
 ) -> Generator[tuple[Pool, list[Output]], None, None]:

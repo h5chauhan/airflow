@@ -38,12 +38,12 @@ execution of Databricks jobs with multiple tasks, but it's harder to detect erro
 .. code-block:: python
 
   json = {
-      'new_cluster': {'spark_version': '2.1.0-db3-scala2.11', 'num_workers': 2},
-      'notebook_task': {
-          'notebook_path': '/Users/airflow@example.com/PrepareData',
+      "new_cluster": {"spark_version": "2.1.0-db3-scala2.11", "num_workers": 2},
+      "notebook_task": {
+          "notebook_path": "/Users/airflow@example.com/PrepareData",
       },
   }
-  notebook_run = DatabricksSubmitRunOperator(task_id='notebook_run', json=json)
+  notebook_run = DatabricksSubmitRunOperator(task_id="notebook_run", json=json)
 
 The second way to accomplish the same thing is to use the named parameters of the ``DatabricksSubmitRunOperator`` directly. Note that there is exactly
 one named parameter for each top level parameter in the ``runs/submit`` endpoint.  When using named parameters you must to specify following:
@@ -60,6 +60,8 @@ one named parameter for each top level parameter in the ``runs/submit`` endpoint
 * Cluster specification - it should be one of:
   * ``new_cluster`` - specs for a new cluster on which this task will be run
   * ``existing_cluster_id`` - ID for existing cluster on which to run this task
+
+* ``pipeline_task`` - may refer to either a ``pipeline_id`` or ``pipeline_name``
 
 In the case where both the json parameter **AND** the named parameters
 are provided, they will be merged together. If there are conflicts during the merge,
@@ -81,12 +83,12 @@ Currently the named parameters that ``DatabricksSubmitRunOperator`` supports are
 
 .. code-block:: python
 
-  new_cluster = {'spark_version': '10.1.x-scala2.12', 'num_workers': 2}
+  new_cluster = {"spark_version": "10.1.x-scala2.12", "num_workers": 2}
   notebook_task = {
-      'notebook_path': '/Users/airflow@example.com/PrepareData',
+      "notebook_path": "/Users/airflow@example.com/PrepareData",
   }
   notebook_run = DatabricksSubmitRunOperator(
-      task_id='notebook_run', new_cluster=new_cluster, notebook_task=notebook_task
+      task_id="notebook_run", new_cluster=new_cluster, notebook_task=notebook_task
   )
 
 Another way to do is use the param tasks to pass array of objects to instantiate this operator. Here the value of tasks param that is used to invoke ``api/2.1/jobs/runs/submit`` endpoint is passed through the ``tasks`` param in ``DatabricksSubmitRunOperator``. Instead of invoking single task, you can pass array of task and submit a one-time run.
@@ -99,7 +101,7 @@ Another way to do is use the param tasks to pass array of objects to instantiate
           "notebook_task": {"notebook_path": "/Users/airflow@example.com/PrepareData"},
       }
   ]
-  notebook_run = DatabricksSubmitRunOperator(task_id='notebook_run', tasks=tasks)
+  notebook_run = DatabricksSubmitRunOperator(task_id="notebook_run", tasks=tasks)
 
 
 
@@ -111,7 +113,7 @@ Specifying parameters as JSON
 
 An example usage of the DatabricksSubmitRunOperator is as follows:
 
-.. exampleinclude:: /../../tests/system/providers/databricks/example_databricks.py
+.. exampleinclude:: /../../providers/tests/system/databricks/example_databricks.py
     :language: python
     :start-after: [START howto_operator_databricks_json]
     :end-before: [END howto_operator_databricks_json]
@@ -121,7 +123,7 @@ Using named parameters
 
 You can also use named parameters to initialize the operator and run the job.
 
-.. exampleinclude:: /../../tests/system/providers/databricks/example_databricks.py
+.. exampleinclude:: /../../providers/tests/system/databricks/example_databricks.py
     :language: python
     :start-after: [START howto_operator_databricks_named]
     :end-before: [END howto_operator_databricks_named]

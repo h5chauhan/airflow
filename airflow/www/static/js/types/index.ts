@@ -17,34 +17,44 @@
  * under the License.
  */
 
-import * as API from './api-generated';
+import type { CamelCase } from "type-fest";
+import type {
+  ElkExtendedEdge,
+  ElkEdgeSection,
+  ElkLabel,
+  ElkPoint,
+  ElkShape,
+  LayoutOptions,
+} from "elkjs";
+import type * as API from "./api-generated";
 
-type RunState = 'success' | 'running' | 'queued' | 'failed';
+type RunState = "success" | "running" | "queued" | "failed";
 
-type TaskState = RunState
-| 'removed'
-| 'scheduled'
-| 'shutdown'
-| 'restarting'
-| 'up_for_retry'
-| 'up_for_reschedule'
-| 'upstream_failed'
-| 'skipped'
-| 'deferred'
-| null;
+type TaskState =
+  | RunState
+  | "removed"
+  | "scheduled"
+  | "restarting"
+  | "up_for_retry"
+  | "up_for_reschedule"
+  | "upstream_failed"
+  | "skipped"
+  | "deferred"
+  | "none"
+  | null;
 
 interface Dag {
-  id: string,
-  rootDagId: string,
-  isPaused: boolean,
-  isSubdag: boolean,
-  owners: Array<string>,
-  description: string,
+  id: string;
+  rootDagId: string;
+  isPaused: boolean;
+  isSubdag: boolean;
+  owners: Array<string>;
+  description: string;
 }
 
 interface DagRun {
   runId: string;
-  runType: 'manual' | 'backfill' | 'scheduled' | 'dataset_triggered';
+  runType: "manual" | "backfill" | "scheduled" | "asset_triggered";
   state: RunState;
   executionDate: string;
   dataIntervalStart: string;
@@ -55,7 +65,7 @@ interface DagRun {
   lastSchedulingDecision: string | null;
   externalTrigger: boolean;
   conf: string | null;
-  confIsJson: boolean;
+  note: string | null;
 }
 
 interface TaskInstance {
@@ -66,11 +76,13 @@ interface TaskInstance {
   state: TaskState | null;
   mappedStates?: {
     [key: string]: number;
-  },
+  };
+  queuedDttm?: string | null;
   mapIndex?: number;
   tryNumber?: number;
   triggererJob?: Job;
   trigger?: Trigger;
+  note: string | null;
 }
 
 interface Trigger {
@@ -92,42 +104,140 @@ interface Task {
   extraLinks?: string[];
   isMapped?: boolean;
   operator?: string;
-  hasOutletDatasets?: boolean;
+  hasOutletAssets?: boolean;
+  triggerRule?: API.TriggerRule;
+  setupTeardownType?: "setup" | "teardown";
 }
 
-type RunOrdering = ('dataIntervalStart' | 'executionDate' | 'dataIntervalEnd')[];
+type RunOrdering = (
+  | "dataIntervalStart"
+  | "executionDate"
+  | "dataIntervalEnd"
+)[];
+
+export interface MidEdge {
+  id: string;
+  sources: string[];
+  targets: string[];
+  isSetupTeardown: boolean | undefined;
+  parentNode: string | undefined;
+  labels: {
+    id: string;
+    text: string;
+    height: number;
+    width: number;
+  }[];
+}
 
 interface DepNode {
   id: string;
   value: {
     id?: string;
-    class: 'dag' | 'dataset' | 'trigger' | 'sensor';
+    class:
+      | "dag"
+      | "asset"
+      | "trigger"
+      | "sensor"
+      | "or-gate"
+      | "and-gate"
+      | "asset-alias";
     label: string;
-    rx: number;
-    ry: number;
-  }
+    rx?: number;
+    ry?: number;
+    isOpen?: boolean;
+    isJoinNode?: boolean;
+    childCount?: number;
+    labelStyle?: string;
+    style?: string;
+    setupTeardownType?: "setup" | "teardown";
+    isMapped?: boolean;
+  };
+  children?: DepNode[];
+  edges?: MidEdge[];
 }
 
 interface DepEdge {
-  u: string;
-  v: string;
+  source: string;
+  target: string;
 }
 
-interface DatasetListItem extends API.Dataset {
-  lastDatasetUpdate: string | null;
+export interface EdgeData {
+  rest: {
+    isSelected: boolean;
+    sources: string[];
+    targets: string[];
+    sections: ElkEdgeSection[];
+    junctionPoints?: ElkPoint[];
+    id: string;
+    labels?: ElkLabel[];
+    layoutOptions?: LayoutOptions;
+    isSetupTeardown?: boolean;
+    parentNode?: string;
+    isZoomedOut?: boolean;
+    isSourceAsset?: boolean;
+  };
+}
+
+export interface NodeType extends ElkShape {
+  value: DepNode["value"];
+  children?: NodeType[];
+  edges?: ElkExtendedEdge[];
+}
+
+export interface WebserverEdge {
+  label?: string;
+  sourceId: string;
+  targetId: string;
+  isSetupTeardown?: boolean;
+  parentNode?: string;
+  isSourceAsset?: boolean;
+}
+
+interface AssetListItem extends API.Asset {
+  lastAssetUpdate: string | null;
   totalUpdates: number;
 }
 
+type MinimalTaskInstance = Pick<TaskInstance, "taskId" | "mapIndex" | "runId">;
+
+type PrimaryShortcutKey = "ctrlKey" | "shiftKey" | "altKey" | "metaKey";
+
+interface KeyboardShortcutKeys {
+  primaryKey: PrimaryShortcutKey;
+  secondaryKey: Array<string>;
+  detail: string;
+}
+
+interface KeyboardShortcutIdentifier {
+  [name: string]: KeyboardShortcutKeys;
+}
+
+interface HistoricalMetricsData {
+  dagRunStates: {
+    [K in CamelCase<RunState>]: number;
+  };
+  dagRunTypes: {
+    [K in CamelCase<DagRun["runType"]>]: number;
+  };
+  taskInstanceStates: {
+    [K in TaskState extends string ? CamelCase<K> : never]: number;
+  };
+}
+
 export type {
+  API,
   Dag,
   DagRun,
-  RunState,
-  TaskState,
-  TaskInstance,
-  Task,
-  DepNode,
+  AssetListItem,
   DepEdge,
-  API,
+  DepNode,
+  HistoricalMetricsData,
+  MinimalTaskInstance,
   RunOrdering,
-  DatasetListItem,
+  RunState,
+  Task,
+  TaskInstance,
+  TaskState,
+  KeyboardShortcutKeys,
+  KeyboardShortcutIdentifier,
 };

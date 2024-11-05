@@ -25,17 +25,20 @@ from airflow.models.log import Log
 
 
 class EventLogSchema(SQLAlchemySchema):
-    """Event log schema"""
+    """Event log schema."""
 
     class Meta:
-        """Meta"""
+        """Meta."""
 
         model = Log
 
-    id = auto_field(data_key='event_log_id', dump_only=True)
-    dttm = auto_field(data_key='when', dump_only=True)
+    id = auto_field(data_key="event_log_id", dump_only=True)
+    dttm = auto_field(data_key="when", dump_only=True)
     dag_id = auto_field(dump_only=True)
     task_id = auto_field(dump_only=True)
+    run_id = auto_field(dump_only=True)
+    map_index = auto_field(dump_only=True)
+    try_number = auto_field(dump_only=True)
     event = auto_field(dump_only=True)
     execution_date = auto_field(dump_only=True)
     owner = auto_field(dump_only=True)
@@ -43,14 +46,14 @@ class EventLogSchema(SQLAlchemySchema):
 
 
 class EventLogCollection(NamedTuple):
-    """List of import errors with metadata"""
+    """List of import errors with metadata."""
 
     event_logs: list[Log]
     total_entries: int
 
 
 class EventLogCollectionSchema(Schema):
-    """EventLog Collection Schema"""
+    """EventLog Collection Schema."""
 
     event_logs = fields.List(fields.Nested(EventLogSchema))
     total_entries = fields.Int()

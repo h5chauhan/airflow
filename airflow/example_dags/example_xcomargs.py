@@ -16,15 +16,16 @@
 # specific language governing permissions and limitations
 # under the License.
 """Example DAG demonstrating the usage of the XComArgs."""
+
 from __future__ import annotations
 
 import logging
 
 import pendulum
 
-from airflow import DAG
 from airflow.decorators import task
-from airflow.operators.bash import BashOperator
+from airflow.models.dag import DAG
+from airflow.providers.standard.operators.bash import BashOperator
 
 log = logging.getLogger(__name__)
 
@@ -42,11 +43,11 @@ def print_value(value, ts=None):
 
 
 with DAG(
-    dag_id='example_xcom_args',
+    dag_id="example_xcom_args",
     start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
     catchup=False,
     schedule=None,
-    tags=['example'],
+    tags=["example"],
 ) as dag:
     print_value(generate_value())
 
@@ -55,7 +56,7 @@ with DAG(
     start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
     catchup=False,
     schedule=None,
-    tags=['example'],
+    tags=["example"],
 ) as dag2:
     bash_op1 = BashOperator(task_id="c", bash_command="echo c")
     bash_op2 = BashOperator(task_id="d", bash_command="echo c")
