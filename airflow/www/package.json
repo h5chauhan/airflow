@@ -126,7 +126,7 @@
     "jquery-ui": "1.13.3",
     "jshint": "^2.13.4",
     "json-to-pretty-yaml": "^1.2.2",
-    "lodash": "^4.17.21",
+    "lodash": "^4.17.23",
     "moment-timezone": "^0.5.43",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
